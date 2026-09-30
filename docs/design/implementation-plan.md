@@ -93,7 +93,7 @@ turning the renderer into a markup parser.
 
 - [x] **ZEP-020** Extend the AST and parser to represent attributes and their
   names, quoting style, and value segments.
-- [ ] **ZEP-021** Support interpolation within attribute values and preserve
+- [x] **ZEP-021** Support interpolation within attribute values and preserve
   each expression's attribute output context.
 - [ ] **ZEP-022** Implement HTML boolean attributes and HTML void-element
   serialization rules.

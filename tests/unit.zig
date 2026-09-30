@@ -86,11 +86,30 @@ test "parser represents boolean and quoted attributes with source spans" {
 
     const double_quoted = element.attributes[2].value.?;
     try std.testing.expectEqual(parser.QuoteStyle.double, double_quoted.quote_style);
-    try std.testing.expectEqualStrings("{{ value }}", double_quoted.segments[0].data.text);
+    try std.testing.expectEqual(@as(usize, 1), double_quoted.segments.len);
+    try std.testing.expectEqualStrings("value", source[double_quoted.segments[0].data.expression.start..double_quoted.segments[0].data.expression.end]);
     try std.testing.expectEqualStrings("<button disabled data-kind='primary' title=\"{{ value }}\">", element.opening_tag);
     try std.testing.expect(element.attributes[0].span.isValid(source.len));
     try std.testing.expect(double_quoted.span.isValid(source.len));
     try std.testing.expect(double_quoted.segments[0].span.isValid(source.len));
+}
+
+test "attribute values preserve static and interpolated segments in source order" {
+    const source = "<a title='before {{ first }} middle {{ second }} after'></a>";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parsed = try parser.parse(arena.allocator(), source);
+    const document = switch (parsed) {
+        .success => |value| value,
+        .failure => return error.UnexpectedParseFailure,
+    };
+    const segments = document.nodes[0].data.element.attributes[0].value.?.segments;
+    try std.testing.expectEqual(@as(usize, 5), segments.len);
+    try std.testing.expectEqualStrings("before ", segments[0].data.text);
+    try std.testing.expectEqualStrings("first", source[segments[1].data.expression.start..segments[1].data.expression.end]);
+    try std.testing.expectEqualStrings(" middle ", segments[2].data.text);
+    try std.testing.expectEqualStrings("second", source[segments[3].data.expression.start..segments[3].data.expression.end]);
+    try std.testing.expectEqualStrings(" after", segments[4].data.text);
 }
 
 test "parser rejects unquoted attribute values" {

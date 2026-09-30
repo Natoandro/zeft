@@ -240,20 +240,52 @@ const Lexer = struct {
                 const quote = self.source[self.offset];
                 self.offset += 1;
                 const value_start = self.offset;
-                while (self.offset < self.source.len and self.source[self.offset] != quote) : (self.offset += 1) {}
+                var segments: std.ArrayList(ValueSegment) = .empty;
+                var text_start = value_start;
+                while (self.offset < self.source.len and self.source[self.offset] != quote) {
+                    if (startsWith(self.source, self.offset, "{{")) {
+                        if (self.offset > text_start) try segments.append(self.allocator, .{
+                            .span = .{ .start = text_start, .end = self.offset },
+                            .data = .{ .text = self.source[text_start..self.offset] },
+                        });
+                        const expression_start = self.offset;
+                        self.offset += 2;
+                        const content_start = self.offset;
+                        while (self.offset + 1 < self.source.len and !startsWith(self.source, self.offset, "}}")) : (self.offset += 1) {}
+                        if (self.offset + 1 >= self.source.len) {
+                            self.failure = .{
+                                .kind = .invalid_expression,
+                                .span = .{ .start = expression_start, .end = self.source.len },
+                            };
+                            self.offset = self.source.len;
+                            return null;
+                        }
+                        const content_end = self.offset;
+                        self.offset += 2;
+                        try segments.append(self.allocator, .{
+                            .span = .{ .start = expression_start, .end = self.offset },
+                            .data = .{ .expression = .{
+                                .start = trimStart(self.source, content_start, content_end),
+                                .end = trimEnd(self.source, content_start, content_end),
+                            } },
+                        });
+                        text_start = self.offset;
+                    } else {
+                        self.offset += 1;
+                    }
+                }
                 if (self.offset >= self.source.len) return self.invalidTag(start);
                 const value_end = self.offset;
-                const segment = try self.allocator.alloc(ValueSegment, 1);
-                segment[0] = .{
-                    .span = .{ .start = value_start, .end = value_end },
-                    .data = .{ .text = self.source[value_start..value_end] },
-                };
+                if (text_start < value_end or segments.items.len == 0) try segments.append(self.allocator, .{
+                    .span = .{ .start = text_start, .end = value_end },
+                    .data = .{ .text = self.source[text_start..value_end] },
+                });
                 self.offset += 1;
                 attribute_end = self.offset;
                 value = .{
                     .quote_style = if (quote == '\'') .single else .double,
                     .span = .{ .start = value_start, .end = value_end },
-                    .segments = segment,
+                    .segments = try segments.toOwnedSlice(self.allocator),
                 };
             } else {
                 // Leave separating whitespace for the next attribute scan.

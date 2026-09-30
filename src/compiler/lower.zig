@@ -49,12 +49,12 @@ const Lowerer = struct {
             switch (node.data) {
                 .text => |text| try self.writeStatic(text, node.span),
                 .element => |element| {
-                    try self.writeStatic(element.opening_tag, .{ .start = node.span.start, .end = node.span.start + element.opening_tag.len });
+                    try self.writeOpeningTag(element, node.span.start);
                     try self.visit(element.children);
                     const closing = try std.fmt.allocPrint(self.allocator, "</{s}>", .{element.name});
                     try self.writeStatic(closing, .{ .start = node.span.end - element.name.len - 3, .end = node.span.end });
                 },
-                .expression => |expr| try self.writeExpression(expr.source_span),
+                .expression => |expr| try self.writeExpression(expr.source_span, node.span),
             }
             if (self.failure != null) return;
         }
@@ -70,9 +70,36 @@ const Lowerer = struct {
         });
     }
 
-    fn writeExpression(self: *Lowerer, span: zeft.SourceSpan) std.mem.Allocator.Error!void {
+    fn writeOpeningTag(self: *Lowerer, element: parser.Element, source_start: usize) std.mem.Allocator.Error!void {
+        var cursor: usize = 0;
+        for (element.attributes) |attribute| {
+            if (attribute.value) |value| {
+                for (value.segments) |segment| {
+                    switch (segment.data) {
+                        .text => {},
+                        .expression => |source_span| {
+                            const expression_start = segment.span.start - source_start;
+                            const expression_end = segment.span.end - source_start;
+                            try self.writeStatic(element.opening_tag[cursor..expression_start], .{
+                                .start = source_start + cursor,
+                                .end = source_start + expression_start,
+                            });
+                            try self.writeExpression(source_span, segment.span);
+                            cursor = expression_end;
+                        },
+                    }
+                }
+            }
+        }
+        try self.writeStatic(element.opening_tag[cursor..], .{
+            .start = source_start + cursor,
+            .end = source_start + element.opening_tag.len,
+        });
+    }
+
+    fn writeExpression(self: *Lowerer, source_span: zeft.SourceSpan, output_span: zeft.SourceSpan) std.mem.Allocator.Error!void {
         if (self.expression_index >= self.analyzed.expressions.len) {
-            self.failure = .{ .kind = .syntax, .span = span };
+            self.failure = .{ .kind = .syntax, .span = source_span };
             return;
         }
         const expression_info = self.analyzed.expressions[self.expression_index];
@@ -89,8 +116,14 @@ const Lowerer = struct {
         };
         try self.expressions.append(self.allocator, .{ .instructions = expr_instructions });
         try self.instructions.append(self.allocator, .{
-            .span = span,
-            .data = .{ .write_expression = .{ .expression_id = id, .escape_mode = .html_text } },
+            .span = output_span,
+            .data = .{ .write_expression = .{
+                .expression_id = id,
+                .escape_mode = switch (expression_info.output_context) {
+                    .html_text => .html_text,
+                    .html_attribute => .html_attribute,
+                },
+            } },
         });
     }
 };

@@ -11,11 +11,11 @@ phased delivery.
 
 The project currently compiles and renders a small HTML template language:
 static text, nested elements, bare boolean attributes, and attributes with
-single- or double-quoted static values. Text-position interpolations contain
-one root-context identifier; interpolation inside attribute values is not yet
-supported. Contexts are generic Zig structs with string-valued fields. Dynamic
-text values are HTML-text escaped. Compile options default to HTML with source
-whitespace preserved.
+single- or double-quoted values. Text-position and attribute-value
+interpolations contain one root-context identifier. Dynamic text and
+attribute values use distinct HTML escaping; attribute values escape both
+quote characters. Contexts are generic Zig structs with string-valued fields.
+Compile options default to HTML with source whitespace preserved.
 See the implementation plan for the current supported subset and remaining
 work.
 

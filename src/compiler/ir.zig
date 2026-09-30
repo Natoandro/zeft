@@ -8,6 +8,7 @@ pub const ExpressionId = u32;
 
 pub const EscapeMode = enum {
     html_text,
+    html_attribute,
 };
 
 pub const ExpressionInstruction = struct {

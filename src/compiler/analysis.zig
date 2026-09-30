@@ -9,6 +9,7 @@ pub const SymbolId = u32;
 
 pub const OutputContext = enum {
     html_text,
+    html_attribute,
 };
 
 pub const Symbol = struct {
@@ -64,25 +65,40 @@ const Analyzer = struct {
         for (nodes) |node| {
             switch (node.data) {
                 .text => {},
-                .element => |element| try self.visit(element.children),
-                .expression => |expr| {
-                    const parsed = expression.parse(self.source, expr.source_span);
-                    const identifier = switch (parsed) {
-                        .success => |value| value,
-                        .failure => |diagnostic| {
-                            self.failure = diagnostic;
-                            return;
-                        },
-                    };
-                    const symbol_id = try self.getOrAddSymbol(identifier.name);
-                    try self.expressions.append(self.allocator, .{
-                        .identifier = identifier,
-                        .symbol_id = symbol_id,
-                        .output_context = .html_text,
-                    });
+                .element => |element| {
+                    for (element.attributes) |attribute| {
+                        if (attribute.value) |value| {
+                            for (value.segments) |segment| {
+                                switch (segment.data) {
+                                    .text => {},
+                                    .expression => |span| try self.addExpression(span, .html_attribute),
+                                }
+                                if (self.failure != null) return;
+                            }
+                        }
+                    }
+                    try self.visit(element.children);
                 },
+                .expression => |expr| try self.addExpression(expr.source_span, .html_text),
             }
         }
+    }
+
+    fn addExpression(self: *Analyzer, span: zeft.SourceSpan, output_context: OutputContext) std.mem.Allocator.Error!void {
+        const parsed = expression.parse(self.source, span);
+        const identifier = switch (parsed) {
+            .success => |value| value,
+            .failure => |diagnostic| {
+                self.failure = diagnostic;
+                return;
+            },
+        };
+        const symbol_id = try self.getOrAddSymbol(identifier.name);
+        try self.expressions.append(self.allocator, .{
+            .identifier = identifier,
+            .symbol_id = symbol_id,
+            .output_context = output_context,
+        });
     }
 
     fn getOrAddSymbol(self: *Analyzer, name: []const u8) std.mem.Allocator.Error!SymbolId {
@@ -116,6 +132,28 @@ test "assigns first-occurrence root symbol IDs and HTML text context" {
     try std.testing.expectEqual(@as(SymbolId, 1), result.expressions[1].symbol_id);
     try std.testing.expectEqual(@as(SymbolId, 0), result.expressions[2].symbol_id);
     try std.testing.expectEqual(OutputContext.html_text, result.expressions[0].output_context);
+}
+
+test "analyzes attribute interpolations before child expressions with distinct contexts" {
+    const source = "<a title=\"{{ name }}\">{{ name }}</a>";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const parsed = try parser.parse(allocator, source);
+    const document = switch (parsed) {
+        .success => |value| value,
+        .failure => return error.UnexpectedParseFailure,
+    };
+    const analyzed = try analyze(allocator, source, document, .html);
+    const result = switch (analyzed) {
+        .success => |value| value,
+        .failure => return error.UnexpectedAnalysisFailure,
+    };
+
+    try std.testing.expectEqual(@as(usize, 2), result.expressions.len);
+    try std.testing.expectEqual(OutputContext.html_attribute, result.expressions[0].output_context);
+    try std.testing.expectEqual(OutputContext.html_text, result.expressions[1].output_context);
+    try std.testing.expectEqual(result.expressions[0].symbol_id, result.expressions[1].symbol_id);
 }
 
 test "rejects XML mode for the Phase 1 analyzer" {

@@ -222,14 +222,23 @@ fn evaluateExpression(
 }
 
 fn writeEscaped(writer: *std.Io.Writer, value: []const u8, mode: ir.EscapeMode) anyerror!void {
-    if (mode != .html_text) return error.UnsupportedEscapeMode;
     var segment_start: usize = 0;
     for (value, 0..) |byte, index| {
-        const replacement: ?[]const u8 = switch (byte) {
-            '&' => "&amp;",
-            '<' => "&lt;",
-            '>' => "&gt;",
-            else => null,
+        const replacement: ?[]const u8 = switch (mode) {
+            .html_text => switch (byte) {
+                '&' => "&amp;",
+                '<' => "&lt;",
+                '>' => "&gt;",
+                else => null,
+            },
+            .html_attribute => switch (byte) {
+                '&' => "&amp;",
+                '<' => "&lt;",
+                '>' => "&gt;",
+                '"' => "&quot;",
+                '\'' => "&#39;",
+                else => null,
+            },
         };
         if (replacement) |escaped| {
             try writer.writeAll(value[segment_start..index]);
