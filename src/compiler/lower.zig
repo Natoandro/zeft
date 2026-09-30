@@ -1,7 +1,7 @@
 //! Lower the Phase 1 AST and analyzed expressions into initial IR.
 
 const std = @import("std");
-const zeft = @import("zeft");
+const zeft = @import("zeft_core");
 const parser = @import("zeft_parser");
 const analysis = @import("zeft_analysis");
 const ir = @import("zeft_ir");

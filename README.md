@@ -9,12 +9,33 @@ phased delivery.
 
 ## Project status
 
-The project has its package foundation and public API scaffold, plus the first
-lexer/parser frontend for static HTML elements and text interpolation. The
-analysis, lowering, finalization, and renderer pipeline is still in progress;
-`compile()` currently returns an `unsupported_syntax` diagnostic for every
-source. The first end-to-end milestone is a small HTML template rendered with
-an escaped context value.
+The project currently compiles and renders a small HTML template language:
+static text, nested elements without attributes, and text-position
+interpolations containing one root-context identifier. Contexts are generic
+Zig structs with string-valued fields. Dynamic values are HTML-text escaped.
+Compile options default to HTML with source whitespace preserved.
+See the implementation plan for the current supported subset and remaining
+work.
+
+~~~zig
+pub fn renderExample(allocator: std.mem.Allocator, writer: *std.Io.Writer) !void {
+    const result = try zeft.compile(allocator, "<p>Hello, {{ name }}!</p>", .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.TemplateCompileFailed,
+    };
+    defer template.deinit();
+
+    const rendered = try template.render(writer, .{ .name = "<Ada>" });
+    switch (rendered) {
+        .success => {},
+        .failure => return error.TemplateRenderFailed,
+    }
+}
+~~~
+
+Compilation syntax/markup failures and runtime template failures are returned
+as diagnostic results. Writer failures propagate as Zig errors.
 
 ## Requirements
 

@@ -4,8 +4,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const zeft = b.addModule("zeft", .{
-        .root_source_file = b.path("src/zeft.zig"),
+    const core = b.addModule("zeft_core", .{
+        .root_source_file = b.path("src/core.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -14,14 +14,14 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/compiler/parser.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{.{ .name = "zeft", .module = zeft }},
+        .imports = &.{.{ .name = "zeft_core", .module = core }},
     });
 
     const expression = b.addModule("zeft_expression", .{
         .root_source_file = b.path("src/compiler/expression.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{.{ .name = "zeft", .module = zeft }},
+        .imports = &.{.{ .name = "zeft_core", .module = core }},
     });
 
     const analysis = b.addModule("zeft_analysis", .{
@@ -29,7 +29,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .imports = &.{
-            .{ .name = "zeft", .module = zeft },
+            .{ .name = "zeft_core", .module = core },
             .{ .name = "zeft_parser", .module = parser },
             .{ .name = "zeft_expression", .module = expression },
         },
@@ -40,7 +40,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .imports = &.{
-            .{ .name = "zeft", .module = zeft },
+            .{ .name = "zeft_core", .module = core },
             .{ .name = "zeft_analysis", .module = analysis },
         },
     });
@@ -50,10 +50,34 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .imports = &.{
-            .{ .name = "zeft", .module = zeft },
+            .{ .name = "zeft_core", .module = core },
             .{ .name = "zeft_parser", .module = parser },
             .{ .name = "zeft_analysis", .module = analysis },
             .{ .name = "zeft_ir", .module = ir },
+        },
+    });
+
+    const optimize_module = b.addModule("zeft_optimize", .{
+        .root_source_file = b.path("src/compiler/optimize.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "zeft_core", .module = core },
+            .{ .name = "zeft_ir", .module = ir },
+        },
+    });
+
+    const zeft = b.addModule("zeft", .{
+        .root_source_file = b.path("src/zeft.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "zeft_core", .module = core },
+            .{ .name = "zeft_parser", .module = parser },
+            .{ .name = "zeft_analysis", .module = analysis },
+            .{ .name = "zeft_lower", .module = lower },
+            .{ .name = "zeft_ir", .module = ir },
+            .{ .name = "zeft_optimize", .module = optimize_module },
         },
     });
 
@@ -71,17 +95,19 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "zeft", .module = zeft },
+                .{ .name = "zeft_core", .module = core },
                 .{ .name = "zeft_parser", .module = parser },
                 .{ .name = "zeft_expression", .module = expression },
                 .{ .name = "zeft_analysis", .module = analysis },
                 .{ .name = "zeft_ir", .module = ir },
                 .{ .name = "zeft_lower", .module = lower },
+                .{ .name = "zeft_optimize", .module = optimize_module },
             },
         }),
     });
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
-    const compiler_test_modules = [_]*std.Build.Module{ parser, expression, analysis, lower };
+    const compiler_test_modules = [_]*std.Build.Module{ core, parser, expression, analysis, lower, optimize_module, zeft };
     var compiler_test_runs: [compiler_test_modules.len]*std.Build.Step.Run = undefined;
     for (compiler_test_modules, 0..) |module, index| {
         const module_tests = b.addTest(.{ .root_module = module });
@@ -93,10 +119,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("tests/integration.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{
-                .{ .name = "zeft", .module = zeft },
-                .{ .name = "zeft_parser", .module = parser },
-            },
+            .imports = &.{.{ .name = "zeft", .module = zeft }},
         }),
     });
     const run_integration_tests = b.addRunArtifact(integration_tests);

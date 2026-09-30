@@ -1,6 +1,6 @@
 //! Initial Phase 1 expression and linear render intermediate representations.
 
-const zeft = @import("zeft");
+const zeft = @import("zeft_core");
 const analysis = @import("zeft_analysis");
 
 pub const StringId = u32;

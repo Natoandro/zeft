@@ -1,7 +1,7 @@
 //! Phase 1 parser for a single root-context identifier expression.
 
 const std = @import("std");
-const zeft = @import("zeft");
+const zeft = @import("zeft_core");
 
 pub const Identifier = struct {
     name: []const u8,

@@ -1,7 +1,7 @@
 //! Phase 1 lexer and parser for static HTML elements and text interpolations.
 
 const std = @import("std");
-const zeft = @import("zeft");
+const zeft = @import("zeft_core");
 
 pub const Token = struct {
     span: zeft.SourceSpan,

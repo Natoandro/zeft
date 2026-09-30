@@ -46,6 +46,10 @@ void-element behavior, XML, and interpolation inside markup constructs are
 deferred to later work. Interpolation in this subset MUST be a single ASCII
 identifier matching `[A-Za-z_][A-Za-z0-9_]*`; property access, literals,
 operators, calls, filters, and local bindings are deferred.
+The initial renderer context MUST be a generic Zig struct whose fields are
+byte strings; non-string values are deferred. The initial whitespace policy
+MUST support preserve; requests for other policies MUST return an
+unsupported_syntax diagnostic.
 
 The end-to-end acceptance case is a template such as
 `<p>Hello, {{ name }}!</p>` rendered with `name = "<Ada>"` as
@@ -69,16 +73,16 @@ lowering, optimization, finalization, and VM execution.
   writes, expression writes, and program termination.
 - [x] **ZEP-014** Lower AST nodes into Render IR and expression IR, including
   static markup serialization.
-- [ ] **ZEP-015** Implement the first semantics-preserving optimizer pass that
+- [x] **ZEP-015** Implement the first semantics-preserving optimizer pass that
   merges adjacent static writes; run the optimizer phase even when it has no
   further work.
-- [ ] **ZEP-016** Finalize the IR, strings, symbols, metadata, and source maps
+- [x] **ZEP-016** Finalize the IR, strings, symbols, metadata, and source maps
   into allocator-owned immutable `CompiledTemplate` storage.
-- [ ] **ZEP-017** Implement a render-local VM that executes the initial Render
+- [x] **ZEP-017** Implement a render-local VM that executes the initial Render
   IR and writes static bytes directly to a caller-provided writer.
-- [ ] **ZEP-018** Implement root-context identifier lookup and HTML text
+- [x] **ZEP-018** Implement root-context identifier lookup and HTML text
   escaping for dynamic values.
-- [ ] **ZEP-019** Add the end-to-end acceptance test above, plus tests for
+- [x] **ZEP-019** Add the end-to-end acceptance test above, plus tests for
   repeated rendering, compile-time syntax failure, writer failure propagation,
   and template deinitialization.
 

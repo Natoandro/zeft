@@ -1,7 +1,7 @@
 //! Semantic analysis for the Phase 1 template AST.
 
 const std = @import("std");
-const zeft = @import("zeft");
+const zeft = @import("zeft_core");
 const parser = @import("zeft_parser");
 const expression = @import("zeft_expression");
 

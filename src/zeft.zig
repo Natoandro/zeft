@@ -1,94 +1,322 @@
 //! Public entry point for the Zeft template compiler and renderer.
 
 const std = @import("std");
+const core = @import("zeft_core");
+const parser = @import("zeft_parser");
+const analysis = @import("zeft_analysis");
+const lower = @import("zeft_lower");
+const ir = @import("zeft_ir");
+const optimizer = @import("zeft_optimize");
 
-pub const OutputFormat = enum {
-    html,
-    xml,
-};
-
-pub const WhitespacePolicy = enum {
-    preserve,
-    compact,
-    pretty,
-};
-
-/// Compile-time settings. Defaults are HTML output with source whitespace
-/// preserved.
-pub const CompileOptions = struct {
-    format: OutputFormat = .html,
-    whitespace: WhitespacePolicy = .preserve,
-};
-
-/// A half-open byte range in the original template source: [start, end).
-pub const SourceSpan = struct {
-    start: usize,
-    end: usize,
-
-    pub fn isValid(self: SourceSpan, source_len: usize) bool {
-        return self.start <= self.end and self.end <= source_len;
-    }
-};
-
-pub const CompileErrorKind = enum {
-    syntax,
-    invalid_markup,
-    invalid_expression,
-    invalid_construct,
-    unsupported_syntax,
-};
-
-pub const RenderErrorKind = enum {
-    missing_variable,
-    invalid_property_access,
-    invalid_operand,
-    non_iterable,
-    filter_failure,
-    function_failure,
-    writer_failure,
-};
-
-pub const CompileDiagnostic = struct {
-    kind: CompileErrorKind,
-    span: ?SourceSpan = null,
-};
-
-pub const RenderDiagnostic = struct {
-    kind: RenderErrorKind,
-    span: ?SourceSpan = null,
-};
-
-/// Owns the finalized storage for one compiled template.
-pub const CompiledTemplate = struct {
-    allocator: std.mem.Allocator,
-    owned_storage: ?[]u8 = null,
-
-    /// Releases storage owned by this template. Call exactly once.
-    pub fn deinit(self: *CompiledTemplate) void {
-        if (self.owned_storage) |storage| self.allocator.free(storage);
-        self.* = undefined;
-    }
-};
+pub const OutputFormat = core.OutputFormat;
+pub const WhitespacePolicy = core.WhitespacePolicy;
+pub const CompileOptions = core.CompileOptions;
+pub const SourceSpan = core.SourceSpan;
+pub const CompileErrorKind = core.CompileErrorKind;
+pub const RenderErrorKind = core.RenderErrorKind;
+pub const CompileDiagnostic = core.CompileDiagnostic;
+pub const RenderDiagnostic = core.RenderDiagnostic;
 
 pub const CompileResult = union(enum) {
     success: CompiledTemplate,
     failure: CompileDiagnostic,
 };
 
-/// Compile source into an owning template or a categorized diagnostic.
-///
-/// The parser frontend is implemented, but compilation still reports
-/// `unsupported_syntax` until analysis, lowering, finalization, and rendering
-/// are available.
+pub const RenderResult = union(enum) {
+    success,
+    failure: RenderDiagnostic,
+};
+
+const ContextEntry = struct { name: []const u8, value: []const u8 };
+
+const FinalizedTemplate = struct {
+    owner_allocator: std.mem.Allocator,
+    storage: *std.heap.ArenaAllocator,
+    program: ir.Program,
+    options: CompileOptions,
+};
+
+/// Owns the finalized storage for one compiled template.
+pub const CompiledTemplate = struct {
+    impl: *anyopaque,
+
+    fn finalized(self: *const CompiledTemplate) *const FinalizedTemplate {
+        return @ptrCast(@alignCast(self.impl));
+    }
+
+    /// Releases all finalized data owned by this template. Call exactly once.
+    pub fn deinit(self: *CompiledTemplate) void {
+        const data: *FinalizedTemplate = @ptrCast(@alignCast(self.impl));
+        data.storage.deinit();
+        data.owner_allocator.destroy(data.storage);
+        data.owner_allocator.destroy(data);
+        self.* = undefined;
+    }
+
+    /// Render against a struct whose fields are byte strings. Runtime template
+    /// errors are returned as diagnostics; writer errors propagate unchanged.
+    pub fn render(
+        self: *const CompiledTemplate,
+        writer: *std.Io.Writer,
+        context: anytype,
+    ) anyerror!RenderResult {
+        const ContextType = @TypeOf(context);
+        const type_info = @typeInfo(ContextType);
+        if (type_info != .@"struct") @compileError("render context must be a struct of string fields");
+
+        const fields = type_info.@"struct".fields;
+        var entries: [fields.len]ContextEntry = undefined;
+        inline for (fields, 0..) |field, index| {
+            entries[index] = .{
+                .name = field.name,
+                .value = contextString(field.type, @field(context, field.name)),
+            };
+        }
+        return renderProgram(self.finalized().program, writer, &entries);
+    }
+};
+
+/// Compile source to an allocator-owned template or a categorized diagnostic.
+/// Temporary AST and IR storage is released before this function returns.
 pub fn compile(
     allocator: std.mem.Allocator,
     source: []const u8,
     options: CompileOptions,
-) CompileResult {
-    _ = allocator;
-    _ = options;
-    return .{ .failure = .{
+) std.mem.Allocator.Error!CompileResult {
+    if (options.whitespace != .preserve) return .{ .failure = .{
         .kind = .unsupported_syntax,
         .span = .{ .start = 0, .end = source.len },
     } };
+
+    var temporary = std.heap.ArenaAllocator.init(allocator);
+    defer temporary.deinit();
+    const temp_allocator = temporary.allocator();
+
+    const parsed = try parser.parse(temp_allocator, source);
+    const document = switch (parsed) {
+        .success => |value| value,
+        .failure => |diagnostic| return .{ .failure = diagnostic },
+    };
+    const analyzed_result = try analysis.analyze(temp_allocator, source, document, options.format);
+    const analyzed = switch (analyzed_result) {
+        .success => |value| value,
+        .failure => |diagnostic| return .{ .failure = diagnostic },
+    };
+    const lowered = try lower.lower(temp_allocator, document, analyzed);
+    const program = switch (lowered) {
+        .success => |value| value,
+        .failure => |diagnostic| return .{ .failure = diagnostic },
+    };
+
+    // Run optimization on every successful compile, including the no-op case.
+    const optimized = try optimizer.optimize(temp_allocator, program);
+    return .{ .success = try finalize(allocator, optimized, options) };
+}
+
+fn finalize(
+    allocator: std.mem.Allocator,
+    program: ir.Program,
+    options: CompileOptions,
+) std.mem.Allocator.Error!CompiledTemplate {
+    const storage = try allocator.create(std.heap.ArenaAllocator);
+    storage.* = std.heap.ArenaAllocator.init(allocator);
+    errdefer {
+        storage.deinit();
+        allocator.destroy(storage);
+    }
+    const persistent = storage.allocator();
+
+    const strings = try persistent.alloc([]const u8, program.strings.len);
+    for (program.strings, 0..) |value, index| strings[index] = try persistent.dupe(u8, value);
+
+    const symbols = try persistent.dupe(analysis.Symbol, program.symbols);
+    for (symbols) |*symbol| symbol.name = try persistent.dupe(u8, symbol.name);
+
+    const expressions = try persistent.alloc(ir.ExpressionProgram, program.expressions.len);
+    for (program.expressions, 0..) |expression, index| {
+        expressions[index] = .{ .instructions = try persistent.dupe(ir.ExpressionInstruction, expression.instructions) };
+    }
+
+    const finalized = try allocator.create(FinalizedTemplate);
+    finalized.* = .{
+        .owner_allocator = allocator,
+        .storage = storage,
+        .program = .{
+            .strings = strings,
+            .symbols = symbols,
+            .expressions = expressions,
+            .instructions = try persistent.dupe(ir.Instruction, program.instructions),
+        },
+        .options = options,
+    };
+    return .{ .impl = finalized };
+}
+
+fn contextString(comptime T: type, value: T) []const u8 {
+    const type_info = @typeInfo(T);
+    if (type_info == .pointer) {
+        const pointer_info = type_info.pointer;
+        if (pointer_info.size == .slice and pointer_info.child == u8) return value;
+        if (pointer_info.size == .one) {
+            const child_info = @typeInfo(pointer_info.child);
+            if (child_info == .array and child_info.array.child == u8) return value[0..];
+        }
+    }
+    @compileError("render context fields must be byte strings");
+}
+
+fn renderProgram(
+    program: ir.Program,
+    writer: *std.Io.Writer,
+    context: []const ContextEntry,
+) anyerror!RenderResult {
+    var pc: usize = 0;
+    while (pc < program.instructions.len) : (pc += 1) {
+        const instruction = program.instructions[pc];
+        switch (instruction.data) {
+            .write_static => |id| try writer.writeAll(program.strings[id]),
+            .write_expression => |write| {
+                const value = switch (evaluateExpression(program, write.expression_id, context)) {
+                    .success => |result| result,
+                    .failure => |diagnostic| return .{ .failure = diagnostic },
+                };
+                try writeEscaped(writer, value, write.escape_mode);
+            },
+            .end => return .success,
+        }
+    }
+    return .{ .failure = .{ .kind = .invalid_operand } };
+}
+
+const ExpressionResult = union(enum) {
+    success: []const u8,
+    failure: RenderDiagnostic,
+};
+
+fn evaluateExpression(
+    program: ir.Program,
+    expression_id: ir.ExpressionId,
+    context: []const ContextEntry,
+) ExpressionResult {
+    if (expression_id >= program.expressions.len) return .{ .failure = .{ .kind = .invalid_operand } };
+    const expression = program.expressions[expression_id];
+    var value: ?[]const u8 = null;
+    for (expression.instructions) |instruction| switch (instruction.data) {
+        .load_root_symbol => |symbol_id| {
+            if (symbol_id >= program.symbols.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+            const name = program.symbols[symbol_id].name;
+            for (context) |entry| {
+                if (std.mem.eql(u8, name, entry.name)) {
+                    value = entry.value;
+                    break;
+                }
+            }
+            if (value == null) return .{ .failure = .{ .kind = .missing_variable, .span = instruction.span } };
+        },
+        .return_value => return if (value) |result|
+            .{ .success = result }
+        else
+            .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+    };
+    return .{ .failure = .{ .kind = .invalid_operand } };
+}
+
+fn writeEscaped(writer: *std.Io.Writer, value: []const u8, mode: ir.EscapeMode) anyerror!void {
+    if (mode != .html_text) return error.UnsupportedEscapeMode;
+    var segment_start: usize = 0;
+    for (value, 0..) |byte, index| {
+        const replacement: ?[]const u8 = switch (byte) {
+            '&' => "&amp;",
+            '<' => "&lt;",
+            '>' => "&gt;",
+            else => null,
+        };
+        if (replacement) |escaped| {
+            try writer.writeAll(value[segment_start..index]);
+            try writer.writeAll(escaped);
+            segment_start = index + 1;
+        }
+    }
+    try writer.writeAll(value[segment_start..]);
+}
+
+test "compile options default to HTML with preserved whitespace" {
+    const options: CompileOptions = .{};
+    try std.testing.expectEqual(OutputFormat.html, options.format);
+    try std.testing.expectEqual(WhitespacePolicy.preserve, options.whitespace);
+}
+
+test "compiled template owns finalized storage and renders after source release" {
+    const allocator = std.testing.allocator;
+    const source = try allocator.dupe(u8, "<p>Hello, {{ name }}!</p>");
+    const result = try compile(allocator, source, .{});
+    allocator.free(source);
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    var output: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, .{ .name = "<Ada>" });
+    try std.testing.expectEqual(RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("<p>Hello, &lt;Ada&gt;!</p>", std.Io.Writer.buffered(&writer));
+}
+
+test "compile returns syntax diagnostics before rendering" {
+    var result = try compile(std.testing.allocator, "<p>{{ broken", .{});
+    switch (result) {
+        .success => |*template| template.deinit(),
+        .failure => |diagnostic| {
+            try std.testing.expectEqual(CompileErrorKind.invalid_expression, diagnostic.kind);
+            try std.testing.expectEqual(@as(?SourceSpan, .{ .start = 3, .end = 12 }), diagnostic.span);
+        },
+    }
+}
+
+test "unsupported whitespace policies return a compile diagnostic" {
+    const result = try compile(std.testing.allocator, "text", .{ .whitespace = .compact });
+    switch (result) {
+        .success => |value| {
+            var template = value;
+            template.deinit();
+            return error.ExpectedDiagnostic;
+        },
+        .failure => |diagnostic| {
+            try std.testing.expectEqual(CompileErrorKind.unsupported_syntax, diagnostic.kind);
+            try std.testing.expectEqual(@as(?SourceSpan, .{ .start = 0, .end = 4 }), diagnostic.span);
+        },
+    }
+}
+
+test "render reports missing identifiers with their source span" {
+    const result = try compile(std.testing.allocator, "{{ name }}", .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    var output: [16]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, .{});
+    switch (rendered) {
+        .success => return error.ExpectedDiagnostic,
+        .failure => |diagnostic| {
+            try std.testing.expectEqual(RenderErrorKind.missing_variable, diagnostic.kind);
+            try std.testing.expectEqual(@as(?SourceSpan, .{ .start = 3, .end = 7 }), diagnostic.span);
+        },
+    }
+}
+
+test "writer failures propagate from render" {
+    const result = try compile(std.testing.allocator, "some output", .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    var output: [2]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    try std.testing.expectError(error.WriteFailed, template.render(&writer, .{}));
 }
