@@ -16,18 +16,18 @@ verification are both complete.
 **Outcome:** a buildable Zig package with public module boundaries and a place
 to add executable specifications.
 
-- [ ] **ZEP-001** Record the supported Zig compiler version and the command used
+- [x] **ZEP-001** Record the supported Zig compiler version and the command used
   to build the package.
-- [ ] **ZEP-002** Add the Zig package/build configuration and a minimal library
+- [x] **ZEP-002** Add the Zig package/build configuration and a minimal library
   module that exports the `zeft` namespace.
-- [ ] **ZEP-003** Define the initial public `compile(allocator, source, options)`
+- [x] **ZEP-003** Define the initial public `compile(allocator, source, options)`
   API and an owning `CompiledTemplate` type with `deinit`.
-- [ ] **ZEP-004** Define compile options with explicit output format and
+- [x] **ZEP-004** Define compile options with explicit output format and
   whitespace policy fields; set the initial implementation defaults in the
   API documentation.
-- [ ] **ZEP-005** Define structured compile and render error categories and a
+- [x] **ZEP-005** Define structured compile and render error categories and a
   source-span type shared by compiler and runtime diagnostics.
-- [ ] **ZEP-006** Establish unit-test and integration-test module layout, with
+- [x] **ZEP-006** Establish unit-test and integration-test module layout, with
   fixtures kept separate from implementation code.
 
 ## Phase 1 — Complete the first vertical slice
