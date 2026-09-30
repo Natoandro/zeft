@@ -19,6 +19,7 @@ pub const OpenElement = struct {
     name: []const u8,
     attributes: []Attribute,
     serialized: []const u8,
+    self_closing: bool,
 };
 
 pub const Node = struct {
@@ -38,6 +39,7 @@ pub const Element = struct {
     /// Exact source bytes for the opening tag, including attribute spacing and quoting.
     opening_tag: []const u8,
     children: []Node,
+    is_void: bool,
 };
 
 pub const Attribute = struct {
@@ -209,6 +211,20 @@ const Lexer = struct {
             const whitespace_start = self.offset;
             while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
             if (self.offset >= self.source.len) break;
+            if (self.source[self.offset] == '/') {
+                self.offset += 1;
+                if (self.offset >= self.source.len or self.source[self.offset] != '>') return self.invalidTag(start);
+                self.offset += 1;
+                return .{
+                    .span = .{ .start = start, .end = self.offset },
+                    .data = .{ .open_element = .{
+                        .name = name,
+                        .attributes = try attributes.toOwnedSlice(self.allocator),
+                        .serialized = self.source[start..self.offset],
+                        .self_closing = true,
+                    } },
+                };
+            }
             if (self.source[self.offset] == '>') {
                 self.offset += 1;
                 return .{
@@ -217,6 +233,7 @@ const Lexer = struct {
                         .name = name,
                         .attributes = try attributes.toOwnedSlice(self.allocator),
                         .serialized = self.source[start..self.offset],
+                        .self_closing = false,
                     } },
                 };
             }
@@ -350,6 +367,24 @@ const Parser = struct {
                     break;
                 },
                 .open_element => |opening| {
+                    const is_void = isHtmlVoidElement(opening.name);
+                    if (opening.self_closing and !is_void) {
+                        self.failure = .{ .kind = .invalid_markup, .span = token.span };
+                        break;
+                    }
+                    if (is_void) {
+                        try nodes.append(self.allocator, .{
+                            .span = token.span,
+                            .data = .{ .element = .{
+                                .name = opening.name,
+                                .attributes = opening.attributes,
+                                .opening_tag = opening.serialized,
+                                .children = &.{},
+                                .is_void = true,
+                            } },
+                        });
+                        continue;
+                    }
                     const children = try self.parseChildren(opening.name, token.span);
                     if (self.failure != null) break;
                     const close_span = children.close_span orelse {
@@ -366,6 +401,7 @@ const Parser = struct {
                             .attributes = opening.attributes,
                             .opening_tag = opening.serialized,
                             .children = children.nodes,
+                            .is_void = false,
                         } },
                     });
                 },
@@ -382,6 +418,17 @@ const Parser = struct {
         return .{ .nodes = try nodes.toOwnedSlice(self.allocator), .close_span = null };
     }
 };
+
+fn isHtmlVoidElement(name: []const u8) bool {
+    const void_names = .{
+        "area",  "base", "br",   "col",   "embed",  "hr",    "img",
+        "input", "link", "meta", "param", "source", "track", "wbr",
+    };
+    inline for (void_names) |void_name| {
+        if (std.ascii.eqlIgnoreCase(name, void_name)) return true;
+    }
+    return false;
+}
 
 fn startsWith(source: []const u8, offset: usize, needle: []const u8) bool {
     return offset <= source.len and std.mem.startsWith(u8, source[offset..], needle);

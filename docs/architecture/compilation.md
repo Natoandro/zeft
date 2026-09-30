@@ -57,6 +57,21 @@ names or attribute values.
 
 Element names MUST be serialized with their original source spelling.
 
+For HTML, the void elements are `area`, `base`, `br`, `col`, `embed`, `hr`,
+`img`, `input`, `link`, `meta`, `param`, `source`, `track`, and `wbr`, matched
+using ASCII case-insensitive comparison. A void element MUST have no children
+and MUST NOT have an end tag. Its opening tag MUST be serialized exactly as
+written, with no generated end tag. HTML void elements MAY use either `<tag>`
+or `<tag/>` syntax; the compiler MUST preserve that opening-tag spelling.
+Self-closing syntax on a non-void HTML element MUST be rejected as invalid
+markup.
+
+A valueless attribute MUST be represented and serialized as a bare boolean
+attribute, preserving its source spelling and surrounding markup bytes. An
+attribute with a quoted value MUST remain an ordinary valued attribute,
+including when its name commonly denotes a boolean attribute; its source
+spelling and quoting MUST be preserved.
+
 ### Expression analysis
 
 Analysis MUST visit expression occurrences in document order, including

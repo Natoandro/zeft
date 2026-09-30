@@ -94,6 +94,54 @@ test "parser represents boolean and quoted attributes with source spans" {
     try std.testing.expect(double_quoted.segments[0].span.isValid(source.len));
 }
 
+test "parser recognizes HTML void elements case-insensitively and preserves their syntax" {
+    const names = .{
+        "area",  "base", "br",   "col",   "embed",  "hr",    "img",
+        "input", "link", "meta", "param", "source", "track", "wbr",
+    };
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    inline for (names, 0..) |name, index| {
+        const source = if (index % 2 == 0)
+            try std.fmt.allocPrint(allocator, "<{s}>", .{name})
+        else
+            try std.fmt.allocPrint(allocator, "<{s}/>", .{name});
+        const result = try parser.parse(allocator, source);
+        const document = switch (result) {
+            .success => |value| value,
+            .failure => return error.UnexpectedParseFailure,
+        };
+        const element = document.nodes[0].data.element;
+        try std.testing.expect(element.is_void);
+        try std.testing.expectEqual(@as(usize, 0), element.children.len);
+        try std.testing.expectEqualStrings(source, element.opening_tag);
+    }
+
+    const uppercase = try parser.parse(allocator, "<BR/>");
+    const uppercase_document = switch (uppercase) {
+        .success => |value| value,
+        .failure => return error.UnexpectedParseFailure,
+    };
+    try std.testing.expect(uppercase_document.nodes[0].data.element.is_void);
+}
+
+test "parser rejects self-closing non-void elements and void end tags" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const invalid_sources = [_][]const u8{ "<div/>", "</br>", "<p><br></br></p>" };
+    for (invalid_sources) |source| {
+        const result = try parser.parse(allocator, source);
+        switch (result) {
+            .success => return error.ExpectedDiagnostic,
+            .failure => |diagnostic| try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind),
+        }
+    }
+}
+
 test "attribute values preserve static and interpolated segments in source order" {
     const source = "<a title='before {{ first }} middle {{ second }} after'></a>";
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

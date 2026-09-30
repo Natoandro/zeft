@@ -95,7 +95,7 @@ turning the renderer into a markup parser.
   names, quoting style, and value segments.
 - [x] **ZEP-021** Support interpolation within attribute values and preserve
   each expression's attribute output context.
-- [ ] **ZEP-022** Implement HTML boolean attributes and HTML void-element
+- [x] **ZEP-022** Implement HTML boolean attributes and HTML void-element
   serialization rules.
 - [ ] **ZEP-023** Implement comments, declarations, and the static markup
   constructs selected for the initial HTML grammar.

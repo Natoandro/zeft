@@ -39,7 +39,7 @@ test "compile syntax failures are returned before execution" {
 }
 
 test "static attributes are preserved exactly during compilation and rendering" {
-    const source = "<button disabled data-kind='primary' title=\"hello\"></button>";
+    const source = "<button disabled checked=\"false\" data-kind='primary' title=\"hello\"></button>";
     const result = try zeft.compile(std.testing.allocator, source, .{});
     var template = switch (result) {
         .success => |value| value,
@@ -52,6 +52,37 @@ test "static attributes are preserved exactly during compilation and rendering" 
     const rendered = try template.render(&writer, .{});
     try std.testing.expectEqual(zeft.RenderResult.success, rendered);
     try std.testing.expectEqualStrings(source, std.Io.Writer.buffered(&writer));
+}
+
+test "HTML void elements preserve their opening spelling without closing tags" {
+    const source = "<p>before<BR/>middle<br>after<img src='image.png'></p>";
+    const result = try zeft.compile(std.testing.allocator, source, .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    var output: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, .{});
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings(source, std.Io.Writer.buffered(&writer));
+}
+
+test "invalid HTML self-closing syntax and void end tags fail during compilation" {
+    const invalid_sources = [_][]const u8{ "<div/>", "</br>", "<p><br></br></p>" };
+    for (invalid_sources) |source| {
+        const result = try zeft.compile(std.testing.allocator, source, .{});
+        switch (result) {
+            .success => |value| {
+                var template = value;
+                template.deinit();
+                return error.ExpectedDiagnostic;
+            },
+            .failure => |diagnostic| try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind),
+        }
+    }
 }
 
 test "attribute interpolations retain their context and render in source order" {
