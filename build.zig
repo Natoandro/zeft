@@ -10,6 +10,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const parser = b.addModule("zeft_parser", .{
+        .root_source_file = b.path("src/compiler/parser.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "zeft", .module = zeft }},
+    });
+
     const library = b.addLibrary(.{
         .name = "zeft",
         .root_module = zeft,
@@ -22,7 +29,10 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("tests/unit.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{.{ .name = "zeft", .module = zeft }},
+            .imports = &.{
+                .{ .name = "zeft", .module = zeft },
+                .{ .name = "zeft_parser", .module = parser },
+            },
         }),
     });
     const run_unit_tests = b.addRunArtifact(unit_tests);
@@ -32,7 +42,10 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("tests/integration.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{.{ .name = "zeft", .module = zeft }},
+            .imports = &.{
+                .{ .name = "zeft", .module = zeft },
+                .{ .name = "zeft_parser", .module = parser },
+            },
         }),
     });
     const run_integration_tests = b.addRunArtifact(integration_tests);

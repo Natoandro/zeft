@@ -41,6 +41,29 @@ The AST MUST NOT be the persistent representation used by rendering.
 
 ## Markup and template parsing
 
+### Phase 1 template delimiters
+
+The initial template grammar MUST recognize `{{` as the start of an
+interpolation and the first subsequent `}}` as its end. Delimiters MUST NOT
+nestedly balance. ASCII space, tab, carriage return, and line feed immediately
+inside the delimiters MUST be excluded from the expression source span; other
+expression syntax is specified separately.
+
+In static text, `\{{` MUST emit the literal bytes `{{`, and `\\` MUST emit
+one literal backslash. These escapes MUST be recognized left-to-right; all
+other backslashes MUST remain literal. Consequently, `\\{{ name }}` emits a
+backslash followed by an interpolation. A `}}` outside an interpolation MUST
+remain ordinary static text. The delimiter escapes apply to text, not markup
+names or attribute values.
+
+The Phase 1 markup subset MUST accept element names beginning with an ASCII
+letter or underscore and continuing with ASCII letters, digits, underscore,
+hyphen, colon, or period. Opening elements in this subset MUST have no
+attributes. Closing names MUST match their opening names using ASCII
+case-insensitive comparison. Elements MUST be balanced and properly nested.
+Attributes, comments, declarations, void-element behavior, and interpolation
+inside markup constructs are outside this subset.
+
 The parser MUST understand markup structure. It MUST represent elements,
 attributes, attribute values, text nodes, and embedded expressions as distinct
 syntax, rather than treating the whole document as undifferentiated text with

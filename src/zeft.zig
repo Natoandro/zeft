@@ -77,8 +77,9 @@ pub const CompileResult = union(enum) {
 
 /// Compile source into an owning template or a categorized diagnostic.
 ///
-/// Phase 0 establishes the public API only. Until the parser is implemented,
-/// source compilation reports `unsupported_syntax`.
+/// The parser frontend is implemented, but compilation still reports
+/// `unsupported_syntax` until analysis, lowering, finalization, and rendering
+/// are available.
 pub fn compile(
     allocator: std.mem.Allocator,
     source: []const u8,

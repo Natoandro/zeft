@@ -9,11 +9,12 @@ phased delivery.
 
 ## Project status
 
-The project currently has its package foundation and public API scaffold in
-place. The parser and renderer are not implemented yet: `compile()` currently
-returns an `unsupported_syntax` diagnostic for every source. The first
-implementation milestone is a complete vertical slice that parses and renders
-a small HTML template with an escaped context value.
+The project has its package foundation and public API scaffold, plus the first
+lexer/parser frontend for static HTML elements and text interpolation. The
+analysis, lowering, finalization, and renderer pipeline is still in progress;
+`compile()` currently returns an `unsupported_syntax` diagnostic for every
+source. The first end-to-end milestone is a small HTML template rendered with
+an escaped context value.
 
 ## Requirements
 

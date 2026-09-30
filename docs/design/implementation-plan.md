@@ -43,13 +43,13 @@ The end-to-end acceptance case is a template such as
 `<p>Hello, &lt;Ada&gt;!</p>`. It must travel through parsing, analysis,
 lowering, optimization, finalization, and VM execution.
 
-- [ ] **ZEP-007** Define the minimal template delimiter rules needed to
+- [x] **ZEP-007** Define the minimal template delimiter rules needed to
   distinguish markup text from `{{ ... }}` expressions.
-- [ ] **ZEP-008** Implement source-span tracking for every token and AST node
+- [x] **ZEP-008** Implement source-span tracking for every token and AST node
   used by the vertical slice.
-- [ ] **ZEP-009** Implement a lexer/parser for static text, opening and closing
+- [x] **ZEP-009** Implement a lexer/parser for static text, opening and closing
   HTML elements, and text-position interpolation.
-- [ ] **ZEP-010** Build a temporary AST with element, text, and expression
+- [x] **ZEP-010** Build a temporary AST with element, text, and expression
   nodes; ensure the compiled template does not retain AST pointers.
 - [ ] **ZEP-011** Implement the analysis phase for the vertical-slice AST,
   assigning symbol IDs to root-context identifiers and marking HTML text
