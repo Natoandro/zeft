@@ -47,6 +47,8 @@ pub const Element = struct {
     attributes: []Attribute,
     /// Exact source bytes for the opening tag, including attribute spacing and quoting.
     opening_tag: []const u8,
+    /// Exact source bytes for the closing tag; empty for void and self-closing elements.
+    closing_tag: []const u8,
     children: []Node,
     is_void: bool,
     self_closing: bool,
@@ -607,6 +609,7 @@ const Parser = struct {
                                 .name = opening.name,
                                 .attributes = opening.attributes,
                                 .opening_tag = opening.serialized,
+                                .closing_tag = "",
                                 .children = &.{},
                                 .is_void = is_void,
                                 .self_closing = opening.self_closing,
@@ -629,6 +632,7 @@ const Parser = struct {
                             .name = opening.name,
                             .attributes = opening.attributes,
                             .opening_tag = opening.serialized,
+                            .closing_tag = self.source[close_span.start..close_span.end],
                             .children = children.nodes,
                             .is_void = false,
                             .self_closing = false,

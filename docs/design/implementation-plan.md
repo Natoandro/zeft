@@ -104,9 +104,9 @@ turning the renderer into a markup parser.
 - [x] **ZEP-025** Add XML format parsing and serialization rules, including
   case-sensitive names and XML empty-element behavior.
 - [x] **ZEP-026** Test text and attribute escaping in both HTML and XML formats.
-- [ ] **ZEP-027** Add parser tests for nested elements, mixed text and markup,
+- [x] **ZEP-027** Add parser tests for nested elements, mixed text and markup,
   quoted attributes, malformed nesting, and source spans.
-- [ ] **ZEP-028** Verify static HTML/XML markup is fully serialized before
+- [x] **ZEP-028** Verify static HTML/XML markup is fully serialized before
   rendering and that the runtime contains no markup parsing path.
 
 ## Phase 3 — Expand expression compilation and evaluation

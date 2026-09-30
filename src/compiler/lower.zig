@@ -52,9 +52,11 @@ const Lowerer = struct {
                 .element => |element| {
                     try self.writeOpeningTag(element, node.span.start);
                     try self.visit(element.children);
-                    if (!element.is_void and !element.self_closing) {
-                        const closing = try std.fmt.allocPrint(self.allocator, "</{s}>", .{element.name});
-                        try self.writeStatic(closing, .{ .start = node.span.end - element.name.len - 3, .end = node.span.end });
+                    if (element.closing_tag.len != 0) {
+                        try self.writeStatic(element.closing_tag, .{
+                            .start = node.span.end - element.closing_tag.len,
+                            .end = node.span.end,
+                        });
                     }
                 },
                 .expression => |expr| try self.writeExpression(expr.source_span, node.span),

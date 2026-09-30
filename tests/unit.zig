@@ -64,6 +64,45 @@ test "parser builds nested elements with text and interpolation spans" {
     try expectNodeSpansValid(document.nodes, source.len);
 }
 
+test "parser preserves nested mixed markup, quoted attributes, and exact source spans" {
+    const source = "<Main id='root'><Child title=\"before {{ name }} after\">left<Inner></Inner>right</Child></Main>";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = try parser.parse(arena.allocator(), source);
+    const document = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedParseFailure,
+    };
+
+    const main = document.nodes[0];
+    try std.testing.expectEqual(zeft.SourceSpan{ .start = 0, .end = source.len }, main.span);
+    const main_element = main.data.element;
+    try std.testing.expectEqualStrings("<Main id='root'>", main_element.opening_tag);
+    try std.testing.expectEqualStrings("</Main>", main_element.closing_tag);
+    try std.testing.expectEqual(@as(usize, 1), main_element.attributes.len);
+    try std.testing.expectEqualStrings("id", main_element.attributes[0].name);
+    try std.testing.expectEqual(zeft.SourceSpan{
+        .start = std.mem.indexOf(u8, source, "id='").?,
+        .end = std.mem.indexOf(u8, source, "id='root'").? + "id='root'".len,
+    }, main_element.attributes[0].span);
+    try std.testing.expectEqual(parser.QuoteStyle.single, main_element.attributes[0].value.?.quote_style);
+
+    const child = main_element.children[0];
+    const child_element = child.data.element;
+    try std.testing.expectEqualStrings("<Child title=\"before {{ name }} after\">", child_element.opening_tag);
+    try std.testing.expectEqualStrings("</Child>", child_element.closing_tag);
+    try std.testing.expectEqual(@as(usize, 3), child_element.children.len);
+    const value = child_element.attributes[0].value.?;
+    try std.testing.expectEqual(parser.QuoteStyle.double, value.quote_style);
+    try std.testing.expectEqualStrings("before ", value.segments[0].data.text);
+    try std.testing.expectEqualStrings("name", source[value.segments[1].data.expression.start..value.segments[1].data.expression.end]);
+    try std.testing.expectEqualStrings(" after", value.segments[2].data.text);
+    try std.testing.expectEqualStrings("left", child_element.children[0].data.text);
+    try std.testing.expectEqualStrings("Inner", child_element.children[1].data.element.name);
+    try std.testing.expectEqualStrings("right", child_element.children[2].data.text);
+    try expectNodeSpansValid(document.nodes, source.len);
+}
+
 test "parser represents boolean and quoted attributes with source spans" {
     const source = "<button disabled data-kind='primary' title=\"{{ value }}\"></button>";
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

@@ -102,6 +102,27 @@ test "XML text and attributes use XML-specific escaping" {
     try std.testing.expectEqualStrings("<?xml version='1.0'?><node value=\"&amp;&lt;&gt;&quot;&apos;\"><child /><![CDATA[ {{ literal }} & < ]]>&amp;&lt;&gt;\"'</node>", std.Io.Writer.buffered(&writer));
 }
 
+test "HTML and XML markup is serialized before runtime execution" {
+    const cases = .{
+        .{ .format = zeft.OutputFormat.html, .source = "<Main id='x'>before<Child title=\"static\">middle</cHiLd>after</MAIN>" },
+        .{ .format = zeft.OutputFormat.xml, .source = "<?xml version='1.0'?><Root attr=\"a&amp;b\"><Child />text<![CDATA[x<y]]></Root>" },
+    };
+    inline for (cases) |case| {
+        const result = try zeft.compile(std.testing.allocator, case.source, .{ .format = case.format });
+        var template = switch (result) {
+            .success => |value| value,
+            .failure => return error.UnexpectedCompileFailure,
+        };
+        defer template.deinit();
+
+        var output: [256]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&output);
+        const rendered = try template.render(&writer, .{});
+        try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+        try std.testing.expectEqualStrings(case.source, std.Io.Writer.buffered(&writer));
+    }
+}
+
 test "invalid HTML self-closing syntax and void end tags fail during compilation" {
     const invalid_sources = [_][]const u8{ "<div/>", "</br>", "<p><br></br></p>" };
     for (invalid_sources) |source| {
