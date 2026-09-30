@@ -1,4 +1,4 @@
-//! Lower the Phase 1 AST and analyzed expressions into initial IR.
+//! Lower the parsed AST and analyzed expressions into Render IR.
 
 const std = @import("std");
 const zeft = @import("zeft_core");
@@ -52,7 +52,7 @@ const Lowerer = struct {
                 .element => |element| {
                     try self.writeOpeningTag(element, node.span.start);
                     try self.visit(element.children);
-                    if (!element.is_void) {
+                    if (!element.is_void and !element.self_closing) {
                         const closing = try std.fmt.allocPrint(self.allocator, "</{s}>", .{element.name});
                         try self.writeStatic(closing, .{ .start = node.span.end - element.name.len - 3, .end = node.span.end });
                     }
@@ -122,9 +122,9 @@ const Lowerer = struct {
             .span = output_span,
             .data = .{ .write_expression = .{
                 .expression_id = id,
-                .escape_mode = switch (expression_info.output_context) {
-                    .html_text => .html_text,
-                    .html_attribute => .html_attribute,
+                .escape_context = switch (expression_info.output_context) {
+                    .text => .text,
+                    .attribute => .attribute,
                 },
             } },
         });
@@ -141,7 +141,7 @@ test "lowers serialized static markup and expression operations" {
         .success => |value| value,
         .failure => return error.UnexpectedParseFailure,
     };
-    const analyzed_result = try analysis.analyze(allocator, source, document, .html);
+    const analyzed_result = try analysis.analyze(allocator, source, document);
     const analyzed = switch (analyzed_result) {
         .success => |value| value,
         .failure => return error.UnexpectedAnalysisFailure,

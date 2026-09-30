@@ -72,10 +72,11 @@ attribute with a quoted value MUST remain an ordinary valued attribute,
 including when its name commonly denotes a boolean attribute; its source
 spelling and quoting MUST be preserved.
 
-HTML comments using `<!--` and the first subsequent `-->` MUST be represented
-as static markup and serialized exactly as written. Template delimiters and
-text escapes inside a comment MUST remain literal bytes and MUST NOT be
-parsed. An unterminated comment MUST fail compilation as invalid markup.
+HTML and XML comments using `<!--` and the first subsequent `-->` MUST be
+represented as static markup and serialized exactly as written. Template
+delimiters and text escapes inside a comment MUST remain literal bytes and
+MUST NOT be parsed. An unterminated comment MUST fail compilation as invalid
+markup.
 
 The initial HTML declaration grammar MUST accept only the HTML5 doctype form:
 `<!DOCTYPE html>`, allowing ASCII case variation in `DOCTYPE` and `html` and
@@ -84,14 +85,49 @@ preserve an accepted doctype exactly as written. Other declarations,
 processing instructions, and CDATA sections MUST fail compilation as invalid
 markup.
 
+### XML markup
+
+XML templates MUST be treated as fragments rather than complete XML documents.
+They MAY contain multiple top-level nodes or character data; the compiler MUST
+NOT require exactly one document element.
+
+In XML format, element and attribute names MUST use the ASCII grammar
+`[A-Za-z_][A-Za-z0-9_.:-]*` and MUST be matched case-sensitively. Names MUST
+retain their original source spelling. Every non-self-closing element MUST
+have one exactly matching end tag. Any element MAY use `<name/>` or
+`<name />` empty-element syntax; the compiler MUST preserve its opening tag
+exactly and MUST NOT generate an end tag. XML MUST NOT apply the HTML void
+element set. XML attributes MUST have single- or double-quoted values; bare
+attributes MUST be rejected as invalid markup.
+
+XML format MAY begin with one XML declaration at byte offset zero. Its version
+MUST be `1.0` or `1.1`; optional `encoding` and `standalone` pseudo-attributes
+MUST follow XML declaration ordering and MUST be preserved exactly as written.
+`encoding` MUST use the ASCII encoding-name syntax; `standalone` MUST be `yes`
+or `no`. XML comments and CDATA sections MUST be represented as static markup
+and serialized exactly as written. XML comments MUST NOT contain `--` except
+as the final comment delimiter. The first subsequent `]]>` closes a CDATA
+section; template delimiters inside CDATA MUST remain literal. An unterminated
+CDATA section MUST fail compilation as invalid markup. XML document type
+declarations and processing instructions other than the XML declaration MUST
+be rejected as invalid markup.
+
+Outside comments and CDATA sections, XML text and attribute values MUST NOT
+contain a literal `<`; XML text MUST NOT contain `]]>`. Ampersands in static
+XML text and attribute values MUST begin one of the five predefined XML entity
+references or a valid decimal or hexadecimal numeric character reference.
+Because document type declarations are unsupported, other named entities MUST
+be rejected. Valid source references MUST be preserved verbatim.
+
 ### Expression analysis
 
 Analysis MUST visit expression occurrences in document order, including
 depth-first element children. It MUST assign one symbol ID per distinct root
 identifier, reusing that ID for later occurrences of the same case-sensitive
 name. New IDs MUST be assigned in first-occurrence order, starting at zero.
-Each expression MUST be marked with its HTML or XML text or attribute output
-context.
+Each expression MUST be marked with its text or attribute output context. The
+selected output format MUST remain available to rendering and determines the
+format-specific escaping rule for that context.
 
 An expression that resolves to a root-context identifier MUST load its
 assigned symbol and return that value. Runtime lookup uses the symbol's

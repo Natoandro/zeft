@@ -1,4 +1,4 @@
-//! Semantic analysis for the Phase 1 template AST.
+//! Semantic analysis for the template AST.
 
 const std = @import("std");
 const zeft = @import("zeft_core");
@@ -8,8 +8,8 @@ const expression = @import("zeft_expression");
 pub const SymbolId = u32;
 
 pub const OutputContext = enum {
-    html_text,
-    html_attribute,
+    text,
+    attribute,
 };
 
 pub const Symbol = struct {
@@ -38,13 +38,7 @@ pub fn analyze(
     allocator: std.mem.Allocator,
     source: []const u8,
     document: parser.Document,
-    format: zeft.OutputFormat,
 ) std.mem.Allocator.Error!AnalyzeResult {
-    if (format == .xml) return .{ .failure = .{
-        .kind = .unsupported_syntax,
-        .span = .{ .start = 0, .end = source.len },
-    } };
-
     var analyzer = Analyzer{ .allocator = allocator, .source = source };
     try analyzer.visit(document.nodes);
     if (analyzer.failure) |diagnostic| return .{ .failure = diagnostic };
@@ -71,7 +65,7 @@ const Analyzer = struct {
                             for (value.segments) |segment| {
                                 switch (segment.data) {
                                     .text => {},
-                                    .expression => |span| try self.addExpression(span, .html_attribute),
+                                    .expression => |span| try self.addExpression(span, .attribute),
                                 }
                                 if (self.failure != null) return;
                             }
@@ -79,7 +73,7 @@ const Analyzer = struct {
                     }
                     try self.visit(element.children);
                 },
-                .expression => |expr| try self.addExpression(expr.source_span, .html_text),
+                .expression => |expr| try self.addExpression(expr.source_span, .text),
             }
         }
     }
@@ -121,7 +115,7 @@ test "assigns first-occurrence root symbol IDs and HTML text context" {
         .success => |value| value,
         .failure => return error.UnexpectedParseFailure,
     };
-    const analyzed = try analyze(allocator, source, document, .html);
+    const analyzed = try analyze(allocator, source, document);
     const result = switch (analyzed) {
         .success => |value| value,
         .failure => return error.UnexpectedAnalysisFailure,
@@ -131,7 +125,7 @@ test "assigns first-occurrence root symbol IDs and HTML text context" {
     try std.testing.expectEqual(@as(SymbolId, 0), result.expressions[0].symbol_id);
     try std.testing.expectEqual(@as(SymbolId, 1), result.expressions[1].symbol_id);
     try std.testing.expectEqual(@as(SymbolId, 0), result.expressions[2].symbol_id);
-    try std.testing.expectEqual(OutputContext.html_text, result.expressions[0].output_context);
+    try std.testing.expectEqual(OutputContext.text, result.expressions[0].output_context);
 }
 
 test "analyzes attribute interpolations before child expressions with distinct contexts" {
@@ -144,27 +138,32 @@ test "analyzes attribute interpolations before child expressions with distinct c
         .success => |value| value,
         .failure => return error.UnexpectedParseFailure,
     };
-    const analyzed = try analyze(allocator, source, document, .html);
+    const analyzed = try analyze(allocator, source, document);
     const result = switch (analyzed) {
         .success => |value| value,
         .failure => return error.UnexpectedAnalysisFailure,
     };
 
     try std.testing.expectEqual(@as(usize, 2), result.expressions.len);
-    try std.testing.expectEqual(OutputContext.html_attribute, result.expressions[0].output_context);
-    try std.testing.expectEqual(OutputContext.html_text, result.expressions[1].output_context);
+    try std.testing.expectEqual(OutputContext.attribute, result.expressions[0].output_context);
+    try std.testing.expectEqual(OutputContext.text, result.expressions[1].output_context);
     try std.testing.expectEqual(result.expressions[0].symbol_id, result.expressions[1].symbol_id);
 }
 
-test "rejects XML mode for the Phase 1 analyzer" {
+test "analyzes XML expressions with text and attribute contexts" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const result = try analyze(arena.allocator(), "<p/>", .{ .nodes = &.{} }, .xml);
+    const source = "<node title=\"{{ attribute }}\">{{ text }}</node>";
+    const document = switch (try parser.parseWithFormat(arena.allocator(), source, .xml)) {
+        .success => |value| value,
+        .failure => return error.UnexpectedParseFailure,
+    };
+    const result = try analyze(arena.allocator(), source, document);
     switch (result) {
-        .success => return error.ExpectedDiagnostic,
-        .failure => |diagnostic| {
-            try std.testing.expectEqual(zeft.CompileErrorKind.unsupported_syntax, diagnostic.kind);
-            try std.testing.expectEqual(@as(?zeft.SourceSpan, .{ .start = 0, .end = 4 }), diagnostic.span);
+        .failure => return error.UnexpectedAnalysisFailure,
+        .success => |analyzed| {
+            try std.testing.expectEqual(OutputContext.attribute, analyzed.expressions[0].output_context);
+            try std.testing.expectEqual(OutputContext.text, analyzed.expressions[1].output_context);
         },
     }
 }

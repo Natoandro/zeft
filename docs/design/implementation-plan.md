@@ -101,10 +101,9 @@ turning the renderer into a markup parser.
   constructs selected for the initial HTML grammar.
 - [x] **ZEP-024** Validate balanced elements and report malformed markup with
   source locations.
-- [ ] **ZEP-025** Add XML format parsing and serialization rules, including
+- [x] **ZEP-025** Add XML format parsing and serialization rules, including
   case-sensitive names and XML empty-element behavior.
-- [ ] **ZEP-026** Add distinct HTML text, HTML attribute, XML text, and XML
-  attribute escaping tests.
+- [x] **ZEP-026** Test text and attribute escaping in both HTML and XML formats.
 - [ ] **ZEP-027** Add parser tests for nested elements, mixed text and markup,
   quoted attributes, malformed nesting, and source spans.
 - [ ] **ZEP-028** Verify static HTML/XML markup is fully serialized before

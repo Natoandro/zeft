@@ -76,14 +76,24 @@ local-slot references to avoid repeated name searches.
 
 ## Output and escaping
 
-Every dynamic output operation MUST carry an escape mode determined during
-compilation. At minimum, modes MUST distinguish HTML text, HTML attribute,
-XML text, XML attribute, and explicit raw output.
+Every dynamic output operation MUST carry an escape context determined during
+compilation. The context MUST distinguish text from attribute output. The
+compiled template MUST retain its selected output format, and the renderer
+MUST combine that format with the instruction's context when escaping. An
+explicit raw-output context MAY be added.
 
-The renderer MUST apply the encoded escape mode when writing a dynamic value.
+The renderer MUST apply the encoded escape context and compiled output format
+when writing a dynamic value.
 It MUST NOT infer context by scanning already-rendered output. Raw output MUST
 be an explicit template operation; it MUST NOT be the default for ordinary
 interpolated values.
+
+HTML text and XML text escaping MUST replace `&`, `<`, and `>` with `&amp;`,
+`&lt;`, and `&gt;`, respectively. HTML attribute escaping MUST additionally
+replace `"` with `&quot;` and `'` with `&#39;`. XML attribute escaping MUST
+additionally replace `"` with `&quot;` and `'` with `&apos;`. Attribute
+escaping MUST escape both quote characters regardless of the source
+attribute's quoting style.
 
 ## Errors
 

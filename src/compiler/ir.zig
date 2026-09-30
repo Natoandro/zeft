@@ -1,4 +1,4 @@
-//! Initial Phase 1 expression and linear render intermediate representations.
+//! Expression and linear render intermediate representations.
 
 const zeft = @import("zeft_core");
 const analysis = @import("zeft_analysis");
@@ -6,9 +6,9 @@ const analysis = @import("zeft_analysis");
 pub const StringId = u32;
 pub const ExpressionId = u32;
 
-pub const EscapeMode = enum {
-    html_text,
-    html_attribute,
+pub const EscapeContext = enum {
+    text,
+    attribute,
 };
 
 pub const ExpressionInstruction = struct {
@@ -33,7 +33,7 @@ pub const Instruction = struct {
         write_static: StringId,
         write_expression: struct {
             expression_id: ExpressionId,
-            escape_mode: EscapeMode,
+            escape_context: EscapeContext,
         },
         end,
     };

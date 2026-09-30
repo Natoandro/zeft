@@ -71,7 +71,7 @@ test "HTML void elements preserve their opening spelling without closing tags" {
 }
 
 test "HTML comments and doctype serialize verbatim without comment interpolation" {
-    const source = "<!DOCTYPE html><!-- {{ ignored }} --><p>{{ name }}</p>";
+    const source = "<!DOCTYPE html><p>before<!-- {{ ignored }} -->{{ name }}</p>";
     const result = try zeft.compile(std.testing.allocator, source, .{});
     var template = switch (result) {
         .success => |value| value,
@@ -83,7 +83,23 @@ test "HTML comments and doctype serialize verbatim without comment interpolation
     var writer = std.Io.Writer.fixed(&output);
     const rendered = try template.render(&writer, .{ .name = "Ada" });
     try std.testing.expectEqual(zeft.RenderResult.success, rendered);
-    try std.testing.expectEqualStrings("<!DOCTYPE html><!-- {{ ignored }} --><p>Ada</p>", std.Io.Writer.buffered(&writer));
+    try std.testing.expectEqualStrings("<!DOCTYPE html><p>before<!-- {{ ignored }} -->Ada</p>", std.Io.Writer.buffered(&writer));
+}
+
+test "XML text and attributes use XML-specific escaping" {
+    const source = "<?xml version='1.0'?><node value=\"{{ value }}\"><child /><![CDATA[ {{ literal }} & < ]]>{{ value }}</node>";
+    const result = try zeft.compile(std.testing.allocator, source, .{ .format = .xml });
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    var output: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, .{ .value = "&<>\"'" });
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("<?xml version='1.0'?><node value=\"&amp;&lt;&gt;&quot;&apos;\"><child /><![CDATA[ {{ literal }} & < ]]>&amp;&lt;&gt;\"'</node>", std.Io.Writer.buffered(&writer));
 }
 
 test "invalid HTML self-closing syntax and void end tags fail during compilation" {

@@ -72,7 +72,8 @@ pub const CompiledTemplate = struct {
                 .value = contextString(field.type, @field(context, field.name)),
             };
         }
-        return renderProgram(self.finalized().program, writer, &entries);
+        const compiled = self.finalized();
+        return renderProgram(compiled.program, writer, &entries, compiled.options.format);
     }
 };
 
@@ -92,12 +93,12 @@ pub fn compile(
     defer temporary.deinit();
     const temp_allocator = temporary.allocator();
 
-    const parsed = try parser.parse(temp_allocator, source);
+    const parsed = try parser.parseWithFormat(temp_allocator, source, options.format);
     const document = switch (parsed) {
         .success => |value| value,
         .failure => |diagnostic| return .{ .failure = diagnostic },
     };
-    const analyzed_result = try analysis.analyze(temp_allocator, source, document, options.format);
+    const analyzed_result = try analysis.analyze(temp_allocator, source, document);
     const analyzed = switch (analyzed_result) {
         .success => |value| value,
         .failure => |diagnostic| return .{ .failure = diagnostic },
@@ -169,6 +170,7 @@ fn renderProgram(
     program: ir.Program,
     writer: *std.Io.Writer,
     context: []const ContextEntry,
+    format: core.OutputFormat,
 ) anyerror!RenderResult {
     var pc: usize = 0;
     while (pc < program.instructions.len) : (pc += 1) {
@@ -180,7 +182,7 @@ fn renderProgram(
                     .success => |result| result,
                     .failure => |diagnostic| return .{ .failure = diagnostic },
                 };
-                try writeEscaped(writer, value, write.escape_mode);
+                try writeEscaped(writer, value, write.escape_context, format);
             },
             .end => return .success,
         }
@@ -221,22 +223,22 @@ fn evaluateExpression(
     return .{ .failure = .{ .kind = .invalid_operand } };
 }
 
-fn writeEscaped(writer: *std.Io.Writer, value: []const u8, mode: ir.EscapeMode) anyerror!void {
+fn writeEscaped(writer: *std.Io.Writer, value: []const u8, context: ir.EscapeContext, format: core.OutputFormat) anyerror!void {
     var segment_start: usize = 0;
     for (value, 0..) |byte, index| {
-        const replacement: ?[]const u8 = switch (mode) {
-            .html_text => switch (byte) {
+        const replacement: ?[]const u8 = switch (context) {
+            .text => switch (byte) {
                 '&' => "&amp;",
                 '<' => "&lt;",
                 '>' => "&gt;",
                 else => null,
             },
-            .html_attribute => switch (byte) {
+            .attribute => switch (byte) {
                 '&' => "&amp;",
                 '<' => "&lt;",
                 '>' => "&gt;",
                 '"' => "&quot;",
-                '\'' => "&#39;",
+                '\'' => if (format == .html) "&#39;" else "&apos;",
                 else => null,
             },
         };

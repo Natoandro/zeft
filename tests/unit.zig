@@ -169,6 +169,72 @@ test "parser rejects unsupported declarations and unterminated comments" {
     }
 }
 
+test "XML parsing preserves declarations and CDATA and applies XML element rules" {
+    const source = "<?xml version=\"1.0\" encoding='UTF-8' standalone=\"yes\"?><Root Attr=\"value&amp;&#65;&#x1F600;\"><Child/>text<![CDATA[ {{ literal }} & < ]]></Root>";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = try parser.parseWithFormat(arena.allocator(), source, .xml);
+    const document = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedParseFailure,
+    };
+
+    try std.testing.expectEqual(@as(usize, 2), document.nodes.len);
+    try std.testing.expectEqual(parser.StaticMarkup.Kind.xml_declaration, document.nodes[0].data.static_markup.kind);
+    try std.testing.expectEqualStrings("<?xml version=\"1.0\" encoding='UTF-8' standalone=\"yes\"?>", document.nodes[0].data.static_markup.serialized);
+    const root = document.nodes[1].data.element;
+    try std.testing.expectEqualStrings("Root", root.name);
+    try std.testing.expect(!root.is_void and !root.self_closing);
+    try std.testing.expectEqualStrings("value&amp;&#65;&#x1F600;", root.attributes[0].value.?.segments[0].data.text);
+    try std.testing.expectEqual(@as(usize, 3), root.children.len);
+    const child = root.children[0].data.element;
+    try std.testing.expectEqualStrings("Child", child.name);
+    try std.testing.expect(child.self_closing);
+    try std.testing.expectEqual(parser.StaticMarkup.Kind.cdata, root.children[2].data.static_markup.kind);
+    try std.testing.expectEqualStrings("<![CDATA[ {{ literal }} & < ]]>", root.children[2].data.static_markup.serialized);
+}
+
+test "XML names are case-sensitive and XML attributes require quoted values" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const invalid_sources = [_][]const u8{
+        "<Node></node>",
+        "<node>unclosed",
+        "<node enabled/>",
+        "<!DOCTYPE html>",
+        "<node><?target data?></node>",
+        "<?xml version=\"2.0\"?>",
+        "text<?xml version=\"1.0\"?>",
+        "<?xml version=\"1.0\" standalone=\"yes\" encoding=\"UTF-8\"?>",
+        "<node>bare & ampersand</node>",
+        "<node>&unknown;</node>",
+        "<node>&#0;</node>",
+        "<node>&#xD800;</node>",
+        "<node>&#x110000;</node>",
+        "<node attr=\"raw < less-than\"/>",
+        "<node>bad ]]> sequence</node>",
+        "<node><!-- bad -- comment --></node>",
+    };
+    for (invalid_sources) |source| {
+        const result = try parser.parseWithFormat(allocator, source, .xml);
+        switch (result) {
+            .success => return error.ExpectedDiagnostic,
+            .failure => |diagnostic| try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind),
+        }
+    }
+}
+
+test "XML 1.1 accepts valid control-character references" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = try parser.parseWithFormat(arena.allocator(), "<?xml version='1.1'?><node>&#1;</node>", .xml);
+    switch (result) {
+        .failure => return error.UnexpectedParseFailure,
+        .success => |document| try std.testing.expectEqual(@as(usize, 2), document.nodes.len),
+    }
+}
+
 test "parser rejects self-closing non-void elements and void end tags" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
