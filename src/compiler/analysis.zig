@@ -64,7 +64,7 @@ const Analyzer = struct {
     fn visit(self: *Analyzer, nodes: []const parser.Node) std.mem.Allocator.Error!void {
         for (nodes) |node| {
             switch (node.data) {
-                .text => {},
+                .text, .static_markup => {},
                 .element => |element| {
                     for (element.attributes) |attribute| {
                         if (attribute.value) |value| {

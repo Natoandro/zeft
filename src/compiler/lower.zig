@@ -48,6 +48,7 @@ const Lowerer = struct {
         for (nodes) |node| {
             switch (node.data) {
                 .text => |text| try self.writeStatic(text, node.span),
+                .static_markup => |markup| try self.writeStatic(markup.serialized, node.span),
                 .element => |element| {
                     try self.writeOpeningTag(element, node.span.start);
                     try self.visit(element.children);

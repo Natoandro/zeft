@@ -127,6 +127,48 @@ test "parser recognizes HTML void elements case-insensitively and preserves thei
     try std.testing.expect(uppercase_document.nodes[0].data.element.is_void);
 }
 
+test "parser represents comments and the HTML doctype as static markup" {
+    const source = "<!dOcTyPe   hTmL ><!-- {{ literal }} -->";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = try parser.parse(arena.allocator(), source);
+    const document = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedParseFailure,
+    };
+
+    try std.testing.expectEqual(@as(usize, 2), document.nodes.len);
+    const doctype = document.nodes[0];
+    try std.testing.expectEqual(parser.StaticMarkup.Kind.doctype, doctype.data.static_markup.kind);
+    try std.testing.expectEqualStrings("<!dOcTyPe   hTmL >", doctype.data.static_markup.serialized);
+    try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 0, .end = 18 }), doctype.span);
+
+    const comment = document.nodes[1];
+    try std.testing.expectEqual(parser.StaticMarkup.Kind.comment, comment.data.static_markup.kind);
+    try std.testing.expectEqualStrings("<!-- {{ literal }} -->", comment.data.static_markup.serialized);
+    try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 18, .end = source.len }), comment.span);
+}
+
+test "parser rejects unsupported declarations and unterminated comments" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const invalid_sources = [_][]const u8{
+        "<!DOCTYPE html PUBLIC 'public'>",
+        "<?xml version='1.0'?>",
+        "<![CDATA[text]]>",
+        "<!-- unterminated",
+    };
+    for (invalid_sources) |source| {
+        const result = try parser.parse(allocator, source);
+        switch (result) {
+            .success => return error.ExpectedDiagnostic,
+            .failure => |diagnostic| try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind),
+        }
+    }
+}
+
 test "parser rejects self-closing non-void elements and void end tags" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -211,7 +253,7 @@ fn expectNodeSpansValid(nodes: []const parser.Node, source_len: usize) !void {
         try std.testing.expect(node.span.isValid(source_len));
         switch (node.data) {
             .element => |element| try expectNodeSpansValid(element.children, source_len),
-            .text, .expression => {},
+            .text, .static_markup, .expression => {},
         }
     }
 }

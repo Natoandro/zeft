@@ -9,10 +9,18 @@ pub const Token = struct {
 
     pub const Data = union(enum) {
         text: []const u8,
+        static_markup: StaticMarkup,
         open_element: OpenElement,
         close_element: []const u8,
         expression: zeft.SourceSpan,
     };
+};
+
+pub const StaticMarkup = struct {
+    kind: Kind,
+    serialized: []const u8,
+
+    pub const Kind = enum { comment, doctype };
 };
 
 pub const OpenElement = struct {
@@ -28,6 +36,7 @@ pub const Node = struct {
 
     pub const Data = union(enum) {
         text: []const u8,
+        static_markup: StaticMarkup,
         element: Element,
         expression: Expression,
     };
@@ -128,6 +137,11 @@ const Lexer = struct {
         if (self.offset == self.source.len) return null;
         const start = self.offset;
 
+        if (startsWith(self.source, self.offset, "<!--")) return self.commentToken();
+        if (startsWithAsciiIgnoreCase(self.source, self.offset, "<!doctype")) return self.doctypeToken();
+        if (startsWith(self.source, self.offset, "<!") or startsWith(self.source, self.offset, "<?")) {
+            return self.invalidSpecialMarkup(start);
+        }
         if (startsWith(self.source, self.offset, "{{")) return self.expressionToken();
         if (startsTag(self.source, self.offset)) return self.tagToken();
 
@@ -178,6 +192,54 @@ const Lexer = struct {
                 .end = trimEnd(self.source, content_start, content_end),
             } },
         };
+    }
+
+    fn commentToken(self: *Lexer) std.mem.Allocator.Error!?Token {
+        const start = self.offset;
+        self.offset += "<!--".len;
+        while (self.offset + "-->".len <= self.source.len and !startsWith(self.source, self.offset, "-->")) : (self.offset += 1) {}
+        if (self.offset + "-->".len > self.source.len) {
+            self.failure = .{
+                .kind = .invalid_markup,
+                .span = .{ .start = start, .end = self.source.len },
+            };
+            self.offset = self.source.len;
+            return null;
+        }
+        self.offset += "-->".len;
+        return .{
+            .span = .{ .start = start, .end = self.offset },
+            .data = .{ .static_markup = .{ .kind = .comment, .serialized = self.source[start..self.offset] } },
+        };
+    }
+
+    fn doctypeToken(self: *Lexer) std.mem.Allocator.Error!?Token {
+        const start = self.offset;
+        self.offset += "<!doctype".len;
+        if (self.offset >= self.source.len or !isMarkupWhitespace(self.source[self.offset])) return self.invalidSpecialMarkup(start);
+        while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
+        if (!startsWithAsciiIgnoreCase(self.source, self.offset, "html")) return self.invalidSpecialMarkup(start);
+        self.offset += "html".len;
+        if (self.offset < self.source.len and self.source[self.offset] != '>' and !isMarkupWhitespace(self.source[self.offset])) {
+            return self.invalidSpecialMarkup(start);
+        }
+        while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
+        if (self.offset >= self.source.len or self.source[self.offset] != '>') return self.invalidSpecialMarkup(start);
+        self.offset += 1;
+        return .{
+            .span = .{ .start = start, .end = self.offset },
+            .data = .{ .static_markup = .{ .kind = .doctype, .serialized = self.source[start..self.offset] } },
+        };
+    }
+
+    fn invalidSpecialMarkup(self: *Lexer, start: usize) ?Token {
+        while (self.offset < self.source.len and self.source[self.offset] != '>') : (self.offset += 1) {}
+        if (self.offset < self.source.len) self.offset += 1;
+        self.failure = .{
+            .kind = .invalid_markup,
+            .span = .{ .start = start, .end = self.offset },
+        };
+        return null;
     }
 
     fn tagToken(self: *Lexer) std.mem.Allocator.Error!?Token {
@@ -351,6 +413,10 @@ const Parser = struct {
             self.index += 1;
             switch (token.data) {
                 .text => |text| try nodes.append(self.allocator, .{ .span = token.span, .data = .{ .text = text } }),
+                .static_markup => |markup| try nodes.append(self.allocator, .{
+                    .span = token.span,
+                    .data = .{ .static_markup = markup },
+                }),
                 .expression => |expression_span| try nodes.append(self.allocator, .{
                     .span = token.span,
                     .data = .{ .expression = .{ .source_span = expression_span } },
@@ -432,6 +498,11 @@ fn isHtmlVoidElement(name: []const u8) bool {
 
 fn startsWith(source: []const u8, offset: usize, needle: []const u8) bool {
     return offset <= source.len and std.mem.startsWith(u8, source[offset..], needle);
+}
+
+fn startsWithAsciiIgnoreCase(source: []const u8, offset: usize, needle: []const u8) bool {
+    return offset <= source.len and source.len - offset >= needle.len and
+        std.ascii.eqlIgnoreCase(source[offset .. offset + needle.len], needle);
 }
 
 fn startsTag(source: []const u8, offset: usize) bool {

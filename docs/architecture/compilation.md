@@ -72,6 +72,18 @@ attribute with a quoted value MUST remain an ordinary valued attribute,
 including when its name commonly denotes a boolean attribute; its source
 spelling and quoting MUST be preserved.
 
+HTML comments using `<!--` and the first subsequent `-->` MUST be represented
+as static markup and serialized exactly as written. Template delimiters and
+text escapes inside a comment MUST remain literal bytes and MUST NOT be
+parsed. An unterminated comment MUST fail compilation as invalid markup.
+
+The initial HTML declaration grammar MUST accept only the HTML5 doctype form:
+`<!DOCTYPE html>`, allowing ASCII case variation in `DOCTYPE` and `html` and
+ASCII markup whitespace between the tokens or before `>`. The compiler MUST
+preserve an accepted doctype exactly as written. Other declarations,
+processing instructions, and CDATA sections MUST fail compilation as invalid
+markup.
+
 ### Expression analysis
 
 Analysis MUST visit expression occurrences in document order, including

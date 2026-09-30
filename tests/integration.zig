@@ -70,6 +70,22 @@ test "HTML void elements preserve their opening spelling without closing tags" {
     try std.testing.expectEqualStrings(source, std.Io.Writer.buffered(&writer));
 }
 
+test "HTML comments and doctype serialize verbatim without comment interpolation" {
+    const source = "<!DOCTYPE html><!-- {{ ignored }} --><p>{{ name }}</p>";
+    const result = try zeft.compile(std.testing.allocator, source, .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    var output: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, .{ .name = "Ada" });
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("<!DOCTYPE html><!-- {{ ignored }} --><p>Ada</p>", std.Io.Writer.buffered(&writer));
+}
+
 test "invalid HTML self-closing syntax and void end tags fail during compilation" {
     const invalid_sources = [_][]const u8{ "<div/>", "</br>", "<p><br></br></p>" };
     for (invalid_sources) |source| {
