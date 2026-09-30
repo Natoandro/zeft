@@ -64,6 +64,45 @@ test "parser builds nested elements with text and interpolation spans" {
     try expectNodeSpansValid(document.nodes, source.len);
 }
 
+test "parser represents boolean and quoted attributes with source spans" {
+    const source = "<button disabled data-kind='primary' title=\"{{ value }}\"></button>";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = try parser.parse(arena.allocator(), source);
+    const document = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedParseFailure,
+    };
+
+    const element = document.nodes[0].data.element;
+    try std.testing.expectEqual(@as(usize, 3), element.attributes.len);
+    try std.testing.expectEqualStrings("disabled", element.attributes[0].name);
+    try std.testing.expect(element.attributes[0].value == null);
+
+    const single_quoted = element.attributes[1].value.?;
+    try std.testing.expectEqual(parser.QuoteStyle.single, single_quoted.quote_style);
+    try std.testing.expectEqual(@as(usize, 1), single_quoted.segments.len);
+    try std.testing.expectEqualStrings("primary", single_quoted.segments[0].data.text);
+
+    const double_quoted = element.attributes[2].value.?;
+    try std.testing.expectEqual(parser.QuoteStyle.double, double_quoted.quote_style);
+    try std.testing.expectEqualStrings("{{ value }}", double_quoted.segments[0].data.text);
+    try std.testing.expectEqualStrings("<button disabled data-kind='primary' title=\"{{ value }}\">", element.opening_tag);
+    try std.testing.expect(element.attributes[0].span.isValid(source.len));
+    try std.testing.expect(double_quoted.span.isValid(source.len));
+    try std.testing.expect(double_quoted.segments[0].span.isValid(source.len));
+}
+
+test "parser rejects unquoted attribute values" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = try parser.parse(arena.allocator(), "<input type=text></input>");
+    switch (result) {
+        .success => return error.ExpectedDiagnostic,
+        .failure => |diagnostic| try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind),
+    }
+}
+
 test "closing interpolation delimiter outside an expression remains text" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

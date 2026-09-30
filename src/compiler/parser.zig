@@ -1,4 +1,4 @@
-//! Phase 1 lexer and parser for static HTML elements and text interpolations.
+//! Lexer and parser for HTML elements, static attributes, and text interpolations.
 
 const std = @import("std");
 const zeft = @import("zeft_core");
@@ -9,10 +9,16 @@ pub const Token = struct {
 
     pub const Data = union(enum) {
         text: []const u8,
-        open_element: []const u8,
+        open_element: OpenElement,
         close_element: []const u8,
         expression: zeft.SourceSpan,
     };
+};
+
+pub const OpenElement = struct {
+    name: []const u8,
+    attributes: []Attribute,
+    serialized: []const u8,
 };
 
 pub const Node = struct {
@@ -28,7 +34,37 @@ pub const Node = struct {
 
 pub const Element = struct {
     name: []const u8,
+    attributes: []Attribute,
+    /// Exact source bytes for the opening tag, including attribute spacing and quoting.
+    opening_tag: []const u8,
     children: []Node,
+};
+
+pub const Attribute = struct {
+    name: []const u8,
+    span: zeft.SourceSpan,
+    value: ?AttributeValue,
+};
+
+pub const AttributeValue = struct {
+    quote_style: QuoteStyle,
+    span: zeft.SourceSpan,
+    segments: []ValueSegment,
+};
+
+pub const QuoteStyle = enum {
+    single,
+    double,
+};
+
+pub const ValueSegment = struct {
+    span: zeft.SourceSpan,
+    data: Data,
+
+    pub const Data = union(enum) {
+        text: []const u8,
+        expression: zeft.SourceSpan,
+    };
 };
 
 pub const Expression = struct {
@@ -50,7 +86,7 @@ pub const ParseResult = union(enum) {
     failure: zeft.CompileDiagnostic,
 };
 
-/// Tokenize the Phase 1 language. All spans are half-open byte offsets into source.
+/// Tokenize the supported language. All spans are half-open byte offsets into source.
 pub fn lex(allocator: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!LexResult {
     var tokens: std.ArrayList(Token) = .empty;
     var lexer = Lexer{ .allocator = allocator, .source = source };
@@ -62,7 +98,7 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) std.mem.Allocator.E
     return .{ .success = try tokens.toOwnedSlice(allocator) };
 }
 
-/// Parse static HTML elements and text-position interpolation into temporary AST nodes.
+/// Parse HTML elements, static attributes, and text-position interpolation into temporary AST nodes.
 pub fn parse(allocator: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!ParseResult {
     const lexed = try lex(allocator, source);
     const tokens = switch (lexed) {
@@ -157,23 +193,89 @@ const Lexer = struct {
         }
         self.offset += 1;
         while (self.offset < self.source.len and isNameContinue(self.source[self.offset])) : (self.offset += 1) {}
-        const name_end = self.offset;
+        const name = self.source[name_start..self.offset];
 
-        if (self.offset >= self.source.len or self.source[self.offset] != '>') {
-            while (self.offset < self.source.len and self.source[self.offset] != '>') : (self.offset += 1) {}
-            if (self.offset < self.source.len) self.offset += 1;
-            self.failure = .{
-                .kind = .invalid_markup,
+        if (closing) {
+            if (self.offset >= self.source.len or self.source[self.offset] != '>') return self.invalidTag(start);
+            self.offset += 1;
+            return .{
                 .span = .{ .start = start, .end = self.offset },
+                .data = .{ .close_element = name },
             };
-            return null;
         }
-        self.offset += 1;
-        const name = self.source[name_start..name_end];
-        return .{
+
+        var attributes: std.ArrayList(Attribute) = .empty;
+        while (self.offset < self.source.len) {
+            const whitespace_start = self.offset;
+            while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
+            if (self.offset >= self.source.len) break;
+            if (self.source[self.offset] == '>') {
+                self.offset += 1;
+                return .{
+                    .span = .{ .start = start, .end = self.offset },
+                    .data = .{ .open_element = .{
+                        .name = name,
+                        .attributes = try attributes.toOwnedSlice(self.allocator),
+                        .serialized = self.source[start..self.offset],
+                    } },
+                };
+            }
+            if (self.offset == whitespace_start) return self.invalidTag(start);
+
+            const attribute_start = self.offset;
+            while (self.offset < self.source.len and isAttributeNameByte(self.source[self.offset])) : (self.offset += 1) {}
+            if (self.offset == attribute_start) return self.invalidTag(start);
+            const attribute_name = self.source[attribute_start..self.offset];
+            const name_end = self.offset;
+
+            while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
+            var value: ?AttributeValue = null;
+            var attribute_end = name_end;
+            if (self.offset < self.source.len and self.source[self.offset] == '=') {
+                self.offset += 1;
+                while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
+                if (self.offset >= self.source.len or (self.source[self.offset] != '\'' and self.source[self.offset] != '"')) {
+                    return self.invalidTag(start);
+                }
+                const quote = self.source[self.offset];
+                self.offset += 1;
+                const value_start = self.offset;
+                while (self.offset < self.source.len and self.source[self.offset] != quote) : (self.offset += 1) {}
+                if (self.offset >= self.source.len) return self.invalidTag(start);
+                const value_end = self.offset;
+                const segment = try self.allocator.alloc(ValueSegment, 1);
+                segment[0] = .{
+                    .span = .{ .start = value_start, .end = value_end },
+                    .data = .{ .text = self.source[value_start..value_end] },
+                };
+                self.offset += 1;
+                attribute_end = self.offset;
+                value = .{
+                    .quote_style = if (quote == '\'') .single else .double,
+                    .span = .{ .start = value_start, .end = value_end },
+                    .segments = segment,
+                };
+            } else {
+                // Leave separating whitespace for the next attribute scan.
+                self.offset = name_end;
+            }
+            try attributes.append(self.allocator, .{
+                .name = attribute_name,
+                .span = .{ .start = attribute_start, .end = attribute_end },
+                .value = value,
+            });
+        }
+        return self.invalidTag(start);
+    }
+
+    fn invalidTag(self: *Lexer, start: usize) ?Token {
+        while (self.offset < self.source.len and self.source[self.offset] != '>') : (self.offset += 1) {}
+        if (self.offset < self.source.len) self.offset += 1;
+        self.failure = .{
+            .kind = .invalid_markup,
             .span = .{ .start = start, .end = self.offset },
-            .data = if (closing) .{ .close_element = name } else .{ .open_element = name },
         };
+        return null;
     }
 };
 
@@ -215,8 +317,8 @@ const Parser = struct {
                     self.failure = .{ .kind = .invalid_markup, .span = token.span };
                     break;
                 },
-                .open_element => |name| {
-                    const children = try self.parseChildren(name, token.span);
+                .open_element => |opening| {
+                    const children = try self.parseChildren(opening.name, token.span);
                     if (self.failure != null) break;
                     const close_span = children.close_span orelse {
                         self.failure = .{
@@ -227,7 +329,12 @@ const Parser = struct {
                     };
                     try nodes.append(self.allocator, .{
                         .span = .{ .start = token.span.start, .end = close_span.end },
-                        .data = .{ .element = .{ .name = name, .children = children.nodes } },
+                        .data = .{ .element = .{
+                            .name = opening.name,
+                            .attributes = opening.attributes,
+                            .opening_tag = opening.serialized,
+                            .children = children.nodes,
+                        } },
                     });
                 },
             }
@@ -265,6 +372,15 @@ fn isNameContinue(byte: u8) bool {
 
 fn isExpressionWhitespace(byte: u8) bool {
     return byte == ' ' or byte == '\t' or byte == '\r' or byte == '\n';
+}
+
+fn isMarkupWhitespace(byte: u8) bool {
+    return byte == ' ' or byte == '\t' or byte == '\r' or byte == '\n' or byte == '\x0c';
+}
+
+fn isAttributeNameByte(byte: u8) bool {
+    return byte > 0x20 and byte != 0x7f and byte != '>' and byte != '/' and byte != '=' and
+        byte != '"' and byte != '\'' and byte != '<' and byte != '`';
 }
 
 fn trimStart(source: []const u8, start: usize, end: usize) usize {

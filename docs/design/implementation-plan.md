@@ -91,7 +91,7 @@ lowering, optimization, finalization, and VM execution.
 **Outcome:** parse the markup structures required by the architecture without
 turning the renderer into a markup parser.
 
-- [ ] **ZEP-020** Extend the AST and parser to represent attributes and their
+- [x] **ZEP-020** Extend the AST and parser to represent attributes and their
   names, quoting style, and value segments.
 - [ ] **ZEP-021** Support interpolation within attribute values and preserve
   each expression's attribute output context.

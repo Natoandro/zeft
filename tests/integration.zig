@@ -37,3 +37,19 @@ test "compile syntax failures are returned before execution" {
         },
     }
 }
+
+test "static attributes are preserved exactly during compilation and rendering" {
+    const source = "<button disabled data-kind='primary' title=\"hello\"></button>";
+    const result = try zeft.compile(std.testing.allocator, source, .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    var output: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, .{});
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings(source, std.Io.Writer.buffered(&writer));
+}

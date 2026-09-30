@@ -49,8 +49,7 @@ const Lowerer = struct {
             switch (node.data) {
                 .text => |text| try self.writeStatic(text, node.span),
                 .element => |element| {
-                    const opening = try std.fmt.allocPrint(self.allocator, "<{s}>", .{element.name});
-                    try self.writeStatic(opening, .{ .start = node.span.start, .end = node.span.start + element.name.len + 2 });
+                    try self.writeStatic(element.opening_tag, .{ .start = node.span.start, .end = node.span.start + element.opening_tag.len });
                     try self.visit(element.children);
                     const closing = try std.fmt.allocPrint(self.allocator, "</{s}>", .{element.name});
                     try self.writeStatic(closing, .{ .start = node.span.end - element.name.len - 3, .end = node.span.end });
