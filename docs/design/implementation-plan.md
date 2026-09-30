@@ -38,6 +38,15 @@ elements, text, one root-context identifier expression, and HTML text escaping.
 Do not add conditionals, loops, XML, dynamic attributes, caching, or advanced
 optimization in this phase.
 
+The Phase 1 subset MUST support HTML only, opening and closing elements with
+ASCII names beginning with a letter or underscore and continuing with letters,
+digits, underscore, hyphen, colon, or period, and no attributes. Element names
+match case-insensitively in this subset. Attributes, comments, declarations,
+void-element behavior, XML, and interpolation inside markup constructs are
+deferred to later work. Interpolation in this subset MUST be a single ASCII
+identifier matching `[A-Za-z_][A-Za-z0-9_]*`; property access, literals,
+operators, calls, filters, and local bindings are deferred.
+
 The end-to-end acceptance case is a template such as
 `<p>Hello, {{ name }}!</p>` rendered with `name = "<Ada>"` as
 `<p>Hello, &lt;Ada&gt;!</p>`. It must travel through parsing, analysis,
@@ -51,14 +60,14 @@ lowering, optimization, finalization, and VM execution.
   HTML elements, and text-position interpolation.
 - [x] **ZEP-010** Build a temporary AST with element, text, and expression
   nodes; ensure the compiled template does not retain AST pointers.
-- [ ] **ZEP-011** Implement the analysis phase for the vertical-slice AST,
+- [x] **ZEP-011** Implement the analysis phase for the vertical-slice AST,
   assigning symbol IDs to root-context identifiers and marking HTML text
   output context.
-- [ ] **ZEP-012** Implement a minimal expression parser for a single identifier
+- [x] **ZEP-012** Implement a minimal expression parser for a single identifier
   lookup and lower it into expression IR.
-- [ ] **ZEP-013** Define the initial linear Render IR instruction set for static
+- [x] **ZEP-013** Define the initial linear Render IR instruction set for static
   writes, expression writes, and program termination.
-- [ ] **ZEP-014** Lower AST nodes into Render IR and expression IR, including
+- [x] **ZEP-014** Lower AST nodes into Render IR and expression IR, including
   static markup serialization.
 - [ ] **ZEP-015** Implement the first semantics-preserving optimizer pass that
   merges adjacent static writes; run the optimizer phase even when it has no

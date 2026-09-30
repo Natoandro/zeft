@@ -53,6 +53,11 @@ such as `user.name | upper` is compiled to operations that load a value,
 access a property, call the filter, and return a result. It MUST NOT traverse
 expression source text during rendering.
 
+An expression that reads a root-context identifier MUST load its assigned
+root symbol and return that value. Root symbols MUST retain the identifier
+name used for context lookup. Expression forms MUST be represented by
+executable IR rather than reparsed during rendering.
+
 The expression interpreter MUST support short-circuit behavior for logical
 operators. It MUST report invalid property access, invalid operations,
 missing variables, and filter/function failures as runtime errors with source

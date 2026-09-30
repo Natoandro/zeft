@@ -1,9 +1,17 @@
 const std = @import("std");
 const zeft = @import("zeft");
 const parser = @import("zeft_parser");
+const expression = @import("zeft_expression");
+const analysis = @import("zeft_analysis");
+const ir = @import("zeft_ir");
+const lower = @import("zeft_lower");
 
 test "public module is importable" {
     _ = std.testing.refAllDecls(zeft);
+    _ = std.testing.refAllDecls(expression);
+    _ = std.testing.refAllDecls(analysis);
+    _ = std.testing.refAllDecls(ir);
+    _ = std.testing.refAllDecls(lower);
 }
 
 test "compile options default to HTML with preserved whitespace" {

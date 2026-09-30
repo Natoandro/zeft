@@ -25,9 +25,9 @@ try template.render(writer, context);
 The exact Zig types and signatures are implementation details; the ownership
 and behavior described here are requirements.
 
-## Compiler phases
+## Compiler pipeline
 
-Compilation MUST perform these phases in order:
+Compilation MUST perform these stages in order:
 
 1. **Lex and parse.** Parse markup and template syntax into an AST.
 2. **Analyze.** Validate structure and template constructs, resolve names and
@@ -41,13 +41,12 @@ The AST MUST NOT be the persistent representation used by rendering.
 
 ## Markup and template parsing
 
-### Phase 1 template delimiters
+### Template delimiters
 
-The initial template grammar MUST recognize `{{` as the start of an
-interpolation and the first subsequent `}}` as its end. Delimiters MUST NOT
-nestedly balance. ASCII space, tab, carriage return, and line feed immediately
-inside the delimiters MUST be excluded from the expression source span; other
-expression syntax is specified separately.
+The template grammar MUST recognize `{{` as the start of an interpolation and
+the first subsequent `}}` as its end. Delimiters MUST NOT nestedly balance.
+ASCII space, tab, carriage return, and line feed immediately inside the
+delimiters MUST be excluded from the expression source span.
 
 In static text, `\{{` MUST emit the literal bytes `{{`, and `\\` MUST emit
 one literal backslash. These escapes MUST be recognized left-to-right; all
@@ -56,13 +55,21 @@ backslash followed by an interpolation. A `}}` outside an interpolation MUST
 remain ordinary static text. The delimiter escapes apply to text, not markup
 names or attribute values.
 
-The Phase 1 markup subset MUST accept element names beginning with an ASCII
-letter or underscore and continuing with ASCII letters, digits, underscore,
-hyphen, colon, or period. Opening elements in this subset MUST have no
-attributes. Closing names MUST match their opening names using ASCII
-case-insensitive comparison. Elements MUST be balanced and properly nested.
-Attributes, comments, declarations, void-element behavior, and interpolation
-inside markup constructs are outside this subset.
+Element names MUST be serialized with their original source spelling.
+
+### Expression analysis
+
+Analysis MUST visit expression occurrences in document order, including
+depth-first element children. It MUST assign one symbol ID per distinct root
+identifier, reusing that ID for later occurrences of the same case-sensitive
+name. New IDs MUST be assigned in first-occurrence order, starting at zero.
+Each expression MUST be marked with its HTML or XML text or attribute output
+context.
+
+An expression that resolves to a root-context identifier MUST load its
+assigned symbol and return that value. Runtime lookup uses the symbol's
+original identifier name against the root context. The root-context adapter
+and missing-variable behavior are specified by the runtime contract.
 
 The parser MUST understand markup structure. It MUST represent elements,
 attributes, attribute values, text nodes, and embedded expressions as distinct
@@ -88,8 +95,7 @@ syntax, invalid markup, and semantic errors where applicable.
 Expressions MUST be parsed into an expression AST and lowered into a separate
 expression IR. The expression IR MUST be executable without reparsing source
 text. It MUST support the language operations accepted by the template
-grammar, including property access, operators, and filter/function calls where
-implemented.
+grammar, including property access, operators, and filter/function calls.
 
 The compiler MUST resolve statically known local bindings to local slots where
 possible. Root-context lookups MUST use symbol identifiers. Expression
@@ -110,8 +116,11 @@ The IR MUST represent at least:
 - iteration and loop-local bindings;
 - termination of the program.
 
-The IR MUST store expressions and strings in compiled data addressed by stable
-IDs. Instructions MUST NOT depend on pointers into temporary AST storage.
+The IR MUST store expressions, strings, and symbols in compiled data addressed
+by stable IDs. Instructions MUST NOT depend on pointers into temporary AST
+storage. Static text escapes MUST be decoded during compilation. Markup MUST
+be serialized during lowering; rendering MUST NOT reconstruct markup nodes.
+Every render and expression instruction MUST carry a source span.
 
 ## Optimization and serialization
 

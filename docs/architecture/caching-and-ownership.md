@@ -58,11 +58,11 @@ A cache MUST own its entries. Callers MUST NOT deinitialize a template while a
 cache or active render still relies on that template. An entry MUST remain
 alive until every active render using it has completed.
 
-## Future comptime compilation
+## Comptime compilation
 
-Comptime compilation is a future extension. It MUST produce the same logical
-Render IR contract used by the runtime renderer. The renderer MUST be
-independent of whether a template was compiled at runtime or comptime.
+Comptime compilation MUST produce the same logical Render IR contract used by
+the runtime renderer. The renderer MUST be independent of whether a template
+was compiled at runtime or comptime.
 
 Comptime support MUST NOT require a second rendering architecture or change the
 semantics of already compiled templates.

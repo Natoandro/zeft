@@ -1,7 +1,7 @@
 # Zeft architecture
 
 This directory defines the normative architecture of Zeft, a runtime-first Zig
-template engine with optional future comptime compilation. Requirements using
+template engine with optional comptime compilation. Requirements using
 **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 
 Zeft MUST compile each template source into an immutable `CompiledTemplate`.
@@ -32,7 +32,7 @@ The documents in this directory define the details:
 - [Runtime](runtime.md): compiled templates, Render IR, expression evaluation,
   rendering state, escaping, and errors.
 - [Caching and ownership](caching-and-ownership.md): cache boundaries,
-  invalidation, includes, lifetimes, and future comptime compilation.
+  invalidation, includes, lifetimes, and comptime compilation.
 
 ## Architectural invariants
 
@@ -45,5 +45,5 @@ The documents in this directory define the details:
 4. `compile()` MUST be deterministic for the same source, options, and compiler
    version.
 5. The cache MUST be an explicit application-owned layer around compilation.
-6. Runtime and future comptime compilation MUST produce the same Render IR
+6. Runtime and comptime compilation MUST produce the same Render IR
    contract consumed by the renderer.
