@@ -117,6 +117,13 @@ The parser MUST retain source spans for syntax and expression nodes. Compile
 diagnostics MUST identify the relevant source location and MUST distinguish
 syntax, invalid markup, and semantic errors where applicable.
 
+Markup diagnostics MUST use half-open byte spans into the original template
+source. A mismatched or unmatched end tag MUST identify the complete end-tag
+token. Malformed start- or end-tag syntax MUST identify the token from its
+opening `<` through its closing `>`, or through end of source if unterminated.
+An element that reaches end of source without a matching end tag MUST identify
+that element's complete opening-tag token.
+
 ## Expression compilation
 
 Expressions MUST be parsed into an expression AST and lowered into a separate

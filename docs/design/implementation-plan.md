@@ -99,7 +99,7 @@ turning the renderer into a markup parser.
   serialization rules.
 - [x] **ZEP-023** Implement comments, declarations, and the static markup
   constructs selected for the initial HTML grammar.
-- [ ] **ZEP-024** Validate balanced elements and report malformed markup with
+- [x] **ZEP-024** Validate balanced elements and report malformed markup with
   source locations.
 - [ ] **ZEP-025** Add XML format parsing and serialization rules, including
   case-sensitive names and XML empty-element behavior.

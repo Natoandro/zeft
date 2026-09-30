@@ -248,6 +248,35 @@ test "parser rejects malformed delimiters and unbalanced elements with spans" {
     }
 }
 
+test "malformed markup diagnostics point to the relevant source token" {
+    const DiagnosticCase = struct {
+        source: []const u8,
+        expected_span: zeft.SourceSpan,
+    };
+    const cases = [_]DiagnosticCase{
+        .{ .source = "</p>", .expected_span = .{ .start = 0, .end = 4 } },
+        .{ .source = "<a></b>", .expected_span = .{ .start = 3, .end = 7 } },
+        .{ .source = "<a>", .expected_span = .{ .start = 0, .end = 3 } },
+        .{ .source = "<a><b>", .expected_span = .{ .start = 3, .end = 6 } },
+        .{ .source = "<a attr=>", .expected_span = .{ .start = 0, .end = 9 } },
+        .{ .source = "</a", .expected_span = .{ .start = 0, .end = 3 } },
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    for (cases) |case| {
+        const result = try parser.parse(arena.allocator(), case.source);
+        switch (result) {
+            .success => return error.ExpectedDiagnostic,
+            .failure => |diagnostic| {
+                try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind);
+                try std.testing.expectEqual(case.expected_span, diagnostic.span.?);
+                try std.testing.expect(diagnostic.span.?.isValid(case.source.len));
+            },
+        }
+    }
+}
+
 fn expectNodeSpansValid(nodes: []const parser.Node, source_len: usize) !void {
     for (nodes) |node| {
         try std.testing.expect(node.span.isValid(source_len));
