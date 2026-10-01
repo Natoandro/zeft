@@ -69,6 +69,12 @@ The root context MUST support native Zig values through an adapter boundary.
 The runtime value model MUST represent null, booleans, numbers, strings,
 sequences, and objects.
 
+Zig structs MUST adapt to objects whose property names are their field names.
+Zig arrays and slices MUST adapt to sequences. Byte strings MUST adapt to
+string values. Property lookup MUST be case-sensitive. Indexing MUST use
+zero-based positions; a missing property or an index outside the sequence
+MUST report `invalid_property_access` at the selector's source span.
+
 Loop and nested template bindings MUST use render-local lexical scopes. Lookup
 MUST resolve the nearest visible local binding before falling back to the root
 context. The compiler SHOULD replace statically resolved local names with

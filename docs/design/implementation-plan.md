@@ -114,23 +114,27 @@ turning the renderer into a markup parser.
 **Outcome:** expressions are compiled independently from template structure
 and run through expression IR without reparsing source text.
 
-- [ ] **ZEP-029** Specify expression precedence, associativity, literal forms,
+- [x] **ZEP-029** Specify expression precedence, associativity, literal forms,
   and supported operators in the language documentation.
+- [x] **ZEP-031** Add property access and non-negative literal sequence indexes
+  to expression parsing, analysis, and evaluation.
+- [x] **ZEP-033** Define the runtime `Value` representation for null,
+  booleans, numbers, strings, sequences, and objects.
+- [x] **ZEP-034** Implement the initial adapter boundary for nested Zig
+  structs, arrays/slices, and byte-string leaves.
 - [ ] **ZEP-030** Extend the expression AST and parser to cover the specified
   literals, unary operators, binary operators, and grouped expressions.
-- [ ] **ZEP-031** Add property access and sequence/index access to expression
-  parsing, analysis, and evaluation.
 - [ ] **ZEP-032** Implement short-circuit evaluation for logical operators.
-- [ ] **ZEP-033** Define the runtime `Value` representation for null,
-  booleans, numbers, strings, sequences, and objects.
-- [ ] **ZEP-034** Implement the adapter boundary that exposes native Zig
-  context values to expression evaluation.
 - [ ] **ZEP-035** Define filter and function registration and invocation
   contracts, then implement the initial built-in set.
 - [ ] **ZEP-036** Map expression instructions to source spans and report
   property, operand, filter, and function failures at the originating source.
 - [ ] **ZEP-037** Add expression unit tests, including precedence,
   short-circuit behavior, property access, missing values, and runtime errors.
+
+The expression grammar specifies the target language. The current expression
+implementation accepts identifier/property/index access only; operator
+compilation and evaluation remain in ZEP-030 and ZEP-032.
 
 ## Phase 4 — Add branches, loops, and lexical scopes
 

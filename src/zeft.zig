@@ -51,29 +51,45 @@ pub const CompiledTemplate = struct {
         self.* = undefined;
     }
 
-    /// Render against a struct whose fields are byte strings. Runtime template
+    /// Render against a struct with byte-string fields, or pass a pointer when
+    /// the context contains nested structs, arrays, or slices. Runtime template
     /// errors are returned as diagnostics; writer errors propagate unchanged.
     pub fn render(
         self: *const CompiledTemplate,
         writer: *std.Io.Writer,
         context: anytype,
     ) anyerror!RenderResult {
-        const ContextType = @TypeOf(context);
-        const type_info = @typeInfo(ContextType);
-        if (type_info != .@"struct") @compileError("render context must be a struct of string fields");
-
-        const fields = type_info.@"struct".fields;
-        var entries: [fields.len]ContextEntry = undefined;
-        inline for (fields, 0..) |field, index| {
-            entries[index] = .{
-                .name = field.name,
-                .value = contextString(field.type, @field(context, field.name)),
-            };
-        }
         const compiled = self.finalized();
-        return runtime.render(compiled.program, writer, &entries, compiled.options.format);
+        return @call(.never_inline, renderContext, .{ compiled.program, writer, context, compiled.options.format });
     }
 };
+
+fn renderContext(program: ir.Program, writer: *std.Io.Writer, context: anytype, format: OutputFormat) anyerror!RenderResult {
+    const ContextType = @TypeOf(context);
+    const type_info = @typeInfo(ContextType);
+    const context_is_pointer = type_info == .pointer and type_info.pointer.size == .one and
+        @typeInfo(type_info.pointer.child) == .@"struct";
+    const StructType = if (context_is_pointer) type_info.pointer.child else ContextType;
+    if (@typeInfo(StructType) != .@"struct") @compileError("render context must be a struct or pointer to a struct");
+
+    const fields = @typeInfo(StructType).@"struct".fields;
+    var entries: [fields.len]ContextEntry = undefined;
+    inline for (fields, 0..) |field, index| {
+        entries[index] = .{
+            .name = field.name,
+            .value = if (comptime runtime.isString(field.type)) blk: {
+                const field_value = if (comptime context_is_pointer)
+                    @field(context.*, field.name)
+                else
+                    @field(context, field.name);
+                break :blk .{ .string = runtime.stringValue(field.type, field_value) };
+            } else if (comptime context_is_pointer) blk: {
+                break :blk runtime.adapt(field.type, &@field(context.*, field.name));
+            } else @compileError("nested context values require passing a pointer to the context struct"),
+        };
+    }
+    return runtime.render(program, writer, &entries, format);
+}
 
 /// Compile source to an allocator-owned template or a categorized diagnostic.
 /// Temporary AST and IR storage is released before this function returns.
@@ -133,7 +149,12 @@ fn finalize(
 
     const expressions = try persistent.alloc(ir.ExpressionProgram, program.expressions.len);
     for (program.expressions, 0..) |expression, index| {
-        expressions[index] = .{ .instructions = try persistent.dupe(ir.ExpressionInstruction, expression.instructions) };
+        const instructions = try persistent.dupe(ir.ExpressionInstruction, expression.instructions);
+        for (instructions) |*instruction| switch (instruction.data) {
+            .get_property => |name| instruction.data = .{ .get_property = try persistent.dupe(u8, name) },
+            else => {},
+        };
+        expressions[index] = .{ .instructions = instructions };
     }
 
     const finalized = try allocator.create(FinalizedTemplate);
@@ -149,19 +170,6 @@ fn finalize(
         .options = options,
     };
     return .{ .impl = finalized };
-}
-
-fn contextString(comptime T: type, value: T) []const u8 {
-    const type_info = @typeInfo(T);
-    if (type_info == .pointer) {
-        const pointer_info = type_info.pointer;
-        if (pointer_info.size == .slice and pointer_info.child == u8) return value;
-        if (pointer_info.size == .one) {
-            const child_info = @typeInfo(pointer_info.child);
-            if (child_info == .array and child_info.array.child == u8) return value[0..];
-        }
-    }
-    @compileError("render context fields must be byte strings");
 }
 
 test "compile options default to HTML with preserved whitespace" {

@@ -144,6 +144,37 @@ expression appears in HTML/XML text or an attribute value. This information
 MUST be lowered into the output operation so rendering can apply the correct
 escaping rule.
 
+### Expression grammar
+
+Identifiers MUST match `[A-Za-z_][A-Za-z0-9_]*`. The case-sensitive literals
+`null`, `true`, and `false` are reserved. Decimal number literals MUST match
+`[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`. String literals MUST use single or
+double quotes. They MUST support the escapes `\\`, `\'`, `\"`, `\n`, `\r`,
+and `\t`; unknown escapes and unescaped line breaks MUST be invalid.
+
+An access expression MUST begin with an identifier and MAY continue with any
+number of `.property` or `[expression]` selectors. Property names MUST match
+the identifier grammar. An index selector MUST evaluate to a non-negative
+integer and MUST be applied to a sequence. Parenthesized expressions MUST be
+supported for grouping.
+
+Unary `!` and `-` MUST associate right-to-left. Binary operators MUST associate
+left-to-right. Their precedence, from lowest to highest, MUST be:
+
+| Precedence | Operators |
+| --- | --- |
+| 1 | `||` |
+| 2 | `&&` |
+| 3 | `==`, `!=` |
+| 4 | `<`, `<=`, `>`, `>=` |
+| 5 | `+`, `-` |
+| 6 | `*`, `/`, `%` |
+| 7 | unary `!`, unary `-` |
+| 8 | property and index selectors |
+
+Logical operators MUST short-circuit. Arithmetic operators MUST operate on
+numeric values; `+` MUST NOT implicitly concatenate strings.
+
 The template language MUST support dynamic expressions, conditional output,
 and iteration. A loop binding MUST have a lexical scope limited to its loop
 body. Nested scopes MUST be representable without mutating the compiled

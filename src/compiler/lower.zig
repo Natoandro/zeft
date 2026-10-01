@@ -110,13 +110,22 @@ const Lowerer = struct {
         const expression_info = self.analyzed.expressions[self.expression_index];
         self.expression_index += 1;
         const id = std.math.cast(ir.ExpressionId, self.expressions.items.len) orelse unreachable;
-        const expr_instructions = try self.allocator.alloc(ir.ExpressionInstruction, 2);
+        const expr_instructions = try self.allocator.alloc(ir.ExpressionInstruction, expression_info.expression.accesses.len + 2);
         expr_instructions[0] = .{
-            .span = expression_info.identifier.span,
+            .span = expression_info.expression.root.span,
             .data = .{ .load_root_symbol = expression_info.symbol_id },
         };
-        expr_instructions[1] = .{
-            .span = expression_info.identifier.span,
+        for (expression_info.expression.accesses, 0..) |access, index| {
+            expr_instructions[index + 1] = .{
+                .span = access.span,
+                .data = switch (access.data) {
+                    .property => |name| .{ .get_property = name },
+                    .index => |value| .{ .get_index = value },
+                },
+            };
+        }
+        expr_instructions[expr_instructions.len - 1] = .{
+            .span = expression_info.expression.span,
             .data = .return_value,
         };
         try self.expressions.append(self.allocator, .{ .instructions = expr_instructions });

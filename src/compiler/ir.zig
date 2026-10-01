@@ -17,6 +17,8 @@ pub const ExpressionInstruction = struct {
 
     pub const Data = union(enum) {
         load_root_symbol: analysis.SymbolId,
+        get_property: []const u8,
+        get_index: usize,
         return_value,
     };
 };

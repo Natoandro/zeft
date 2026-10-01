@@ -5,11 +5,110 @@ const std = @import("std");
 const core = @import("zeft_core");
 const ir = @import("zeft_ir");
 
-pub const ContextEntry = struct { name: []const u8, value: []const u8 };
+pub const Value = union(enum) {
+    null,
+    boolean: bool,
+    number: f64,
+    string: []const u8,
+    object: Object,
+    sequence: Sequence,
+};
+
+pub const Object = struct {
+    pointer: *const anyopaque,
+    get_property: *const fn (*const anyopaque, []const u8) ?Value,
+};
+
+pub const Sequence = struct {
+    pointer: *const anyopaque,
+    len: usize,
+    get_index: *const fn (*const anyopaque, usize) ?Value,
+};
+
+pub const ContextEntry = struct { name: []const u8, value: Value };
 pub const RenderResult = union(enum) {
     success,
     failure: core.RenderDiagnostic,
 };
+
+pub fn isString(comptime T: type) bool {
+    const type_info = @typeInfo(T);
+    return (type_info == .pointer and type_info.pointer.size == .slice and type_info.pointer.child == u8) or
+        (type_info == .array and type_info.array.child == u8) or
+        (type_info == .pointer and type_info.pointer.size == .one and @typeInfo(type_info.pointer.child) == .array and
+            @typeInfo(type_info.pointer.child).array.child == u8);
+}
+
+pub fn stringValue(comptime T: type, value: T) []const u8 {
+    if (comptime isString(T)) {
+        const type_info = @typeInfo(T);
+        if (type_info == .array) return value[0..];
+        if (type_info == .pointer and type_info.pointer.size == .one and @typeInfo(type_info.pointer.child) == .array) return value[0..];
+        return value;
+    }
+    unreachable;
+}
+
+/// Adapt supported native context values without allocating or copying them.
+/// Objects are Zig structs, sequences are arrays/slices, and scalar leaves are
+/// byte strings in the initial access-only expression subset.
+pub fn adapt(comptime T: type, pointer: *const T) Value {
+    const type_info = @typeInfo(T);
+    if (type_info == .pointer and type_info.pointer.size == .slice and type_info.pointer.child == u8) {
+        return .{ .string = pointer.* };
+    }
+    if (type_info == .array and type_info.array.child == u8) {
+        return .{ .string = pointer.*[0..] };
+    }
+    if (type_info == .pointer and type_info.pointer.size == .slice) {
+        return .{ .sequence = .{
+            .pointer = @ptrCast(pointer),
+            .len = pointer.*.len,
+            .get_index = sequenceIndex(T),
+        } };
+    }
+    if (type_info == .array) {
+        return .{ .sequence = .{
+            .pointer = @ptrCast(pointer),
+            .len = type_info.array.len,
+            .get_index = sequenceIndex(T),
+        } };
+    }
+    if (type_info == .@"struct") {
+        return .{ .object = .{ .pointer = @ptrCast(pointer), .get_property = objectProperty(T) } };
+    }
+    @compileError("context values must be structs, arrays, slices, or byte strings");
+}
+
+fn objectProperty(comptime T: type) *const fn (*const anyopaque, []const u8) ?Value {
+    return struct {
+        fn get(pointer: *const anyopaque, name: []const u8) ?Value {
+            const value: *const T = @ptrCast(@alignCast(pointer));
+            inline for (@typeInfo(T).@"struct".fields) |field| {
+                if (std.mem.eql(u8, name, field.name)) return adapt(field.type, &@field(value.*, field.name));
+            }
+            return null;
+        }
+    }.get;
+}
+
+fn sequenceIndex(comptime T: type) *const fn (*const anyopaque, usize) ?Value {
+    return struct {
+        fn get(pointer: *const anyopaque, index: usize) ?Value {
+            const value: *const T = @ptrCast(@alignCast(pointer));
+            const type_info = @typeInfo(T);
+            if (type_info == .array) {
+                if (index >= type_info.array.len) return null;
+                return adapt(type_info.array.child, &value.*[index]);
+            }
+            if (type_info == .pointer and type_info.pointer.size == .slice) {
+                if (index >= value.*.len) return null;
+                return adapt(type_info.pointer.child, &value.*[index]);
+            }
+            unreachable;
+        }
+    }.get;
+}
 
 pub fn render(
     program: ir.Program,
@@ -27,7 +126,10 @@ pub fn render(
                     .success => |result| result,
                     .failure => |diagnostic| return .{ .failure = diagnostic },
                 };
-                try writeEscaped(writer, value, write.escape_context, format);
+                switch (value) {
+                    .string => |string| try writeEscaped(writer, string, write.escape_context, format),
+                    else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                }
             },
             .end => return .success,
         }
@@ -36,7 +138,7 @@ pub fn render(
 }
 
 const ExpressionResult = union(enum) {
-    success: []const u8,
+    success: Value,
     failure: core.RenderDiagnostic,
 };
 
@@ -47,7 +149,7 @@ fn evaluateExpression(
 ) ExpressionResult {
     if (expression_id >= program.expressions.len) return .{ .failure = .{ .kind = .invalid_operand } };
     const expression = program.expressions[expression_id];
-    var value: ?[]const u8 = null;
+    var value: ?Value = null;
     for (expression.instructions) |instruction| switch (instruction.data) {
         .load_root_symbol => |symbol_id| {
             if (symbol_id >= program.symbols.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
@@ -59,6 +161,22 @@ fn evaluateExpression(
                 }
             }
             if (value == null) return .{ .failure = .{ .kind = .missing_variable, .span = instruction.span } };
+        },
+        .get_property => |name| {
+            const current = value orelse return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+            value = switch (current) {
+                .object => |object| object.get_property(object.pointer, name),
+                else => null,
+            };
+            if (value == null) return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
+        },
+        .get_index => |index| {
+            const current = value orelse return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+            value = switch (current) {
+                .sequence => |sequence| if (index < sequence.len) sequence.get_index(sequence.pointer, index) else null,
+                else => null,
+            };
+            if (value == null) return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
         },
         .return_value => return if (value) |result|
             .{ .success = result }

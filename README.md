@@ -13,10 +13,13 @@ The project currently compiles and renders a small HTML/XML template language:
 static text, nested elements, HTML boolean and quoted attributes, XML quoted
 attributes, comments, the HTML doctype, XML declarations, CDATA, and
 format-specific empty-element rules. Text-position and attribute-value
-interpolations contain one root-context identifier. Dynamic text and attribute
+interpolations support root identifiers, nested struct properties, and
+non-negative literal indexes into arrays and slices. Expression operators are
+specified in the architecture and remain planned. Dynamic text and attribute
 values use format- and context-specific escaping; attribute values escape both
-quote characters. Contexts are generic Zig structs with string-valued fields.
-Compile options default to HTML with source whitespace preserved.
+quote characters. Contexts are generic Zig structs with byte-string leaves;
+pass aggregate contexts by pointer. Compile options default to HTML with
+source whitespace preserved.
 See the implementation plan for the current supported subset and remaining
 work.
 

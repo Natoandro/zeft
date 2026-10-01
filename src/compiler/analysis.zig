@@ -18,7 +18,7 @@ pub const Symbol = struct {
 };
 
 pub const AnalyzedExpression = struct {
-    identifier: expression.Identifier,
+    expression: expression.Expression,
     symbol_id: SymbolId,
     output_context: OutputContext,
 };
@@ -79,17 +79,17 @@ const Analyzer = struct {
     }
 
     fn addExpression(self: *Analyzer, span: zeft.SourceSpan, output_context: OutputContext) std.mem.Allocator.Error!void {
-        const parsed = expression.parse(self.source, span);
-        const identifier = switch (parsed) {
+        const parsed = try expression.parse(self.allocator, self.source, span);
+        const parsed_expression = switch (parsed) {
             .success => |value| value,
             .failure => |diagnostic| {
                 self.failure = diagnostic;
                 return;
             },
         };
-        const symbol_id = try self.getOrAddSymbol(identifier.name);
+        const symbol_id = try self.getOrAddSymbol(parsed_expression.root.name);
         try self.expressions.append(self.allocator, .{
-            .identifier = identifier,
+            .expression = parsed_expression,
             .symbol_id = symbol_id,
             .output_context = output_context,
         });

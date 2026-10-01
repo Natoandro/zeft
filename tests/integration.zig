@@ -153,3 +153,90 @@ test "attribute interpolations retain their context and render in source order" 
     try std.testing.expectEqual(zeft.RenderResult.success, rendered);
     try std.testing.expectEqualStrings("<a title='A&amp;B&quot;&#39; & &lt;C&gt;'>A&amp;B\"'</a>", std.Io.Writer.buffered(&writer));
 }
+
+test "property and literal array-index expressions traverse native context values" {
+    const Person = struct { name: []const u8 };
+    const Profile = struct { label: []const u8 };
+    const Context = struct {
+        people: [2]Person,
+        profile: Profile,
+        aliases: []const []const u8,
+    };
+    const label = try std.testing.allocator.dupe(u8, "Engineer <");
+    defer std.testing.allocator.free(label);
+    var context: Context = undefined;
+    context = .{
+        .people = [_]Person{ .{ .name = "Ada" }, .{ .name = "Grace & Hopper" } },
+        .profile = .{ .label = label },
+        .aliases = &.{ "first", "second" },
+    };
+    const source = "<p data-name=\"{{ people[0].name }}\">{{ people[1].name }} | {{ profile.label }} | {{ aliases[0] }}</p>";
+    const result = try zeft.compile(std.testing.allocator, source, .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    var output: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, &context);
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("<p data-name=\"Ada\">Grace &amp; Hopper | Engineer &lt; | first</p>", std.Io.Writer.buffered(&writer));
+}
+
+test "missing properties and out-of-range literal indexes report access spans" {
+    const Person = struct { name: []const u8 };
+    const name = try std.testing.allocator.dupe(u8, "Ada");
+    defer std.testing.allocator.free(name);
+    const Context = struct { people: [1]Person };
+    var context: Context = undefined;
+    context = .{ .people = [_]Person{.{ .name = name }} };
+    const Case = struct { source: []const u8, selector: []const u8 };
+    const cases = [_]Case{
+        .{ .source = "{{ people[0].missing }}", .selector = ".missing" },
+        .{ .source = "{{ people[2] }}", .selector = "[2]" },
+    };
+    for (cases) |case| {
+        const result = try zeft.compile(std.testing.allocator, case.source, .{});
+        var template = switch (result) {
+            .success => |value| value,
+            .failure => return error.UnexpectedCompileFailure,
+        };
+        defer template.deinit();
+
+        var output: [16]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&output);
+        const rendered = try template.render(&writer, &context);
+        switch (rendered) {
+            .success => return error.ExpectedDiagnostic,
+            .failure => |diagnostic| {
+                try std.testing.expectEqual(zeft.RenderErrorKind.invalid_property_access, diagnostic.kind);
+                const start = std.mem.indexOf(u8, case.source, case.selector).?;
+                try std.testing.expectEqual(@as(?zeft.SourceSpan, .{ .start = start, .end = start + case.selector.len }), diagnostic.span);
+            },
+        }
+    }
+}
+
+test "finalized access expressions do not retain the template source" {
+    const Context = struct { user: struct { name: []const u8 } };
+    const source = try std.testing.allocator.dupe(u8, "{{ user.name }}");
+    const result = try zeft.compile(std.testing.allocator, source, .{});
+    std.testing.allocator.free(source);
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    const name = try std.testing.allocator.dupe(u8, "Ada");
+    defer std.testing.allocator.free(name);
+    var context: Context = undefined;
+    context = .{ .user = .{ .name = name } };
+    var output: [16]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, &context);
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("Ada", std.Io.Writer.buffered(&writer));
+}
