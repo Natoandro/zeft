@@ -149,7 +149,7 @@ const Lowerer = struct {
             },
             .unary => |unary| {
                 try self.emitExpr(output, unary.operand.*);
-                try output.append(self.allocator, .{ .span = expr.span, .data = .{ .unary = @enumFromInt(@intFromEnum(unary.op)) } });
+                try output.append(self.allocator, .{ .span = unary.operator_span, .data = .{ .unary = @enumFromInt(@intFromEnum(unary.op)) } });
             },
             .binary => |binary| {
                 try self.emitExpr(output, binary.left.*);
@@ -161,8 +161,17 @@ const Lowerer = struct {
                     if (binary.op == .and_) output.items[jump_index].data.jump_if_false = target else output.items[jump_index].data.jump_if_true = target;
                 } else {
                     try self.emitExpr(output, binary.right.*);
-                    try output.append(self.allocator, .{ .span = expr.span, .data = .{ .binary = @enumFromInt(@intFromEnum(binary.op)) } });
+                    try output.append(self.allocator, .{ .span = binary.operator_span, .data = .{ .binary = @enumFromInt(@intFromEnum(binary.op)) } });
                 }
+            },
+            .call => |call| {
+                for (call.args) |arg| try self.emitExpr(output, arg.*);
+                try output.append(self.allocator, .{ .span = call.call_span, .data = .{ .call_function = .{ .name = call.name, .argument_count = @intCast(call.args.len) } } });
+            },
+            .filter => |filter| {
+                try self.emitExpr(output, filter.input.*);
+                for (filter.args) |arg| try self.emitExpr(output, arg.*);
+                try output.append(self.allocator, .{ .span = filter.call_span, .data = .{ .call_filter = .{ .name = filter.name, .argument_count = @intCast(filter.args.len + 1) } } });
             },
         }
     }

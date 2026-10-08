@@ -125,9 +125,9 @@ and run through expression IR without reparsing source text.
 - [x] **ZEP-030** Extend the expression AST and parser to cover the specified
   literals, unary operators, binary operators, and grouped expressions.
 - [x] **ZEP-032** Implement short-circuit evaluation for logical operators.
-- [ ] **ZEP-035** Define filter and function registration and invocation
+- [x] **ZEP-035** Define filter and function registration and invocation
   contracts, then implement the initial built-in set.
-- [ ] **ZEP-036** Map expression instructions to source spans and report
+- [x] **ZEP-036** Map expression instructions to source spans and report
   property, operand, filter, and function failures at the originating source.
 - [x] **ZEP-037** Add expression unit tests, including precedence,
   short-circuit behavior, property access, missing values, and runtime errors.

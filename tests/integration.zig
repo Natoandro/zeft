@@ -268,3 +268,98 @@ test "logical operators short circuit missing property access" {
     try std.testing.expectEqual(zeft.RenderResult.success, rendered);
     try std.testing.expectEqualStrings("false|true", std.Io.Writer.buffered(&writer));
 }
+
+fn registeredSuffix(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []const zeft.Value) anyerror!zeft.Value {
+    if (args.len != 1 and args.len != 2) return error.InvalidArguments;
+    const value = switch (args[0]) {
+        .string => |string| string,
+        else => return error.InvalidArguments,
+    };
+    const suffix = if (args.len == 1) "!" else switch (args[1]) {
+        .string => |string| string,
+        else => return error.InvalidArguments,
+    };
+    const joined = try std.mem.concat(allocator, u8, &.{ value, suffix });
+    return .{ .string = joined };
+}
+
+fn failingCallable(_: std.mem.Allocator, _: ?*const anyopaque, _: []const zeft.Value) anyerror!zeft.Value {
+    return error.DeliberateFailure;
+}
+
+test "built-in functions and filters evaluate through expression IR" {
+    const result = try zeft.compile(std.testing.allocator, "{{ length(items) }}|{{ name | upper }}|{{ blank | default('fallback') | trim }}", .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    var output: [96]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const Context = struct { items: []const []const u8, name: []const u8, blank: []const u8 };
+    var context: Context = .{ .items = &.{ "a", "b", "c" }, .name = "ada", .blank = "" };
+    const rendered = try template.render(&writer, &context);
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("3|ADA|fallback", std.Io.Writer.buffered(&writer));
+}
+
+test "registered functions and filters override built-ins and receive scratch allocation" {
+    const result = try zeft.compile(std.testing.allocator, "{{ name | upper }}|{{ name | suffix('!') }}", .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    const registrations = [_]zeft.Registration{
+        .{ .name = "upper", .callback = registeredSuffix },
+        .{ .name = "suffix", .callback = registeredSuffix },
+    };
+    var output: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.renderWithOptions(&writer, .{ .name = "Ada" }, .{
+        .allocator = std.testing.allocator,
+        .filters = &registrations,
+    });
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("Ada!|Ada!", std.Io.Writer.buffered(&writer));
+}
+
+test "callable failures and invalid operands retain originating source spans" {
+    const cases = [_]struct { source: []const u8, kind: zeft.RenderErrorKind }{
+        .{ .source = "{{ fail() }}", .kind = .function_failure },
+        .{ .source = "{{ value | fail }}", .kind = .filter_failure },
+        .{ .source = "{{ 'a' - 1 }}", .kind = .invalid_operand },
+    };
+    const failing_functions = [_]zeft.Registration{.{ .name = "fail", .callback = failingCallable }};
+    const failing_filters = [_]zeft.Registration{.{ .name = "fail", .callback = failingCallable }};
+    for (cases) |case| {
+        const result = try zeft.compile(std.testing.allocator, case.source, .{});
+        var template = switch (result) {
+            .success => |value| value,
+            .failure => return error.UnexpectedCompileFailure,
+        };
+        defer template.deinit();
+        var output: [16]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&output);
+        const rendered = try template.renderWithOptions(&writer, .{ .value = "ok" }, .{
+            .functions = &failing_functions,
+            .filters = &failing_filters,
+        });
+        switch (rendered) {
+            .success => return error.ExpectedDiagnostic,
+            .failure => |diagnostic| {
+                try std.testing.expectEqual(case.kind, diagnostic.kind);
+                const expected = if (std.mem.indexOf(u8, case.source, "fail") != null) blk: {
+                    const start = std.mem.indexOf(u8, case.source, "fail").?;
+                    break :blk zeft.SourceSpan{ .start = start, .end = if (std.mem.indexOf(u8, case.source, "fail()") != null) start + 6 else start + 4 };
+                } else blk: {
+                    const start = std.mem.indexOf(u8, case.source, "-").?;
+                    break :blk zeft.SourceSpan{ .start = start, .end = start + 1 };
+                };
+                try std.testing.expectEqual(@as(?zeft.SourceSpan, expected), diagnostic.span);
+            },
+        }
+    }
+}

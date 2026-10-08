@@ -26,6 +26,17 @@ pub const Sequence = struct {
 };
 
 pub const ContextEntry = struct { name: []const u8, value: Value };
+pub const Callable = *const fn (std.mem.Allocator, ?*const anyopaque, []const Value) anyerror!Value;
+pub const Registration = struct {
+    name: []const u8,
+    callback: Callable,
+    user_data: ?*const anyopaque = null,
+};
+pub const RenderOptions = struct {
+    allocator: std.mem.Allocator = std.heap.page_allocator,
+    filters: []const Registration = &.{},
+    functions: []const Registration = &.{},
+};
 pub const RenderResult = union(enum) {
     success,
     failure: core.RenderDiagnostic,
@@ -116,13 +127,25 @@ pub fn render(
     context: []const ContextEntry,
     format: core.OutputFormat,
 ) anyerror!RenderResult {
+    return renderWithOptions(program, writer, context, format, .{});
+}
+
+pub fn renderWithOptions(
+    program: ir.Program,
+    writer: *std.Io.Writer,
+    context: []const ContextEntry,
+    format: core.OutputFormat,
+    options: RenderOptions,
+) anyerror!RenderResult {
+    var scratch = std.heap.ArenaAllocator.init(options.allocator);
+    defer scratch.deinit();
     var pc: usize = 0;
     while (pc < program.instructions.len) : (pc += 1) {
         const instruction = program.instructions[pc];
         switch (instruction.data) {
             .write_static => |id| try writer.writeAll(program.strings[id]),
             .write_expression => |write| {
-                const value = switch (evaluateExpression(program, write.expression_id, context)) {
+                const value = switch (evaluateExpression(program, write.expression_id, context, options, scratch.allocator())) {
                     .success => |result| result,
                     .failure => |diagnostic| return .{ .failure = diagnostic },
                 };
@@ -149,6 +172,8 @@ fn evaluateExpression(
     program: ir.Program,
     expression_id: ir.ExpressionId,
     context: []const ContextEntry,
+    options: RenderOptions,
+    allocator: std.mem.Allocator,
 ) ExpressionResult {
     if (expression_id >= program.expressions.len) return .{ .failure = .{ .kind = .invalid_operand } };
     const expression = program.expressions[expression_id];
@@ -243,6 +268,32 @@ fn evaluateExpression(
             .jump => |target| {
                 pc = target - 1;
             },
+            .call_function => |call| {
+                const count: usize = call.argument_count;
+                if (count > depth) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                const args = stack[depth - count .. depth];
+                const function = findRegistration(options.functions, call.name) orelse findBuiltinFunction(call.name);
+                const result = if (function) |registered|
+                    registered.callback(allocator, registered.user_data, args) catch return .{ .failure = .{ .kind = .function_failure, .span = instruction.span } }
+                else
+                    return .{ .failure = .{ .kind = .function_failure, .span = instruction.span } };
+                depth -= count;
+                stack[depth] = result;
+                depth += 1;
+            },
+            .call_filter => |call| {
+                const count: usize = call.argument_count;
+                if (count > depth or count == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                const args = stack[depth - count .. depth];
+                const filter = findRegistration(options.filters, call.name) orelse findBuiltinFilter(call.name);
+                const result = if (filter) |registered|
+                    registered.callback(allocator, registered.user_data, args) catch return .{ .failure = .{ .kind = .filter_failure, .span = instruction.span } }
+                else
+                    return .{ .failure = .{ .kind = .filter_failure, .span = instruction.span } };
+                depth -= count;
+                stack[depth] = result;
+                depth += 1;
+            },
             .binary => |op| {
                 if (depth < 2) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
                 const right = stack[depth - 1];
@@ -254,6 +305,70 @@ fn evaluateExpression(
         }
     }
     return .{ .failure = .{ .kind = .invalid_operand } };
+}
+
+fn findRegistration(registrations: []const Registration, name: []const u8) ?Registration {
+    for (registrations) |registration| if (std.mem.eql(u8, name, registration.name)) return registration;
+    return null;
+}
+
+fn findBuiltinFunction(name: []const u8) ?Registration {
+    if (std.mem.eql(u8, name, "length")) return .{ .name = "length", .callback = builtinLength };
+    return null;
+}
+
+fn findBuiltinFilter(name: []const u8) ?Registration {
+    if (std.mem.eql(u8, name, "default")) return .{ .name = "default", .callback = builtinDefault };
+    if (std.mem.eql(u8, name, "upper")) return .{ .name = "upper", .callback = builtinUpper };
+    if (std.mem.eql(u8, name, "lower")) return .{ .name = "lower", .callback = builtinLower };
+    if (std.mem.eql(u8, name, "trim")) return .{ .name = "trim", .callback = builtinTrim };
+    return null;
+}
+
+fn builtinLength(_: std.mem.Allocator, _: ?*const anyopaque, args: []const Value) anyerror!Value {
+    if (args.len != 1) return error.InvalidArguments;
+    return switch (args[0]) {
+        .string => |value| .{ .number = @floatFromInt(value.len) },
+        .sequence => |value| .{ .number = @floatFromInt(value.len) },
+        else => error.InvalidArguments,
+    };
+}
+
+fn builtinDefault(_: std.mem.Allocator, _: ?*const anyopaque, args: []const Value) anyerror!Value {
+    if (args.len != 2) return error.InvalidArguments;
+    return switch (args[0]) {
+        .null => args[1],
+        .string => |value| if (value.len == 0) args[1] else args[0],
+        else => args[0],
+    };
+}
+
+fn builtinUpper(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []const Value) anyerror!Value {
+    return mapCase(allocator, args, true);
+}
+
+fn builtinLower(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []const Value) anyerror!Value {
+    return mapCase(allocator, args, false);
+}
+
+fn mapCase(allocator: std.mem.Allocator, args: []const Value, uppercase: bool) anyerror!Value {
+    if (args.len != 1) return error.InvalidArguments;
+    const input = switch (args[0]) {
+        .string => |value| value,
+        else => return error.InvalidArguments,
+    };
+    const output = try allocator.dupe(u8, input);
+    for (output) |*byte| byte.* = if (uppercase) std.ascii.toUpper(byte.*) else std.ascii.toLower(byte.*);
+    return .{ .string = output };
+}
+
+fn builtinTrim(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []const Value) anyerror!Value {
+    if (args.len != 1) return error.InvalidArguments;
+    const input = switch (args[0]) {
+        .string => |value| value,
+        else => return error.InvalidArguments,
+    };
+    return .{ .string = try allocator.dupe(u8, std.mem.trim(u8, input, " \t\r\n")) };
 }
 
 fn applyBinary(op: ir.Operator, left: Value, right: Value) ?Value {

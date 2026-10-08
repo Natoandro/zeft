@@ -24,6 +24,10 @@ pub const CompileResult = union(enum) {
 };
 
 pub const RenderResult = runtime.RenderResult;
+pub const Value = runtime.Value;
+pub const Callable = runtime.Callable;
+pub const Registration = runtime.Registration;
+pub const RenderOptions = runtime.RenderOptions;
 
 const ContextEntry = runtime.ContextEntry;
 
@@ -60,11 +64,23 @@ pub const CompiledTemplate = struct {
         context: anytype,
     ) anyerror!RenderResult {
         const compiled = self.finalized();
-        return @call(.never_inline, renderContext, .{ compiled.program, writer, context, compiled.options.format });
+        return @call(.never_inline, renderContext, .{ compiled.program, writer, context, compiled.options.format, RenderOptions{} });
+    }
+
+    /// Render with caller supplied filters, functions, and scratch allocator.
+    /// Registered callback data must remain valid for the duration of render.
+    pub fn renderWithOptions(
+        self: *const CompiledTemplate,
+        writer: *std.Io.Writer,
+        context: anytype,
+        options: RenderOptions,
+    ) anyerror!RenderResult {
+        const compiled = self.finalized();
+        return @call(.never_inline, renderContext, .{ compiled.program, writer, context, compiled.options.format, options });
     }
 };
 
-fn renderContext(program: ir.Program, writer: *std.Io.Writer, context: anytype, format: OutputFormat) anyerror!RenderResult {
+fn renderContext(program: ir.Program, writer: *std.Io.Writer, context: anytype, format: OutputFormat, options: RenderOptions) anyerror!RenderResult {
     const ContextType = @TypeOf(context);
     const type_info = @typeInfo(ContextType);
     const context_is_pointer = type_info == .pointer and type_info.pointer.size == .one and
@@ -88,7 +104,7 @@ fn renderContext(program: ir.Program, writer: *std.Io.Writer, context: anytype, 
             } else @compileError("nested context values require passing a pointer to the context struct"),
         };
     }
-    return runtime.render(program, writer, &entries, format);
+    return runtime.renderWithOptions(program, writer, &entries, format, options);
 }
 
 /// Compile source to an allocator-owned template or a categorized diagnostic.
@@ -156,6 +172,8 @@ fn finalize(
                 .string => |value| instruction.data = .{ .push_literal = .{ .string = try persistent.dupe(u8, value) } },
                 else => {},
             },
+            .call_function => |call| instruction.data = .{ .call_function = .{ .name = try persistent.dupe(u8, call.name), .argument_count = call.argument_count } },
+            .call_filter => |call| instruction.data = .{ .call_filter = .{ .name = try persistent.dupe(u8, call.name), .argument_count = call.argument_count } },
             else => {},
         };
         expressions[index] = .{ .instructions = instructions };

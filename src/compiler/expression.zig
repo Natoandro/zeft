@@ -13,8 +13,10 @@ pub const Expression = struct {
         identifier: []const u8,
         property: struct { base: *Expression, name: []const u8, selector_span: zeft.SourceSpan },
         index: struct { base: *Expression, value: usize, selector_span: zeft.SourceSpan },
-        unary: struct { op: Operator, operand: *Expression },
-        binary: struct { op: Operator, left: *Expression, right: *Expression },
+        call: struct { name: []const u8, args: []*Expression, call_span: zeft.SourceSpan },
+        filter: struct { input: *Expression, name: []const u8, args: []*Expression, call_span: zeft.SourceSpan },
+        unary: struct { op: Operator, operand: *Expression, operator_span: zeft.SourceSpan },
+        binary: struct { op: Operator, left: *Expression, right: *Expression, operator_span: zeft.SourceSpan },
     };
 };
 pub const ParseResult = union(enum) { success: Expression, failure: zeft.CompileDiagnostic };
@@ -49,9 +51,22 @@ const Parser = struct {
             self.skipSpace();
             const found = self.binaryOperator() orelse break;
             if (found.precedence < min_prec) break;
+            const operator_start = self.offset;
             self.offset += found.length;
+            if (found.is_filter) {
+                self.skipSpace();
+                const name_start = self.offset;
+                if (self.offset >= self.end or !isStart(self.source[self.offset])) return null;
+                self.offset += 1;
+                while (self.offset < self.end and isContinue(self.source[self.offset])) : (self.offset += 1) {}
+                const name = self.source[name_start..self.offset];
+                const args = try self.parseArguments();
+                const call_span = zeft.SourceSpan{ .start = name_start, .end = self.offset };
+                lhs = try self.make(.{ .start = lhs.span.start, .end = self.offset }, .{ .filter = .{ .input = lhs, .name = name, .args = args, .call_span = call_span } });
+                continue;
+            }
             const rhs = (try self.parseBinary(found.precedence + 1)) orelse return null;
-            lhs = try self.make(.{ .start = lhs.span.start, .end = rhs.span.end }, .{ .binary = .{ .op = found.op, .left = lhs, .right = rhs } });
+            lhs = try self.make(.{ .start = lhs.span.start, .end = rhs.span.end }, .{ .binary = .{ .op = found.op, .left = lhs, .right = rhs, .operator_span = .{ .start = operator_start, .end = operator_start + found.length } } });
         }
         return lhs;
     }
@@ -63,7 +78,7 @@ const Parser = struct {
             const byte = self.source[self.offset];
             self.offset += 1;
             const operand = (try self.parseUnary()) orelse return null;
-            return try self.make(.{ .start = begin, .end = operand.span.end }, .{ .unary = .{ .op = if (byte == '!') .not else .negate, .operand = operand } });
+            return try self.make(.{ .start = begin, .end = operand.span.end }, .{ .unary = .{ .op = if (byte == '!') .not else .negate, .operand = operand, .operator_span = .{ .start = begin, .end = begin + 1 } } });
         }
         return self.parsePrimary();
     }
@@ -124,7 +139,10 @@ const Parser = struct {
             self.offset += 1;
             while (self.offset < self.end and isContinue(self.source[self.offset])) : (self.offset += 1) {}
             const name = self.source[begin..self.offset];
-            if (std.mem.eql(u8, name, "null")) value = try self.make(.{ .start = begin, .end = self.offset }, .{ .literal = .null }) else if (std.mem.eql(u8, name, "true") or std.mem.eql(u8, name, "false")) value = try self.make(.{ .start = begin, .end = self.offset }, .{ .literal = .{ .boolean = name[0] == 't' } }) else value = try self.make(.{ .start = begin, .end = self.offset }, .{ .identifier = name });
+            if (std.mem.eql(u8, name, "null")) value = try self.make(.{ .start = begin, .end = self.offset }, .{ .literal = .null }) else if (std.mem.eql(u8, name, "true") or std.mem.eql(u8, name, "false")) value = try self.make(.{ .start = begin, .end = self.offset }, .{ .literal = .{ .boolean = name[0] == 't' } }) else if (self.offset < self.end and self.source[self.offset] == '(') {
+                const args = try self.parseArguments();
+                value = try self.make(.{ .start = begin, .end = self.offset }, .{ .call = .{ .name = name, .args = args, .call_span = .{ .start = begin, .end = self.offset } } });
+            } else value = try self.make(.{ .start = begin, .end = self.offset }, .{ .identifier = name });
         } else return null;
         while (true) {
             self.skipSpace();
@@ -154,10 +172,34 @@ const Parser = struct {
         }
         return value;
     }
-    const Binary = struct { op: Operator, precedence: u8, length: usize };
+    fn parseArguments(self: *Parser) std.mem.Allocator.Error![]*Expression {
+        if (self.offset >= self.end or self.source[self.offset] != '(') return self.allocator.alloc(*Expression, 0);
+        self.offset += 1;
+        self.skipSpace();
+        var args: std.ArrayList(*Expression) = .empty;
+        if (self.offset < self.end and self.source[self.offset] == ')') {
+            self.offset += 1;
+            return args.toOwnedSlice(self.allocator);
+        }
+        while (true) {
+            const arg = (try self.parseBinary(1)) orelse return args.toOwnedSlice(self.allocator);
+            try args.append(self.allocator, arg);
+            self.skipSpace();
+            if (self.offset < self.end and self.source[self.offset] == ',') {
+                self.offset += 1;
+                self.skipSpace();
+                continue;
+            }
+            if (self.offset >= self.end or self.source[self.offset] != ')') return args.toOwnedSlice(self.allocator);
+            self.offset += 1;
+            return args.toOwnedSlice(self.allocator);
+        }
+    }
+    const Binary = struct { op: Operator = .add, precedence: u8, length: usize, is_filter: bool = false };
     fn binaryOperator(self: *Parser) ?Binary {
         const s = self.source[self.offset..self.end];
-        const candidates = [_]Binary{ .{ .op = .or_, .precedence = 1, .length = 2 }, .{ .op = .and_, .precedence = 2, .length = 2 }, .{ .op = .equal, .precedence = 3, .length = 2 }, .{ .op = .not_equal, .precedence = 3, .length = 2 }, .{ .op = .less_equal, .precedence = 4, .length = 2 }, .{ .op = .greater_equal, .precedence = 4, .length = 2 }, .{ .op = .less, .precedence = 4, .length = 1 }, .{ .op = .greater, .precedence = 4, .length = 1 }, .{ .op = .add, .precedence = 5, .length = 1 }, .{ .op = .subtract, .precedence = 5, .length = 1 }, .{ .op = .multiply, .precedence = 6, .length = 1 }, .{ .op = .divide, .precedence = 6, .length = 1 }, .{ .op = .modulo, .precedence = 6, .length = 1 } };
+        if (std.mem.startsWith(u8, s, "|") and !std.mem.startsWith(u8, s, "||")) return .{ .precedence = 3, .length = 1, .is_filter = true };
+        const candidates = [_]Binary{ .{ .op = .or_, .precedence = 1, .length = 2 }, .{ .op = .and_, .precedence = 2, .length = 2 }, .{ .op = .equal, .precedence = 4, .length = 2 }, .{ .op = .not_equal, .precedence = 4, .length = 2 }, .{ .op = .less_equal, .precedence = 5, .length = 2 }, .{ .op = .greater_equal, .precedence = 5, .length = 2 }, .{ .op = .less, .precedence = 5, .length = 1 }, .{ .op = .greater, .precedence = 5, .length = 1 }, .{ .op = .add, .precedence = 6, .length = 1 }, .{ .op = .subtract, .precedence = 6, .length = 1 }, .{ .op = .multiply, .precedence = 7, .length = 1 }, .{ .op = .divide, .precedence = 7, .length = 1 }, .{ .op = .modulo, .precedence = 7, .length = 1 } };
         for (candidates) |candidate| {
             const token = switch (candidate.op) {
                 .or_ => "||",

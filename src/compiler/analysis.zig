@@ -105,6 +105,11 @@ const Analyzer = struct {
             .property => |access| try self.collectSymbols(access.base),
             .index => |access| try self.collectSymbols(access.base),
             .unary => |unary| try self.collectSymbols(unary.operand),
+            .call => |call| for (call.args) |arg| try self.collectSymbols(arg),
+            .filter => |filter| {
+                try self.collectSymbols(filter.input);
+                for (filter.args) |arg| try self.collectSymbols(arg);
+            },
             .binary => |binary| {
                 try self.collectSymbols(binary.left);
                 try self.collectSymbols(binary.right);
@@ -134,6 +139,8 @@ fn firstIdentifier(expr: *const expression.Expression) ?[]const u8 {
         .property => |v| firstIdentifier(v.base),
         .index => |v| firstIdentifier(v.base),
         .unary => |v| firstIdentifier(v.operand),
+        .call => |v| if (v.args.len > 0) firstIdentifier(v.args[0]) else null,
+        .filter => |v| firstIdentifier(v.input),
         .binary => |v| firstIdentifier(v.left) orelse firstIdentifier(v.right),
         .literal => null,
     };

@@ -158,6 +158,32 @@ the identifier grammar. An index selector MUST evaluate to a non-negative
 integer and MUST be applied to a sequence. Parenthesized expressions MUST be
 supported for grouping.
 
+Named function calls MUST use `name(argument, ...)` syntax and MUST be
+available as expression values. Filters MUST use `value | name` syntax and
+MAY take arguments as `value | name(argument, ...)`; filter pipelines MUST
+associate left-to-right and bind more tightly than logical OR. Calls and
+filters MUST accept zero or more expression arguments syntactically; arity and
+value constraints are checked by the invoked callable at render time.
+Identifiers followed by `(` are function calls, while bare identifiers remain
+root-context lookups.
+
+Applications MUST be able to register filters and functions per render. Each
+registration MUST provide a case-sensitive name, callback, and optional
+user-data pointer. A callback MUST receive the render scratch allocator and
+the evaluated argument values, and MUST return a `Value` or an error. The
+render scratch allocator MUST remain valid only for that render; callback
+results that reference it MUST be consumed before rendering returns. A
+callback error or unknown callable MUST produce the corresponding filter or
+function runtime error at the call site's source span. Caller registrations
+with the same name as a built-in MUST take precedence for that render.
+
+The initial built-ins MUST include the `length(value)` function for strings
+and sequences and the `default` filter, which returns its second argument when
+the input is null or an empty string. The `upper`, `lower`, and `trim` filters
+MUST accept one string; case conversion is ASCII-only and trim removes ASCII
+space, tab, carriage return, and line feed from both ends. Invalid arity or
+value types MUST be reported as filter/function failures.
+
 Unary `!` and `-` MUST associate right-to-left. Binary operators MUST associate
 left-to-right. Their precedence, from lowest to highest, MUST be:
 

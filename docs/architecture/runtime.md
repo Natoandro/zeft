@@ -63,6 +63,23 @@ operators. It MUST report invalid property access, invalid operations,
 missing variables, and filter/function failures as runtime errors with source
 locations when available.
 
+The public render API MUST allow callers to supply filter and function
+registrations and a scratch allocator. Registrations are render-local inputs;
+compiled templates MUST NOT retain callback pointers or user data. A
+registration consists of a case-sensitive name, a callback, and optional
+user data. The callback receives the render scratch allocator and a slice of
+evaluated `Value` arguments, and returns a `Value` or an error. Callback errors
+MUST map to `filter_failure` or `function_failure` while preserving the
+instruction's source span. Unknown names MUST use the same error categories.
+The scratch allocator MUST be reset when rendering ends, so callback results
+must not escape the render. Caller registrations override built-ins by name.
+
+The initial built-ins are `length(value)` for strings and sequences, plus the
+`default`, `upper`, `lower`, and `trim` filters. `default` takes an input and
+fallback and selects the fallback for null or an empty string. The case
+filters operate on ASCII bytes. `trim` removes ASCII space, tab, carriage
+return, and line feed from each end.
+
 ## Context and scopes
 
 The root context MUST support native Zig values through an adapter boundary.
