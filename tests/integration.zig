@@ -1,6 +1,63 @@
 const std = @import("std");
 const zeft = @import("zeft");
 
+fn expectFixture(source: []const u8, expected: []const u8, options: zeft.CompileOptions, context: anytype) !void {
+    const result = try zeft.compile(std.testing.allocator, source, options);
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    var output: [1024]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, context);
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings(expected, std.Io.Writer.buffered(&writer));
+}
+
+test "enabled golden fixtures compile and render byte-for-byte" {
+    _ = std.testing.refAllDecls(zeft);
+
+    try expectFixture(
+        @embedFile("fixtures/html/static.tmpl"),
+        @embedFile("fixtures/html/static.out"),
+        .{},
+        .{},
+    );
+
+    const HtmlContext = struct { value: []const u8 };
+    try expectFixture(
+        @embedFile("fixtures/html/dynamic.tmpl"),
+        @embedFile("fixtures/html/dynamic.out"),
+        .{},
+        HtmlContext{ .value = "A&B\"'<" },
+    );
+
+    const Person = struct { name: []const u8 };
+    const ExpressionContext = struct {
+        people: [2]Person,
+        blank: []const u8,
+    };
+    try expectFixture(
+        @embedFile("fixtures/html/expressions.tmpl"),
+        @embedFile("fixtures/html/expressions.out"),
+        .{},
+        &ExpressionContext{
+            .people = .{ .{ .name = "Ada" }, .{ .name = "Grace & Hopper" } },
+            .blank = "",
+        },
+    );
+
+    const XmlContext = struct { value: []const u8 };
+    try expectFixture(
+        @embedFile("fixtures/xml/fragment.tmpl"),
+        @embedFile("fixtures/xml/fragment.out"),
+        .{ .format = .xml },
+        XmlContext{ .value = "&<>\"'" },
+    );
+}
+
 test "compile and render the end-to-end HTML text escaping case repeatedly" {
     _ = std.testing.refAllDecls(zeft);
     const result = try zeft.compile(std.testing.allocator, "<p>Hello, {{ name }}!</p>", .{});

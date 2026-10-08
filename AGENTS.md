@@ -20,6 +20,17 @@
 - Keep unit tests, integration tests, and reusable fixtures in their
   respective `tests/` locations.
 
+## Fixture catalog
+
+- Keep the suite coverage inventory in `tests/fixtures/catalog.md` and its
+  layout and status conventions in `tests/fixtures/README.md`.
+- Preserve fixture case IDs. Do not reuse an ID when a case is removed; add
+  cases to the catalog when architecture requirements or implementation
+  coverage change.
+- Mark a case enabled only after its behavior is implemented and verified.
+  Keep future scenarios disabled until their required syntax and APIs are
+  defined; do not invent unresolved product behavior to fill in fixture data.
+
 ## Git commits
 
 - Use Conventional Commits for every commit, in the form
