@@ -4,6 +4,7 @@ const std = @import("std");
 const zeft = @import("zeft_core");
 const parser = @import("zeft_parser");
 const expression = @import("zeft_expression");
+pub const Expression = expression.Expression;
 
 pub const SymbolId = u32;
 
@@ -87,12 +88,34 @@ const Analyzer = struct {
                 return;
             },
         };
-        const symbol_id = try self.getOrAddSymbol(parsed_expression.root.name);
+        try self.collectSymbols(&parsed_expression);
+        const symbol_id = if (firstIdentifier(&parsed_expression)) |name| self.getSymbolId(name) else 0;
         try self.expressions.append(self.allocator, .{
             .expression = parsed_expression,
             .symbol_id = symbol_id,
             .output_context = output_context,
         });
+    }
+
+    fn collectSymbols(self: *Analyzer, expr: *const expression.Expression) std.mem.Allocator.Error!void {
+        switch (expr.data) {
+            .identifier => |name| {
+                _ = try self.getOrAddSymbol(name);
+            },
+            .property => |access| try self.collectSymbols(access.base),
+            .index => |access| try self.collectSymbols(access.base),
+            .unary => |unary| try self.collectSymbols(unary.operand),
+            .binary => |binary| {
+                try self.collectSymbols(binary.left);
+                try self.collectSymbols(binary.right);
+            },
+            .literal => {},
+        }
+    }
+
+    fn getSymbolId(self: *Analyzer, name: []const u8) SymbolId {
+        for (self.symbols.items) |symbol| if (std.mem.eql(u8, name, symbol.name)) return symbol.id;
+        unreachable;
     }
 
     fn getOrAddSymbol(self: *Analyzer, name: []const u8) std.mem.Allocator.Error!SymbolId {
@@ -104,6 +127,17 @@ const Analyzer = struct {
         return id;
     }
 };
+
+fn firstIdentifier(expr: *const expression.Expression) ?[]const u8 {
+    return switch (expr.data) {
+        .identifier => |name| name,
+        .property => |v| firstIdentifier(v.base),
+        .index => |v| firstIdentifier(v.base),
+        .unary => |v| firstIdentifier(v.operand),
+        .binary => |v| firstIdentifier(v.left) orelse firstIdentifier(v.right),
+        .literal => null,
+    };
+}
 
 test "assigns first-occurrence root symbol IDs and HTML text context" {
     const source = "{{ name }}<b>{{other}}{{name}}</b>";

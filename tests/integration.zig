@@ -240,3 +240,31 @@ test "finalized access expressions do not retain the template source" {
     try std.testing.expectEqual(zeft.RenderResult.success, rendered);
     try std.testing.expectEqualStrings("Ada", std.Io.Writer.buffered(&writer));
 }
+
+test "expression operators honor precedence and render literals" {
+    const result = try zeft.compile(std.testing.allocator, "{{ 1 + 2 * 3 }}|{{ (8 - 2) / 3 }}|{{ !false }}|{{ 'a\\n' }}", .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    var output: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, .{});
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("7|2|true|a\n", std.Io.Writer.buffered(&writer));
+}
+
+test "logical operators short circuit missing property access" {
+    const result = try zeft.compile(std.testing.allocator, "{{ false && missing.value }}|{{ true || missing.value }}", .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    var output: [32]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, .{});
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("false|true", std.Io.Writer.buffered(&writer));
+}

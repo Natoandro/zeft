@@ -5,6 +5,7 @@ const zeft = @import("zeft_core");
 const parser = @import("zeft_parser");
 const analysis = @import("zeft_analysis");
 const ir = @import("zeft_ir");
+const expression = analysis.Expression;
 
 pub const LowerResult = union(enum) {
     success: ir.Program,
@@ -110,25 +111,13 @@ const Lowerer = struct {
         const expression_info = self.analyzed.expressions[self.expression_index];
         self.expression_index += 1;
         const id = std.math.cast(ir.ExpressionId, self.expressions.items.len) orelse unreachable;
-        const expr_instructions = try self.allocator.alloc(ir.ExpressionInstruction, expression_info.expression.accesses.len + 2);
-        expr_instructions[0] = .{
-            .span = expression_info.expression.root.span,
-            .data = .{ .load_root_symbol = expression_info.symbol_id },
-        };
-        for (expression_info.expression.accesses, 0..) |access, index| {
-            expr_instructions[index + 1] = .{
-                .span = access.span,
-                .data = switch (access.data) {
-                    .property => |name| .{ .get_property = name },
-                    .index => |value| .{ .get_index = value },
-                },
-            };
-        }
-        expr_instructions[expr_instructions.len - 1] = .{
+        var expr_instructions: std.ArrayList(ir.ExpressionInstruction) = .empty;
+        try self.emitExpr(&expr_instructions, expression_info.expression);
+        try expr_instructions.append(self.allocator, .{
             .span = expression_info.expression.span,
             .data = .return_value,
-        };
-        try self.expressions.append(self.allocator, .{ .instructions = expr_instructions });
+        });
+        try self.expressions.append(self.allocator, .{ .instructions = try expr_instructions.toOwnedSlice(self.allocator) });
         try self.instructions.append(self.allocator, .{
             .span = output_span,
             .data = .{ .write_expression = .{
@@ -139,6 +128,48 @@ const Lowerer = struct {
                 },
             } },
         });
+    }
+
+    fn emitExpr(self: *Lowerer, output: *std.ArrayList(ir.ExpressionInstruction), expr: analysis.Expression) std.mem.Allocator.Error!void {
+        switch (expr.data) {
+            .literal => |literal| try output.append(self.allocator, .{ .span = expr.span, .data = .{ .push_literal = switch (literal) {
+                .null => .null,
+                .boolean => |v| .{ .boolean = v },
+                .number => |v| .{ .number = v },
+                .string => |v| .{ .string = v },
+            } } }),
+            .identifier => |name| try output.append(self.allocator, .{ .span = expr.span, .data = .{ .load_root_symbol = self.findSymbol(name) } }),
+            .property => |access| {
+                try self.emitExpr(output, access.base.*);
+                try output.append(self.allocator, .{ .span = access.selector_span, .data = .{ .get_property = access.name } });
+            },
+            .index => |access| {
+                try self.emitExpr(output, access.base.*);
+                try output.append(self.allocator, .{ .span = access.selector_span, .data = .{ .get_index = access.value } });
+            },
+            .unary => |unary| {
+                try self.emitExpr(output, unary.operand.*);
+                try output.append(self.allocator, .{ .span = expr.span, .data = .{ .unary = @enumFromInt(@intFromEnum(unary.op)) } });
+            },
+            .binary => |binary| {
+                try self.emitExpr(output, binary.left.*);
+                if (binary.op == .and_ or binary.op == .or_) {
+                    const jump_index = output.items.len;
+                    try output.append(self.allocator, .{ .span = binary.left.span, .data = if (binary.op == .and_) .{ .jump_if_false = 0 } else .{ .jump_if_true = 0 } });
+                    try self.emitExpr(output, binary.right.*);
+                    const target: u32 = @intCast(output.items.len);
+                    if (binary.op == .and_) output.items[jump_index].data.jump_if_false = target else output.items[jump_index].data.jump_if_true = target;
+                } else {
+                    try self.emitExpr(output, binary.right.*);
+                    try output.append(self.allocator, .{ .span = expr.span, .data = .{ .binary = @enumFromInt(@intFromEnum(binary.op)) } });
+                }
+            },
+        }
+    }
+
+    fn findSymbol(self: *Lowerer, name: []const u8) analysis.SymbolId {
+        for (self.analyzed.symbols) |symbol| if (std.mem.eql(u8, symbol.name, name)) return symbol.id;
+        unreachable;
     }
 };
 

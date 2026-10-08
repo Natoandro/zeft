@@ -128,6 +128,9 @@ pub fn render(
                 };
                 switch (value) {
                     .string => |string| try writeEscaped(writer, string, write.escape_context, format),
+                    .null => {},
+                    .boolean => |boolean| try writeEscaped(writer, if (boolean) "true" else "false", write.escape_context, format),
+                    .number => |number| try writer.print("{d}", .{number}),
                     else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
                 }
             },
@@ -149,41 +152,144 @@ fn evaluateExpression(
 ) ExpressionResult {
     if (expression_id >= program.expressions.len) return .{ .failure = .{ .kind = .invalid_operand } };
     const expression = program.expressions[expression_id];
-    var value: ?Value = null;
-    for (expression.instructions) |instruction| switch (instruction.data) {
-        .load_root_symbol => |symbol_id| {
-            if (symbol_id >= program.symbols.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
-            const name = program.symbols[symbol_id].name;
-            for (context) |entry| {
-                if (std.mem.eql(u8, name, entry.name)) {
-                    value = entry.value;
-                    break;
+    // Expression evaluation is render-local and stack based. Keep a generous
+    // fixed cap so rendering does not allocate; malformed/deep programs fail
+    // with the normal invalid-operand diagnostic.
+    var stack: [256]Value = undefined;
+    var depth: usize = 0;
+    var pc: usize = 0;
+    while (pc < expression.instructions.len) : (pc += 1) {
+        const instruction = expression.instructions[pc];
+        switch (instruction.data) {
+            .load_root_symbol => |symbol_id| {
+                if (symbol_id >= program.symbols.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                const name = program.symbols[symbol_id].name;
+                var found = false;
+                for (context) |entry| {
+                    if (std.mem.eql(u8, name, entry.name)) {
+                        if (depth >= stack.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                        stack[depth] = entry.value;
+                        depth += 1;
+                        found = true;
+                        break;
+                    }
                 }
-            }
-            if (value == null) return .{ .failure = .{ .kind = .missing_variable, .span = instruction.span } };
-        },
-        .get_property => |name| {
-            const current = value orelse return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
-            value = switch (current) {
-                .object => |object| object.get_property(object.pointer, name),
-                else => null,
-            };
-            if (value == null) return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
-        },
-        .get_index => |index| {
-            const current = value orelse return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
-            value = switch (current) {
-                .sequence => |sequence| if (index < sequence.len) sequence.get_index(sequence.pointer, index) else null,
-                else => null,
-            };
-            if (value == null) return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
-        },
-        .return_value => return if (value) |result|
-            .{ .success = result }
-        else
-            .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
-    };
+                if (!found) return .{ .failure = .{ .kind = .missing_variable, .span = instruction.span } };
+            },
+            .push_literal => |literal| {
+                if (depth >= stack.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                stack[depth] = switch (literal) {
+                    .null => .null,
+                    .boolean => |v| .{ .boolean = v },
+                    .number => |v| .{ .number = v },
+                    .string => |v| .{ .string = v },
+                };
+                depth += 1;
+            },
+            .get_property => |name| {
+                if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                const current = stack[depth - 1];
+                const next: ?Value = switch (current) {
+                    .object => |object| object.get_property(object.pointer, name),
+                    else => null,
+                };
+                stack[depth - 1] = next orelse return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
+            },
+            .get_index => |index| {
+                if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                const current = stack[depth - 1];
+                const next: ?Value = switch (current) {
+                    .sequence => |sequence| if (index < sequence.len) sequence.get_index(sequence.pointer, index) else null,
+                    else => null,
+                };
+                stack[depth - 1] = next orelse return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
+            },
+            .unary => |op| {
+                if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                stack[depth - 1] = switch (op) {
+                    .not => switch (stack[depth - 1]) {
+                        .boolean => |v| .{ .boolean = !v },
+                        else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                    },
+                    .negate => switch (stack[depth - 1]) {
+                        .number => |v| .{ .number = -v },
+                        else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                    },
+                    else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                };
+            },
+            .jump_if_false => |target| {
+                if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                switch (stack[depth - 1]) {
+                    .boolean => |v| if (!v) {
+                        pc = target - 1;
+                    } else {
+                        depth -= 1;
+                    },
+                    else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                }
+            },
+            .jump_if_true => |target| {
+                if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                switch (stack[depth - 1]) {
+                    .boolean => |v| if (v) {
+                        pc = target - 1;
+                    } else {
+                        depth -= 1;
+                    },
+                    else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                }
+            },
+            .jump => |target| {
+                pc = target - 1;
+            },
+            .binary => |op| {
+                if (depth < 2) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                const right = stack[depth - 1];
+                const left = stack[depth - 2];
+                depth -= 1;
+                stack[depth - 1] = applyBinary(op, left, right) orelse return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+            },
+            .return_value => return if (depth == 1) .{ .success = stack[0] } else .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+        }
+    }
     return .{ .failure = .{ .kind = .invalid_operand } };
+}
+
+fn applyBinary(op: ir.Operator, left: Value, right: Value) ?Value {
+    if (op == .equal or op == .not_equal) {
+        const equal = switch (left) {
+            .null => right == .null,
+            .boolean => |a| switch (right) {
+                .boolean => |b| a == b,
+                else => false,
+            },
+            .number => |a| switch (right) {
+                .number => |b| a == b,
+                else => false,
+            },
+            .string => |a| switch (right) {
+                .string => |b| std.mem.eql(u8, a, b),
+                else => false,
+            },
+            else => false,
+        };
+        return .{ .boolean = if (op == .equal) equal else !equal };
+    }
+    const a = if (left == .number) left.number else return null;
+    const b = if (right == .number) right.number else return null;
+    return switch (op) {
+        .add => .{ .number = a + b },
+        .subtract => .{ .number = a - b },
+        .multiply => .{ .number = a * b },
+        .divide => if (b == 0) null else .{ .number = a / b },
+        .modulo => if (b == 0) null else .{ .number = @rem(a, b) },
+        .less => .{ .boolean = a < b },
+        .less_equal => .{ .boolean = a <= b },
+        .greater => .{ .boolean = a > b },
+        .greater_equal => .{ .boolean = a >= b },
+        else => null,
+    };
 }
 
 fn writeEscaped(writer: *std.Io.Writer, value: []const u8, context: ir.EscapeContext, format: core.OutputFormat) anyerror!void {

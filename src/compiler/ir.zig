@@ -5,6 +5,7 @@ const analysis = @import("zeft_analysis");
 
 pub const StringId = u32;
 pub const ExpressionId = u32;
+pub const Operator = enum { not, negate, or_, and_, equal, not_equal, less, less_equal, greater, greater_equal, add, subtract, multiply, divide, modulo };
 
 pub const EscapeContext = enum {
     text,
@@ -17,11 +18,19 @@ pub const ExpressionInstruction = struct {
 
     pub const Data = union(enum) {
         load_root_symbol: analysis.SymbolId,
+        push_literal: Literal,
         get_property: []const u8,
         get_index: usize,
+        unary: Operator,
+        binary: Operator,
+        jump_if_false: u32,
+        jump_if_true: u32,
+        jump: u32,
         return_value,
     };
 };
+
+pub const Literal = union(enum) { null, boolean: bool, number: f64, string: []const u8 };
 
 pub const ExpressionProgram = struct {
     instructions: []ExpressionInstruction,

@@ -152,6 +152,10 @@ fn finalize(
         const instructions = try persistent.dupe(ir.ExpressionInstruction, expression.instructions);
         for (instructions) |*instruction| switch (instruction.data) {
             .get_property => |name| instruction.data = .{ .get_property = try persistent.dupe(u8, name) },
+            .push_literal => |literal| switch (literal) {
+                .string => |value| instruction.data = .{ .push_literal = .{ .string = try persistent.dupe(u8, value) } },
+                else => {},
+            },
             else => {},
         };
         expressions[index] = .{ .instructions = instructions };
