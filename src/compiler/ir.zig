@@ -18,6 +18,7 @@ pub const ExpressionInstruction = struct {
 
     pub const Data = union(enum) {
         load_root_symbol: analysis.SymbolId,
+        load_local: u32,
         push_literal: Literal,
         get_property: []const u8,
         get_index: usize,
@@ -48,6 +49,12 @@ pub const Instruction = struct {
             expression_id: ExpressionId,
             escape_context: EscapeContext,
         },
+        jump_if_false: struct { expression_id: ExpressionId, target: u32 },
+        jump: u32,
+        loop_begin: struct { expression_id: ExpressionId, slot: u32, exit_target: u32 },
+        loop_next: struct { body_target: u32, exit_target: u32 },
+        loop_break: u32,
+        loop_continue: u32,
         end,
     };
 };

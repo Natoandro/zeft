@@ -9,14 +9,32 @@ const ir = @import("zeft_ir");
 pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Allocator.Error!ir.Program {
     var strings: std.ArrayList([]const u8) = .empty;
     var instructions: std.ArrayList(ir.Instruction) = .empty;
+    const old_to_new = try allocator.alloc(u32, program.instructions.len + 1);
+    defer allocator.free(old_to_new);
+    const targeted = try allocator.alloc(bool, program.instructions.len + 1);
+    defer allocator.free(targeted);
+    @memset(targeted, false);
+    for (program.instructions) |instruction| switch (instruction.data) {
+        .jump_if_false => |branch| markTarget(targeted, branch.target),
+        .jump => |target| markTarget(targeted, target),
+        .loop_begin => |begin| markTarget(targeted, begin.exit_target),
+        .loop_next => |next| {
+            markTarget(targeted, next.body_target);
+            markTarget(targeted, next.exit_target);
+        },
+        .loop_break => |target| markTarget(targeted, target),
+        .loop_continue => |target| markTarget(targeted, target),
+        else => {},
+    };
     var previous_string_owned = false;
 
-    for (program.instructions) |instruction| {
+    for (program.instructions, 0..) |instruction, old_index| {
         switch (instruction.data) {
             .write_static => |old_id| {
                 const bytes = program.strings[old_id];
-                if (instructions.items.len > 0 and instructions.items[instructions.items.len - 1].data == .write_static) {
+                if (!targeted[old_index] and instructions.items.len > 0 and instructions.items[instructions.items.len - 1].data == .write_static) {
                     const previous = &instructions.items[instructions.items.len - 1];
+                    old_to_new[old_index] = @intCast(instructions.items.len - 1);
                     const previous_id = previous.data.write_static;
                     const previous_bytes = strings.items[previous_id];
                     const merged = try concatenate(allocator, previous_bytes, bytes);
@@ -28,6 +46,7 @@ pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Alloc
                         .end = @max(previous.span.end, instruction.span.end),
                     };
                 } else {
+                    old_to_new[old_index] = @intCast(instructions.items.len);
                     const new_id = std.math.cast(ir.StringId, strings.items.len) orelse unreachable;
                     try strings.append(allocator, bytes);
                     var rewritten = instruction;
@@ -36,12 +55,27 @@ pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Alloc
                     previous_string_owned = false;
                 }
             },
-            .write_expression, .end => {
+            else => {
+                old_to_new[old_index] = @intCast(instructions.items.len);
                 try instructions.append(allocator, instruction);
                 previous_string_owned = false;
             },
         }
     }
+    old_to_new[program.instructions.len] = @intCast(instructions.items.len);
+
+    for (instructions.items) |*instruction| switch (instruction.data) {
+        .jump_if_false => |*branch| branch.target = remapTarget(old_to_new, branch.target),
+        .jump => |*target| target.* = remapTarget(old_to_new, target.*),
+        .loop_begin => |*begin| begin.exit_target = remapTarget(old_to_new, begin.exit_target),
+        .loop_next => |*next| {
+            next.body_target = remapTarget(old_to_new, next.body_target);
+            next.exit_target = remapTarget(old_to_new, next.exit_target);
+        },
+        .loop_break => |*target| target.* = remapTarget(old_to_new, target.*),
+        .loop_continue => |*target| target.* = remapTarget(old_to_new, target.*),
+        else => {},
+    };
 
     // Check that all static-write references remain valid after rewriting.
     for (instructions.items) |instruction| switch (instruction.data) {
@@ -55,6 +89,16 @@ pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Alloc
         .expressions = program.expressions,
         .instructions = try instructions.toOwnedSlice(allocator),
     };
+}
+
+fn remapTarget(mapping: []const u32, target: u32) u32 {
+    std.debug.assert(target < mapping.len);
+    return mapping[target];
+}
+
+fn markTarget(targeted: []bool, target: u32) void {
+    std.debug.assert(target < targeted.len);
+    targeted[target] = true;
 }
 
 fn concatenate(
@@ -116,4 +160,23 @@ test "optimizer succeeds when no adjacent static writes exist" {
     defer std.testing.allocator.free(optimized.instructions);
     try std.testing.expectEqual(@as(usize, 1), optimized.strings.len);
     try std.testing.expectEqual(@as(usize, 3), optimized.instructions.len);
+}
+
+test "optimizer preserves branch destinations when writes merge nearby" {
+    const strings = [_][]const u8{ "then", "else", ":" };
+    const instructions = [_]ir.Instruction{
+        .{ .span = .{ .start = 0, .end = 1 }, .data = .{ .jump_if_false = .{ .expression_id = 0, .target = 3 } } },
+        .{ .span = .{ .start = 1, .end = 2 }, .data = .{ .write_static = 0 } },
+        .{ .span = .{ .start = 2, .end = 3 }, .data = .{ .jump = 5 } },
+        .{ .span = .{ .start = 3, .end = 4 }, .data = .{ .write_static = 1 } },
+        .{ .span = .{ .start = 4, .end = 5 }, .data = .{ .write_static = 2 } },
+        .{ .span = .{ .start = 5, .end = 5 }, .data = .end },
+    };
+    const program: ir.Program = .{ .strings = @constCast(&strings), .symbols = &.{}, .expressions = &.{}, .instructions = @constCast(&instructions) };
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const optimized = try optimize(arena.allocator(), program);
+    try std.testing.expectEqual(@as(u32, 3), optimized.instructions[0].data.jump_if_false.target);
+    try std.testing.expectEqual(@as(u32, 4), optimized.instructions[2].data.jump);
+    try std.testing.expectEqualStrings("else:", optimized.strings[1]);
 }

@@ -40,6 +40,8 @@ JUMP_IF_FALSE      expression_id, target
 JUMP               target
 LOOP_BEGIN         expression_id, binding_id, exit_target
 LOOP_NEXT          body_target, exit_target
+LOOP_BREAK         exit_target
+LOOP_CONTINUE      next_target
 END
 ```
 
@@ -92,10 +94,11 @@ string values. Property lookup MUST be case-sensitive. Indexing MUST use
 zero-based positions; a missing property or an index outside the sequence
 MUST report `invalid_property_access` at the selector's source span.
 
-Loop and nested template bindings MUST use render-local lexical scopes. Lookup
-MUST resolve the nearest visible local binding before falling back to the root
-context. The compiler SHOULD replace statically resolved local names with
-local-slot references to avoid repeated name searches.
+Loop bindings MUST use render-local lexical scopes. Lookup MUST resolve the
+nearest visible loop binding before falling back to the root context, and a
+loop binding MUST disappear when its loop exits. Inner loops MAY shadow outer
+loop bindings and root names. The compiler SHOULD replace statically resolved
+local names with local-slot references to avoid repeated name searches.
 
 ## Output and escaping
 

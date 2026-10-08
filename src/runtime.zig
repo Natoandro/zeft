@@ -41,6 +41,8 @@ pub const RenderResult = union(enum) {
     success,
     failure: core.RenderDiagnostic,
 };
+const LocalValue = struct { slot: u32, value: Value };
+const LoopFrame = struct { sequence: Sequence, index: usize, local_base: usize, span: core.SourceSpan };
 
 pub fn isString(comptime T: type) bool {
     const type_info = @typeInfo(T);
@@ -71,6 +73,7 @@ pub fn adapt(comptime T: type, pointer: *const T) Value {
     if (type_info == .array and type_info.array.child == u8) {
         return .{ .string = pointer.*[0..] };
     }
+    if (T == bool) return .{ .boolean = pointer.* };
     if (type_info == .pointer and type_info.pointer.size == .slice) {
         return .{ .sequence = .{
             .pointer = @ptrCast(pointer),
@@ -139,13 +142,18 @@ pub fn renderWithOptions(
 ) anyerror!RenderResult {
     var scratch = std.heap.ArenaAllocator.init(options.allocator);
     defer scratch.deinit();
+    const render_allocator = scratch.allocator();
+    const locals = try render_allocator.alloc(LocalValue, program.instructions.len);
+    var local_count: usize = 0;
+    const loops = try render_allocator.alloc(LoopFrame, program.instructions.len);
+    var loop_count: usize = 0;
     var pc: usize = 0;
     while (pc < program.instructions.len) : (pc += 1) {
         const instruction = program.instructions[pc];
         switch (instruction.data) {
             .write_static => |id| try writer.writeAll(program.strings[id]),
             .write_expression => |write| {
-                const value = switch (evaluateExpression(program, write.expression_id, context, options, scratch.allocator())) {
+                const value = switch (evaluateExpression(program, write.expression_id, context, options, scratch.allocator(), locals[0..local_count])) {
                     .success => |result| result,
                     .failure => |diagnostic| return .{ .failure = diagnostic },
                 };
@@ -157,6 +165,60 @@ pub fn renderWithOptions(
                     else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
                 }
             },
+            .jump_if_false => |branch| {
+                const value = switch (evaluateExpression(program, branch.expression_id, context, options, scratch.allocator(), locals[0..local_count])) {
+                    .success => |result| result,
+                    .failure => |diagnostic| return .{ .failure = diagnostic },
+                };
+                switch (value) {
+                    .boolean => |condition| {
+                        if (!condition) pc = branch.target - 1;
+                    },
+                    else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                }
+            },
+            .jump => |target| pc = target - 1,
+            .loop_begin => |begin| {
+                const iterable = switch (evaluateExpression(program, begin.expression_id, context, options, scratch.allocator(), locals[0..local_count])) {
+                    .success => |result| result,
+                    .failure => |diagnostic| return .{ .failure = diagnostic },
+                };
+                const sequence = switch (iterable) {
+                    .sequence => |value| value,
+                    else => return .{ .failure = .{ .kind = .non_iterable, .span = instruction.span } },
+                };
+                if (sequence.len == 0) {
+                    pc = begin.exit_target - 1;
+                    continue;
+                }
+                if (loop_count >= loops.len or local_count >= locals.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                const item = sequence.get_index(sequence.pointer, 0) orelse return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                loops[loop_count] = .{ .sequence = sequence, .index = 0, .local_base = local_count, .span = instruction.span };
+                loop_count += 1;
+                locals[local_count] = .{ .slot = begin.slot, .value = item };
+                local_count += 1;
+            },
+            .loop_next => |next| {
+                if (loop_count == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                const frame = &loops[loop_count - 1];
+                frame.index += 1;
+                if (frame.index >= frame.sequence.len) {
+                    local_count = frame.local_base;
+                    loop_count -= 1;
+                    pc = next.exit_target - 1;
+                } else {
+                    const item = frame.sequence.get_index(frame.sequence.pointer, frame.index) orelse return .{ .failure = .{ .kind = .invalid_operand, .span = frame.span } };
+                    locals[frame.local_base].value = item;
+                    pc = next.body_target - 1;
+                }
+            },
+            .loop_break => |target| {
+                if (loop_count == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                local_count = loops[loop_count - 1].local_base;
+                loop_count -= 1;
+                pc = target - 1;
+            },
+            .loop_continue => |target| pc = target - 1,
             .end => return .success,
         }
     }
@@ -174,6 +236,7 @@ fn evaluateExpression(
     context: []const ContextEntry,
     options: RenderOptions,
     allocator: std.mem.Allocator,
+    locals: []const LocalValue,
 ) ExpressionResult {
     if (expression_id >= program.expressions.len) return .{ .failure = .{ .kind = .invalid_operand } };
     const expression = program.expressions[expression_id];
@@ -200,6 +263,21 @@ fn evaluateExpression(
                     }
                 }
                 if (!found) return .{ .failure = .{ .kind = .missing_variable, .span = instruction.span } };
+            },
+            .load_local => |slot| {
+                var found: ?Value = null;
+                var local_index = locals.len;
+                while (local_index > 0) {
+                    local_index -= 1;
+                    if (locals[local_index].slot == slot) {
+                        found = locals[local_index].value;
+                        break;
+                    }
+                }
+                const value = found orelse return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (depth >= stack.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                stack[depth] = value;
+                depth += 1;
             },
             .push_literal => |literal| {
                 if (depth >= stack.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };

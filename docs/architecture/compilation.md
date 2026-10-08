@@ -48,6 +48,27 @@ the first subsequent `}}` as its end. Delimiters MUST NOT nestedly balance.
 ASCII space, tab, carriage return, and line feed immediately inside the
 delimiters MUST be excluded from the expression source span.
 
+Control directives MUST use `{% ... %}` and MUST be recognized only in
+template text, not inside markup tags, attribute values, comments, or CDATA.
+The supported forms are `{% if expression %}`, `{% else %}`, `{% endif %}`,
+`{% for name in expression %}`, `{% endfor %}`, `{% break %}`, and
+`{% continue %}`. `else if` is not a form; nested `if` blocks express multiple
+conditions. Each `if` has at most one `else`. Block terminators MUST match the
+most recently opened block. Unknown directives, duplicate or unmatched
+terminators, and unterminated directives MUST fail compilation with a source
+span covering the directive. `break` and `continue` MUST be rejected outside
+a loop and MUST target the innermost active loop.
+Unknown directive names MUST use the `syntax` diagnostic category. Invalid
+block nesting and loop control outside a loop MUST use `invalid_construct`.
+
+Conditions MUST evaluate to booleans. A `for` iterable MUST evaluate to a
+sequence; a non-sequence is a runtime `non_iterable` error at the loop
+expression span. Empty sequences execute no body. A loop creates one lexical
+binding visible only in its body. Loops are the only constructs that create
+lexical scopes. Nested loop bindings may shadow outer loop bindings and root
+context names; lookup selects the nearest loop binding and then the root
+context. The root binding is visible again after a loop.
+
 In static text, `\{{` MUST emit the literal bytes `{{`, and `\\` MUST emit
 one literal backslash. These escapes MUST be recognized left-to-right; all
 other backslashes MUST remain literal. Consequently, `\\{{ name }}` emits a
@@ -202,9 +223,8 @@ Logical operators MUST short-circuit. Arithmetic operators MUST operate on
 numeric values; `+` MUST NOT implicitly concatenate strings.
 
 The template language MUST support dynamic expressions, conditional output,
-and iteration. A loop binding MUST have a lexical scope limited to its loop
-body. Nested scopes MUST be representable without mutating the compiled
-template.
+and iteration as specified above. Loop bindings MUST be resolved to local
+slots where statically known.
 
 The parser MUST retain source spans for syntax and expression nodes. Compile
 diagnostics MUST identify the relevant source location and MUST distinguish

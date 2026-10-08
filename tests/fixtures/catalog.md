@@ -54,27 +54,27 @@ ownership) in unit tests because their assertions are not rendered output.
 | C-002 | Existing tests | Parser unit cases | Mismatched/unmatched end tags point to the full end tag; malformed tags point from `<` through `>` or EOF; unclosed elements point to the opening tag. |
 | C-003 | Defined | Invalid-expression table for each literal, selector, operator, call, and delimiter rule | Return invalid-expression/syntax category and half-open source span for the invalid token. |
 | C-004 | Defined | Invalid-markup table for HTML declarations, XML declarations/entities/comments/CDATA, and attributes | Return invalid-markup category and prescribed markup token span. |
-| C-005 | Pending syntax | Unknown directive and invalid control-flow nesting | Return the specified construct category and source span after ZEP-038 defines block syntax. |
+| C-005 | Enabled | Control-flow integration diagnostics | Unknown directive and invalid nesting return categorized diagnostics at source spans. |
 
 ## Control flow and scopes
 
-The scenarios below are required once ZEP-038 defines the block syntax. They
-intentionally do not choose delimiters, directive names, or loop-control
-spelling.
+The scenarios below use the syntax specified by ZEP-038: `{% if expression %}`,
+`{% else %}`, `{% endif %}`, `{% for name in expression %}`, `{% endfor %}`,
+`{% break %}`, and `{% continue %}`.
 
 | ID | Status | Scenario | Expected result |
 | --- | --- | --- | --- |
-| F-001 | Pending syntax | Conditional with true and false conditions | Emit only the selected branch. |
-| F-002 | Pending syntax | Conditional with alternate branch and nested conditionals | Select the first matching branch; preserve document order. |
-| F-003 | Pending syntax | Empty and non-empty sequence loops | Emit no body for empty input; emit once per item otherwise. |
-| F-004 | Pending syntax | Loop body reads item and root values | Local item resolves before root context and is scoped to the body. |
-| F-005 | Pending syntax | Nested loops over distinct sequences | Each loop keeps independent iteration state and bindings. |
-| F-006 | Pending syntax | Inner loop shadows outer name | Inner binding wins in its body; outer binding is visible again afterward. |
-| F-007 | Pending syntax | Same-named root variable before and after a loop that binds that name | The local binding is visible only inside the body; root lookup is visible outside it. |
-| F-008 | Pending syntax | Non-iterable loop input | Return `non_iterable` with the loop expression span. |
-| F-009 | Pending syntax | Loop control, nested/invalid control use | Verify defined continue/break semantics and reject invalid placement. |
-| F-010 | Pending syntax | Branch and loop combinations, including branch inside loop and loop inside branch | Follow explicit branch destinations and maintain render-local scopes. |
-| F-011 | Pending syntax | Render one compiled control-flow template repeatedly and concurrently with different contexts | Outputs remain isolated; compiled template remains unchanged. |
+| F-001 | Enabled | Control-flow fixture and focused cases | True/false conditions emit only the selected branch. |
+| F-002 | Enabled | Control-flow fixture and focused cases | Alternate branch and nested conditions preserve document order. |
+| F-003 | Enabled | Control-flow integration cases | Empty loops emit nothing; non-empty loops emit once per item. |
+| F-004 | Enabled | `html/control-flow.tmpl` | Loop local resolves before root context and expires after its body. |
+| F-005 | Enabled | Control-flow integration cases | Nested loops keep independent iteration state and bindings. |
+| F-006 | Enabled | Control-flow integration cases | Inner loop shadows outer name; outer binding is visible again afterward. |
+| F-007 | Enabled | `html/control-flow.tmpl` | Root variable with the loop binding's name is visible before and after the loop. |
+| F-008 | Enabled | Control-flow integration cases | Non-sequence input returns `non_iterable` at the loop expression span. |
+| F-009 | Enabled | Control-flow integration cases | `continue`/`break` target innermost loop; reject invalid placement. |
+| F-010 | Enabled | Control-flow fixture and focused cases | Branch/loop combinations keep explicit destinations and local scopes. |
+| F-011 | Enabled | Control-flow integration cases | Repeated renders keep state isolated; compiled template remains immutable. |
 
 ## Whitespace policies
 

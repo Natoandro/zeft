@@ -13,7 +13,19 @@ pub const Token = struct {
         open_element: OpenElement,
         close_element: []const u8,
         expression: zeft.SourceSpan,
+        directive: Directive,
     };
+};
+
+pub const Directive = union(enum) {
+    if_: zeft.SourceSpan,
+    else_,
+    endif,
+    for_: struct { name: []const u8, name_span: zeft.SourceSpan, expression: zeft.SourceSpan },
+    endfor,
+    break_,
+    continue_,
+    unknown,
 };
 
 pub const StaticMarkup = struct {
@@ -39,8 +51,15 @@ pub const Node = struct {
         static_markup: StaticMarkup,
         element: Element,
         expression: Expression,
+        conditional: Conditional,
+        loop: Loop,
+        break_,
+        continue_,
     };
 };
+
+pub const Conditional = struct { condition: zeft.SourceSpan, then_nodes: []Node, else_nodes: []Node };
+pub const Loop = struct { name: []const u8, name_span: zeft.SourceSpan, expression: zeft.SourceSpan, children: []Node };
 
 pub const Element = struct {
     name: []const u8,
@@ -142,8 +161,9 @@ pub fn parseWithFormat(
         .tokens = tokens,
         .format = format,
     };
-    const parsed = try parser.parseChildren(null, null);
+    const parsed = try parser.parseChildren(null, null, 0);
     if (parser.failure) |diagnostic| return .{ .failure = diagnostic };
+    if (parsed.stop != null) return .{ .failure = .{ .kind = .invalid_construct, .span = parsed.stop_span } };
     return .{ .success = .{ .nodes = parsed.nodes } };
 }
 
@@ -167,6 +187,7 @@ const Lexer = struct {
             return self.invalidSpecialMarkup(start);
         }
         if (startsWith(self.source, self.offset, "{{")) return self.expressionToken();
+        if (startsWith(self.source, self.offset, "{%")) return self.directiveToken();
         if (startsTag(self.source, self.offset)) return self.tagToken();
         if (self.format == .xml and self.source[self.offset] == '<') return self.invalidSpecialMarkup(start);
 
@@ -188,7 +209,7 @@ const Lexer = struct {
             } else if (self.format == .xml and startsWith(self.source, self.offset, "]]>")) {
                 self.failure = .{ .kind = .invalid_markup, .span = .{ .start = self.offset, .end = self.offset + 3 } };
                 return null;
-            } else if (startsWith(self.source, self.offset, "{{") or startsTag(self.source, self.offset) or
+            } else if (startsWith(self.source, self.offset, "{{") or startsWith(self.source, self.offset, "{%") or startsTag(self.source, self.offset) or
                 startsSpecialMarkup(self.source, self.offset, self.format))
             {
                 break;
@@ -204,6 +225,46 @@ const Lexer = struct {
             .span = .{ .start = start, .end = self.offset },
             .data = .{ .text = try decoded.toOwnedSlice(self.allocator) },
         };
+    }
+
+    fn directiveToken(self: *Lexer) std.mem.Allocator.Error!?Token {
+        const start = self.offset;
+        self.offset += 2;
+        const content_start = self.offset;
+        while (self.offset + 1 < self.source.len and !startsWith(self.source, self.offset, "%}")) : (self.offset += 1) {}
+        if (self.offset + 1 >= self.source.len) {
+            self.failure = .{ .kind = .syntax, .span = .{ .start = start, .end = self.source.len } };
+            return null;
+        }
+        const content_end = self.offset;
+        self.offset += 2;
+        const content = trimSpan(self.source, content_start, content_end);
+        const bytes = self.source[content.start..content.end];
+        var directive: Directive = .unknown;
+        if (std.mem.startsWith(u8, bytes, "if ")) {
+            directive = .{ .if_ = trimSpan(self.source, content.start + 3, content.end) };
+        } else if (std.mem.eql(u8, bytes, "else")) {
+            directive = .else_;
+        } else if (std.mem.eql(u8, bytes, "endif")) {
+            directive = .endif;
+        } else if (std.mem.eql(u8, bytes, "endfor")) {
+            directive = .endfor;
+        } else if (std.mem.eql(u8, bytes, "break")) {
+            directive = .break_;
+        } else if (std.mem.eql(u8, bytes, "continue")) {
+            directive = .continue_;
+        } else if (std.mem.startsWith(u8, bytes, "for ")) {
+            const rest_start = content.start + 4;
+            const in_index = std.mem.indexOf(u8, self.source[rest_start..content.end], " in ");
+            if (in_index) |found| {
+                const name_span = trimSpan(self.source, rest_start, rest_start + found);
+                const expr_span = trimSpan(self.source, rest_start + found + 4, content.end);
+                if (validIdentifier(self.source[name_span.start..name_span.end]) and expr_span.start < expr_span.end) {
+                    directive = .{ .for_ = .{ .name = self.source[name_span.start..name_span.end], .name_span = name_span, .expression = expr_span } };
+                }
+            }
+        }
+        return .{ .span = .{ .start = start, .end = self.offset }, .data = .{ .directive = directive } };
     }
 
     fn expressionToken(self: *Lexer) std.mem.Allocator.Error!?Token {
@@ -552,6 +613,8 @@ const XmlPseudoAttribute = struct {
 const ParsedChildren = struct {
     nodes: []Node,
     close_span: ?zeft.SourceSpan,
+    stop: ?Directive = null,
+    stop_span: ?zeft.SourceSpan = null,
 };
 
 const Parser = struct {
@@ -566,6 +629,7 @@ const Parser = struct {
         self: *Parser,
         parent_name: ?[]const u8,
         parent_span: ?zeft.SourceSpan,
+        loop_depth: usize,
     ) std.mem.Allocator.Error!ParsedChildren {
         var nodes: std.ArrayList(Node) = .empty;
         while (self.index < self.tokens.len and self.failure == null) {
@@ -581,6 +645,62 @@ const Parser = struct {
                     .span = token.span,
                     .data = .{ .expression = .{ .source_span = expression_span } },
                 }),
+                .directive => |directive| switch (directive) {
+                    .else_, .endif, .endfor => return .{ .nodes = try nodes.toOwnedSlice(self.allocator), .close_span = null, .stop = directive, .stop_span = token.span },
+                    .if_ => |condition| {
+                        const then_result = try self.parseChildren(parent_name, parent_span, loop_depth);
+                        if (self.failure != null) break;
+                        var else_nodes: []Node = &.{};
+                        const end_span = if (then_result.stop) |stop| switch (stop) {
+                            .else_ => blk: {
+                                const else_result = try self.parseChildren(parent_name, parent_span, loop_depth);
+                                if (self.failure != null) break;
+                                if (!isEndIf(else_result.stop)) {
+                                    self.failure = .{ .kind = .invalid_construct, .span = else_result.stop_span orelse token.span };
+                                    break;
+                                }
+                                else_nodes = else_result.nodes;
+                                break :blk else_result.stop_span.?;
+                            },
+                            .endif => then_result.stop_span.?,
+                            else => {
+                                self.failure = .{ .kind = .invalid_construct, .span = token.span };
+                                break;
+                            },
+                        } else {
+                            self.failure = .{ .kind = .invalid_construct, .span = token.span };
+                            break;
+                        };
+                        try nodes.append(self.allocator, .{ .span = .{ .start = token.span.start, .end = end_span.end }, .data = .{ .conditional = .{ .condition = condition, .then_nodes = then_result.nodes, .else_nodes = else_nodes } } });
+                    },
+                    .for_ => |loop| {
+                        const body = try self.parseChildren(parent_name, parent_span, loop_depth + 1);
+                        if (self.failure != null) break;
+                        if (!isEndFor(body.stop)) {
+                            self.failure = .{ .kind = .invalid_construct, .span = body.stop_span orelse token.span };
+                            break;
+                        }
+                        try nodes.append(self.allocator, .{ .span = .{ .start = token.span.start, .end = body.stop_span.?.end }, .data = .{ .loop = .{ .name = loop.name, .name_span = loop.name_span, .expression = loop.expression, .children = body.nodes } } });
+                    },
+                    .break_ => {
+                        if (loop_depth == 0) {
+                            self.failure = .{ .kind = .invalid_construct, .span = token.span };
+                            break;
+                        }
+                        try nodes.append(self.allocator, .{ .span = token.span, .data = .break_ });
+                    },
+                    .continue_ => {
+                        if (loop_depth == 0) {
+                            self.failure = .{ .kind = .invalid_construct, .span = token.span };
+                            break;
+                        }
+                        try nodes.append(self.allocator, .{ .span = token.span, .data = .continue_ });
+                    },
+                    .unknown => {
+                        self.failure = .{ .kind = .syntax, .span = token.span };
+                        break;
+                    },
+                },
                 .close_element => |name| {
                     if (parent_name) |expected| {
                         const names_match = if (self.format == .html)
@@ -617,7 +737,7 @@ const Parser = struct {
                         });
                         continue;
                     }
-                    const children = try self.parseChildren(opening.name, token.span);
+                    const children = try self.parseChildren(opening.name, token.span, loop_depth);
                     if (self.failure != null) break;
                     const close_span = children.close_span orelse {
                         self.failure = .{
@@ -772,4 +892,37 @@ fn trimEnd(source: []const u8, start: usize, end: usize) usize {
     var offset = end;
     while (offset > start and isExpressionWhitespace(source[offset - 1])) : (offset -= 1) {}
     return offset;
+}
+
+fn trimSpan(source: []const u8, start: usize, end: usize) zeft.SourceSpan {
+    return .{ .start = trimStart(source, start, end), .end = trimEnd(source, start, end) };
+}
+
+fn validIdentifier(value: []const u8) bool {
+    if (value.len == 0 or !isIdentifierStart(value[0])) return false;
+    for (value[1..]) |byte| if (!isIdentifierContinue(byte)) return false;
+    return true;
+}
+
+fn isIdentifierStart(byte: u8) bool {
+    return std.ascii.isAlphabetic(byte) or byte == '_';
+}
+fn isIdentifierContinue(byte: u8) bool {
+    return std.ascii.isAlphanumeric(byte) or byte == '_';
+}
+
+fn isEndIf(directive: ?Directive) bool {
+    if (directive) |value| return switch (value) {
+        .endif => true,
+        else => false,
+    };
+    return false;
+}
+
+fn isEndFor(directive: ?Directive) bool {
+    if (directive) |value| return switch (value) {
+        .endfor => true,
+        else => false,
+    };
+    return false;
 }

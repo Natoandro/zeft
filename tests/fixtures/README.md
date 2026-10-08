@@ -16,6 +16,7 @@ template syntax or runtime APIs.
 | `html/static` | Nested markup, exact static attributes, void elements, doctype, comments, and text delimiter escapes |
 | `html/dynamic` | Text and quoted-attribute interpolation with HTML escaping |
 | `html/expressions` | Property and index access, operators, short-circuiting, and built-in filters/functions |
+| `html/control-flow` | Conditional branches, loop bindings, root-name restoration, and lexical scope |
 | `xml/fragment` | XML declaration, fragments, empty elements, CDATA, entity preservation, and XML escaping |
 
 Context values are supplied by the Zig test because fixtures intentionally

@@ -44,12 +44,47 @@ const Lowerer = struct {
     expressions: std.ArrayList(ir.ExpressionProgram) = .empty,
     instructions: std.ArrayList(ir.Instruction) = .empty,
     failure: ?zeft.CompileDiagnostic = null,
+    locals: std.ArrayList(struct { name: []const u8, slot: u32 }) = .empty,
+    loop_stack: std.ArrayList(struct { begin: usize }) = .empty,
+    next_slot: u32 = 0,
 
     fn visit(self: *Lowerer, nodes: []const parser.Node) std.mem.Allocator.Error!void {
         for (nodes) |node| {
             switch (node.data) {
                 .text => |text| try self.writeStatic(text, node.span),
                 .static_markup => |markup| try self.writeStatic(markup.serialized, node.span),
+                .break_ => try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .loop_break = 0 } }),
+                .continue_ => try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .loop_continue = 0 } }),
+                .conditional => |conditional| {
+                    const condition_id = try self.compileExpression(conditional.condition);
+                    const branch_index = self.instructions.items.len;
+                    try self.instructions.append(self.allocator, .{ .span = conditional.condition, .data = .{ .jump_if_false = .{ .expression_id = condition_id, .target = 0 } } });
+                    try self.visit(conditional.then_nodes);
+                    const jump_index = self.instructions.items.len;
+                    try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .jump = 0 } });
+                    self.instructions.items[branch_index].data.jump_if_false.target = @intCast(self.instructions.items.len);
+                    try self.visit(conditional.else_nodes);
+                    self.instructions.items[jump_index].data.jump = @intCast(self.instructions.items.len);
+                },
+                .loop => |loop| {
+                    const expression_id = try self.compileExpression(loop.expression);
+                    const slot = self.next_slot;
+                    self.next_slot += 1;
+                    const begin = self.instructions.items.len;
+                    try self.instructions.append(self.allocator, .{ .span = loop.expression, .data = .{ .loop_begin = .{ .expression_id = expression_id, .slot = slot, .exit_target = 0 } } });
+                    const body_target: u32 = @intCast(self.instructions.items.len);
+                    try self.locals.append(self.allocator, .{ .name = loop.name, .slot = slot });
+                    try self.loop_stack.append(self.allocator, .{ .begin = begin });
+                    try self.visit(loop.children);
+                    const next = self.instructions.items.len;
+                    try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .loop_next = .{ .body_target = body_target, .exit_target = 0 } } });
+                    const exit_target: u32 = @intCast(self.instructions.items.len);
+                    self.instructions.items[begin].data.loop_begin.exit_target = exit_target;
+                    self.instructions.items[next].data.loop_next.exit_target = exit_target;
+                    self.patchLoopControls(next, exit_target);
+                    self.loop_stack.items.len -= 1;
+                    self.locals.items.len -= 1;
+                },
                 .element => |element| {
                     try self.writeOpeningTag(element, node.span.start);
                     try self.visit(element.children);
@@ -108,16 +143,8 @@ const Lowerer = struct {
             self.failure = .{ .kind = .syntax, .span = source_span };
             return;
         }
-        const expression_info = self.analyzed.expressions[self.expression_index];
-        self.expression_index += 1;
-        const id = std.math.cast(ir.ExpressionId, self.expressions.items.len) orelse unreachable;
-        var expr_instructions: std.ArrayList(ir.ExpressionInstruction) = .empty;
-        try self.emitExpr(&expr_instructions, expression_info.expression);
-        try expr_instructions.append(self.allocator, .{
-            .span = expression_info.expression.span,
-            .data = .return_value,
-        });
-        try self.expressions.append(self.allocator, .{ .instructions = try expr_instructions.toOwnedSlice(self.allocator) });
+        const id = try self.compileExpression(source_span);
+        const expression_info = self.analyzed.expressions[self.expression_index - 1];
         try self.instructions.append(self.allocator, .{
             .span = output_span,
             .data = .{ .write_expression = .{
@@ -128,6 +155,22 @@ const Lowerer = struct {
                 },
             } },
         });
+        return;
+    }
+
+    fn compileExpression(self: *Lowerer, source_span: zeft.SourceSpan) std.mem.Allocator.Error!ir.ExpressionId {
+        _ = source_span;
+        const expression_info = self.analyzed.expressions[self.expression_index];
+        self.expression_index += 1;
+        const id = std.math.cast(ir.ExpressionId, self.expressions.items.len) orelse unreachable;
+        var expr_instructions: std.ArrayList(ir.ExpressionInstruction) = .empty;
+        try self.emitExpr(&expr_instructions, expression_info.expression);
+        try expr_instructions.append(self.allocator, .{
+            .span = expression_info.expression.span,
+            .data = .return_value,
+        });
+        try self.expressions.append(self.allocator, .{ .instructions = try expr_instructions.toOwnedSlice(self.allocator) });
+        return id;
     }
 
     fn emitExpr(self: *Lowerer, output: *std.ArrayList(ir.ExpressionInstruction), expr: analysis.Expression) std.mem.Allocator.Error!void {
@@ -138,7 +181,10 @@ const Lowerer = struct {
                 .number => |v| .{ .number = v },
                 .string => |v| .{ .string = v },
             } } }),
-            .identifier => |name| try output.append(self.allocator, .{ .span = expr.span, .data = .{ .load_root_symbol = self.findSymbol(name) } }),
+            .identifier => |name| if (self.findLocal(name)) |slot|
+                try output.append(self.allocator, .{ .span = expr.span, .data = .{ .load_local = slot } })
+            else
+                try output.append(self.allocator, .{ .span = expr.span, .data = .{ .load_root_symbol = self.findSymbol(name) } }),
             .property => |access| {
                 try self.emitExpr(output, access.base.*);
                 try output.append(self.allocator, .{ .span = access.selector_span, .data = .{ .get_property = access.name } });
@@ -179,6 +225,30 @@ const Lowerer = struct {
     fn findSymbol(self: *Lowerer, name: []const u8) analysis.SymbolId {
         for (self.analyzed.symbols) |symbol| if (std.mem.eql(u8, symbol.name, name)) return symbol.id;
         unreachable;
+    }
+
+    fn findLocal(self: *Lowerer, name: []const u8) ?u32 {
+        var index = self.locals.items.len;
+        while (index > 0) {
+            index -= 1;
+            if (std.mem.eql(u8, self.locals.items[index].name, name)) return self.locals.items[index].slot;
+        }
+        return null;
+    }
+
+    fn patchLoopControls(self: *Lowerer, next: usize, exit: u32) void {
+        const frame = self.loop_stack.items[self.loop_stack.items.len - 1];
+        for (self.instructions.items[frame.begin + 1 .. next]) |*instruction| {
+            switch (instruction.data) {
+                .loop_break => {
+                    if (instruction.data.loop_break == 0) instruction.data.loop_break = exit;
+                },
+                .loop_continue => {
+                    if (instruction.data.loop_continue == 0) instruction.data.loop_continue = @intCast(next);
+                },
+                else => {},
+            }
+        }
     }
 };
 

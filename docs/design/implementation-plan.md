@@ -138,26 +138,29 @@ compilation and evaluation remain in ZEP-030 and ZEP-032.
 
 ## Phase 4 — Add branches, loops, and lexical scopes
 
-**Outcome:** conditional and iterative template constructs lower to explicit
-linear control flow and execute with isolated render-local state.
+**Outcome:** `{% if expression %}`, `{% else %}`, `{% endif %}`,
+`{% for name in expression %}`, `{% endfor %}`, `{% break %}`, and
+`{% continue %}` lower to explicit control flow and execute with isolated
+render-local state. There is no `else if`; loops alone create lexical scopes,
+and inner loop bindings shadow outer and root names.
 
-- [ ] **ZEP-038** Specify conditional, loop, loop-control, and scope syntax and
+- [x] **ZEP-038** Specify conditional, loop, loop-control, and scope syntax and
   their compile-time validation rules.
-- [ ] **ZEP-039** Add conditional and loop nodes to the template AST, retaining
+- [x] **ZEP-039** Add conditional and loop nodes to the template AST, retaining
   source spans for delimiters and bodies.
-- [ ] **ZEP-040** Analyze lexical bindings and resolve loop-local names to
+- [x] **ZEP-040** Analyze lexical bindings and resolve loop-local names to
   local slots where statically known.
-- [ ] **ZEP-041** Add conditional branch and jump instructions with validated
+- [x] **ZEP-041** Add conditional branch and jump instructions with validated
   destinations to Render IR.
-- [ ] **ZEP-042** Implement `LOOP_BEGIN` and `LOOP_NEXT` lowering and VM
+- [x] **ZEP-042** Implement `LOOP_BEGIN` and `LOOP_NEXT` lowering and VM
   execution, including empty iterables.
-- [ ] **ZEP-043** Implement nested render-local scopes and loop state without
+- [x] **ZEP-043** Implement nested render-local scopes and loop state without
   mutating the compiled template.
-- [ ] **ZEP-044** Define behavior for nested loops, shadowed names, and
+- [x] **ZEP-044** Define behavior for nested loops, shadowed names, and
   conditionals inside loops.
-- [ ] **ZEP-045** Add compile diagnostics for invalid control-flow constructs
+- [x] **ZEP-045** Add compile diagnostics for invalid control-flow constructs
   and malformed block nesting.
-- [ ] **ZEP-046** Add integration tests for true/false branches, empty and
+- [x] **ZEP-046** Add integration tests for true/false branches, empty and
   non-empty loops, nested scopes, shadowing, and concurrent renders of one
   compiled template.
 

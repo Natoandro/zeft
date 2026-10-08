@@ -23,6 +23,7 @@ pub const AnalyzedExpression = struct {
     symbol_id: SymbolId,
     output_context: OutputContext,
 };
+const LocalBinding = struct { name: []const u8 };
 
 pub const Result = struct {
     symbols: []Symbol,
@@ -54,12 +55,24 @@ const Analyzer = struct {
     source: []const u8,
     symbols: std.ArrayList(Symbol) = .empty,
     expressions: std.ArrayList(AnalyzedExpression) = .empty,
+    locals: std.ArrayList(LocalBinding) = .empty,
     failure: ?zeft.CompileDiagnostic = null,
 
     fn visit(self: *Analyzer, nodes: []const parser.Node) std.mem.Allocator.Error!void {
         for (nodes) |node| {
             switch (node.data) {
-                .text, .static_markup => {},
+                .text, .static_markup, .break_, .continue_ => {},
+                .conditional => |conditional| {
+                    try self.addExpression(conditional.condition, .text);
+                    try self.visit(conditional.then_nodes);
+                    try self.visit(conditional.else_nodes);
+                },
+                .loop => |loop| {
+                    try self.addExpression(loop.expression, .text);
+                    try self.locals.append(self.allocator, .{ .name = loop.name });
+                    try self.visit(loop.children);
+                    self.locals.items.len -= 1;
+                },
                 .element => |element| {
                     for (element.attributes) |attribute| {
                         if (attribute.value) |value| {
@@ -89,7 +102,7 @@ const Analyzer = struct {
             },
         };
         try self.collectSymbols(&parsed_expression);
-        const symbol_id = if (firstIdentifier(&parsed_expression)) |name| self.getSymbolId(name) else 0;
+        const symbol_id = if (firstIdentifier(&parsed_expression)) |name| if (self.isLocal(name)) 0 else self.getSymbolId(name) else 0;
         try self.expressions.append(self.allocator, .{
             .expression = parsed_expression,
             .symbol_id = symbol_id,
@@ -100,7 +113,7 @@ const Analyzer = struct {
     fn collectSymbols(self: *Analyzer, expr: *const expression.Expression) std.mem.Allocator.Error!void {
         switch (expr.data) {
             .identifier => |name| {
-                _ = try self.getOrAddSymbol(name);
+                if (!self.isLocal(name)) _ = try self.getOrAddSymbol(name);
             },
             .property => |access| try self.collectSymbols(access.base),
             .index => |access| try self.collectSymbols(access.base),
@@ -116,6 +129,15 @@ const Analyzer = struct {
             },
             .literal => {},
         }
+    }
+
+    fn isLocal(self: *Analyzer, name: []const u8) bool {
+        var i = self.locals.items.len;
+        while (i > 0) {
+            i -= 1;
+            if (std.mem.eql(u8, self.locals.items[i].name, name)) return true;
+        }
+        return false;
     }
 
     fn getSymbolId(self: *Analyzer, name: []const u8) SymbolId {
