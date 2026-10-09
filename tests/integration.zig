@@ -1,5 +1,6 @@
 const std = @import("std");
 const zeft = @import("zeft");
+const fixtures = @import("fixture_runner.zig");
 
 const SharedControlContext = struct { show: bool, items: []const []const u8 };
 const ConcurrentRender = struct {
@@ -50,34 +51,29 @@ fn renderConcurrentOptions(state: *ConcurrentOptionsRender) void {
 }
 
 fn expectFixture(source: []const u8, expected: []const u8, options: zeft.CompileOptions, context: anytype) !void {
-    const result = try zeft.compile(std.testing.allocator, source, options);
-    var template = switch (result) {
-        .success => |value| value,
-        .failure => return error.UnexpectedCompileFailure,
-    };
-    defer template.deinit();
+    try fixtures.expectSuccess(.{ .id = "focused", .path = source, .source = source, .expected = expected, .compile_options = options }, context);
+}
 
-    var output: [1024]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&output);
-    const rendered = try template.render(&writer, context);
-    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
-    try std.testing.expectEqualStrings(expected, std.Io.Writer.buffered(&writer));
+fn expectGolden(comptime id: []const u8, comptime source_path: []const u8, comptime expected_path: []const u8, options: zeft.CompileOptions, context: anytype) !void {
+    try fixtures.expectSuccess(.{ .id = id, .path = source_path, .expected_path = expected_path, .source = @embedFile(source_path), .expected = @embedFile(expected_path), .compile_options = options }, context);
 }
 
 test "enabled golden fixtures compile and render byte-for-byte" {
     _ = std.testing.refAllDecls(zeft);
 
-    try expectFixture(
-        @embedFile("fixtures/html/static.tmpl"),
-        @embedFile("fixtures/html/static.out"),
+    try expectGolden(
+        "M-001–M-004",
+        "fixtures/html/static.tmpl",
+        "fixtures/html/static.out",
         .{},
         .{},
     );
 
     const HtmlContext = struct { value: []const u8 };
-    try expectFixture(
-        @embedFile("fixtures/html/dynamic.tmpl"),
-        @embedFile("fixtures/html/dynamic.out"),
+    try expectGolden(
+        "E-001",
+        "fixtures/html/dynamic.tmpl",
+        "fixtures/html/dynamic.out",
         .{},
         HtmlContext{ .value = "A&B\"'<" },
     );
@@ -87,9 +83,10 @@ test "enabled golden fixtures compile and render byte-for-byte" {
         people: [2]Person,
         blank: []const u8,
     };
-    try expectFixture(
-        @embedFile("fixtures/html/expressions.tmpl"),
-        @embedFile("fixtures/html/expressions.out"),
+    try expectGolden(
+        "E-002",
+        "fixtures/html/expressions.tmpl",
+        "fixtures/html/expressions.out",
         .{},
         &ExpressionContext{
             .people = .{ .{ .name = "Ada" }, .{ .name = "Grace & Hopper" } },
@@ -98,36 +95,38 @@ test "enabled golden fixtures compile and render byte-for-byte" {
     );
 
     const ControlContext = struct { item: []const u8, show: bool, items: []const []const u8 };
-    try expectFixture(
-        @embedFile("fixtures/html/control-flow.tmpl"),
-        @embedFile("fixtures/html/control-flow.out"),
+    try expectGolden(
+        "F-004/F-007",
+        "fixtures/html/control-flow.tmpl",
+        "fixtures/html/control-flow.out",
         .{},
         &ControlContext{ .item = "root", .show = true, .items = &.{ "A", "B" } },
     );
 
     const XmlContext = struct { value: []const u8 };
-    try expectFixture(
-        @embedFile("fixtures/xml/fragment.tmpl"),
-        @embedFile("fixtures/xml/fragment.out"),
+    try expectGolden(
+        "M-010",
+        "fixtures/xml/fragment.tmpl",
+        "fixtures/xml/fragment.out",
         .{ .format = .xml },
         XmlContext{ .value = "&<>\"'" },
     );
 
-    try expectFixture(@embedFile("fixtures/html/whitespace.tmpl"), @embedFile("fixtures/html/whitespace-preserve.out"), .{}, .{});
-    try expectFixture(@embedFile("fixtures/html/whitespace.tmpl"), @embedFile("fixtures/html/whitespace-compact.out"), .{ .whitespace = .compact }, .{});
-    try expectFixture(@embedFile("fixtures/html/whitespace.tmpl"), @embedFile("fixtures/html/whitespace-pretty.out"), .{ .whitespace = .pretty }, .{});
-    try expectFixture(@embedFile("fixtures/xml/whitespace.tmpl"), @embedFile("fixtures/xml/whitespace-preserve.out"), .{ .format = .xml }, .{});
-    try expectFixture(@embedFile("fixtures/xml/whitespace.tmpl"), @embedFile("fixtures/xml/whitespace-compact.out"), .{ .format = .xml, .whitespace = .compact }, .{});
-    try expectFixture(@embedFile("fixtures/xml/whitespace.tmpl"), @embedFile("fixtures/xml/whitespace-pretty.out"), .{ .format = .xml, .whitespace = .pretty }, .{});
+    try expectGolden("W-html-preserve", "fixtures/html/whitespace.tmpl", "fixtures/html/whitespace-preserve.out", .{}, .{});
+    try expectGolden("W-html-compact", "fixtures/html/whitespace.tmpl", "fixtures/html/whitespace-compact.out", .{ .whitespace = .compact }, .{});
+    try expectGolden("W-html-pretty", "fixtures/html/whitespace.tmpl", "fixtures/html/whitespace-pretty.out", .{ .whitespace = .pretty }, .{});
+    try expectGolden("W-xml-preserve", "fixtures/xml/whitespace.tmpl", "fixtures/xml/whitespace-preserve.out", .{ .format = .xml }, .{});
+    try expectGolden("W-xml-compact", "fixtures/xml/whitespace.tmpl", "fixtures/xml/whitespace-compact.out", .{ .format = .xml, .whitespace = .compact }, .{});
+    try expectGolden("W-xml-pretty", "fixtures/xml/whitespace.tmpl", "fixtures/xml/whitespace-pretty.out", .{ .format = .xml, .whitespace = .pretty }, .{});
 }
 
 test "whitespace policies retain dynamic boundaries across empty and repeated loop output" {
     const Context = struct { name: []const u8, items: []const []const u8 };
     const source = @embedFile("fixtures/html/whitespace-dynamic.tmpl");
     const context = &Context{ .name = "Ada", .items = &.{ "A", "B" } };
-    try expectFixture(source, @embedFile("fixtures/html/whitespace-dynamic-preserve.out"), .{}, context);
-    try expectFixture(source, @embedFile("fixtures/html/whitespace-dynamic-compact.out"), .{ .whitespace = .compact }, context);
-    try expectFixture(source, @embedFile("fixtures/html/whitespace-dynamic-pretty.out"), .{ .whitespace = .pretty }, context);
+    try expectGolden("W-dynamic-preserve", "fixtures/html/whitespace-dynamic.tmpl", "fixtures/html/whitespace-dynamic-preserve.out", .{}, context);
+    try expectGolden("W-dynamic-compact", "fixtures/html/whitespace-dynamic.tmpl", "fixtures/html/whitespace-dynamic-compact.out", .{ .whitespace = .compact }, context);
+    try expectGolden("W-dynamic-pretty", "fixtures/html/whitespace-dynamic.tmpl", "fixtures/html/whitespace-dynamic-pretty.out", .{ .whitespace = .pretty }, context);
     try expectFixture(source, "<p>Hello Ada !</p>", .{ .whitespace = .compact }, &Context{ .name = "Ada", .items = &.{} });
 }
 
@@ -825,4 +824,32 @@ test "render scratch allocations are released after callback output" {
     try std.testing.expect(diagnostic == .failure);
     try std.testing.expectEqual(zeft.RenderErrorKind.missing_variable, diagnostic.failure.kind);
     try std.testing.expectEqual(before_render, debug_allocator.total_requested_bytes);
+}
+
+test "fixture runner supports large output and typed callback registrations" {
+    const Context = struct { value: []const u8 };
+    const value = "x" ** 2048;
+    const registrations = [_]zeft.Registration{.{ .name = "suffix", .callback = registeredSuffix }};
+    try fixtures.expectSuccess(.{
+        .id = "runner-large-output",
+        .path = "inline/runner-large-output",
+        .source = "{{ value | suffix }}",
+        .expected = value ++ "!",
+        .render_options = .{ .allocator = std.testing.allocator, .filters = &registrations },
+    }, &Context{ .value = value });
+}
+
+test "fixture runner checks compile and render diagnostic descriptors" {
+    try fixtures.expectCompileFailure(.{
+        .id = "runner-compile-diagnostic",
+        .path = "inline/runner-compile-diagnostic",
+        .source = "<div/>",
+        .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 6 } },
+    });
+    try fixtures.expectRenderFailure(.{
+        .id = "runner-render-diagnostic",
+        .path = "inline/runner-render-diagnostic",
+        .source = "before {{ absent }}",
+        .diagnostic = .{ .kind = .missing_variable, .span = .{ .start = 10, .end = 16 } },
+    }, .{});
 }

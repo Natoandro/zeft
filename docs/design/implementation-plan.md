@@ -132,9 +132,8 @@ and run through expression IR without reparsing source text.
 - [x] **ZEP-037** Add expression unit tests, including precedence,
   short-circuit behavior, property access, missing values, and runtime errors.
 
-The expression grammar specifies the target language. The current expression
-implementation accepts identifier/property/index access only; operator
-compilation and evaluation remain in ZEP-030 and ZEP-032.
+The expression implementation covers the specified access, literal, operator,
+short-circuit, function, and filter forms through compiled expression IR.
 
 ## Phase 4 — Add branches, loops, and lexical scopes
 
@@ -252,7 +251,7 @@ T-001 and T-002 remain pending until their public API is defined.
 
 ### Coverage and fixture structure
 
-The starting inventory is nine `.tmpl` files and fourteen file-backed golden
+The starting inventory is eight `.tmpl` files and fourteen file-backed golden
 render cases. Most diagnostics, lifecycle, and cache scenarios currently use
 inline Zig sources. Catalog status currently mixes executable golden cases
 with focused tests; reconcile that distinction before expanding the suite.
@@ -282,13 +281,13 @@ reviewed independently of the renderer's actual output.
 
 ### Implementation sequence
 
-- [ ] **ZEP-074** Audit every catalog row against normative requirements and
+- [x] **ZEP-074** Audit every catalog row against normative requirements and
   actual executable tests. Record the owning test/fixture and concrete gaps;
   distinguish fixture coverage, focused test coverage, and pending features.
   Preserve all existing IDs. Remove stale implementation-status prose in this
   plan where it contradicts completed tasks, after confirming current code.
   Verification: every catalog row has an accurate coverage mapping.
-- [ ] **ZEP-075** Extract shared fixture helpers and introduce explicit named
+- [x] **ZEP-075** Extract shared fixture helpers and introduce explicit named
   descriptors for successful renders, compile failures, and render failures.
   Support typed native contexts and callback registrations. Replace the fixed
   1,024-byte golden-output buffer with a writer sized to expected output plus
