@@ -243,6 +243,126 @@ already established by tests.
 - [x] **ZEP-073** Optimize static markup serialization and adjacent writes
   using benchmark evidence.
 
+## Phase 9 — Complete fixture-driven end-to-end coverage
+
+**Outcome:** a large, traceable suite exercises the public compile/render and
+cache APIs against the specified architecture, covering successful output and
+failures. Compiler-internal assertions remain in unit tests. Comptime cases
+T-001 and T-002 remain pending until their public API is defined.
+
+### Coverage and fixture structure
+
+The starting inventory is nine `.tmpl` files and fourteen file-backed golden
+render cases. Most diagnostics, lifecycle, and cache scenarios currently use
+inline Zig sources. Catalog status currently mixes executable golden cases
+with focused tests; reconcile that distinction before expanding the suite.
+
+Use explicit Zig case descriptors to embed fixture files and declare case IDs,
+compile options, typed contexts, render registrations, and expected outcomes.
+Keep template input and exact successful output in `.tmpl` and `.out` files.
+Keep expected diagnostic categories and half-open byte spans in descriptors;
+avoid introducing a new context or expectation serialization language. Give
+each executable case a unique ID, retaining the existing catalog IDs as
+coverage references when several cases verify one requirement. Report both
+the case ID and fixture path when a case fails.
+
+Organize reusable inputs under `tests/fixtures/` by behavior: HTML, XML,
+expressions, control flow, whitespace, compile errors, render errors, and
+includes. Keep suite code under `tests/`, with `tests/integration.zig` importing
+the case groups. Cache scenarios need explicit sequences of public API calls;
+lifecycle and concurrency scenarios need dedicated Zig harnesses.
+
+Target approximately 150–220 named executions initially, including option and
+context variants. This is a sizing estimate, not a completion criterion.
+Every applicable catalog requirement needs positive, negative, and boundary
+coverage where those outcomes are specified. Avoid multiplying every feature
+by every option; use full matrices for escaping and whitespace and selected
+combinations elsewhere. Expected results must come from requirements and be
+reviewed independently of the renderer's actual output.
+
+### Implementation sequence
+
+- [ ] **ZEP-074** Audit every catalog row against normative requirements and
+  actual executable tests. Record the owning test/fixture and concrete gaps;
+  distinguish fixture coverage, focused test coverage, and pending features.
+  Preserve all existing IDs. Remove stale implementation-status prose in this
+  plan where it contradicts completed tasks, after confirming current code.
+  Verification: every catalog row has an accurate coverage mapping.
+- [ ] **ZEP-075** Extract shared fixture helpers and introduce explicit named
+  descriptors for successful renders, compile failures, and render failures.
+  Support typed native contexts and callback registrations. Replace the fixed
+  1,024-byte golden-output buffer with a writer sized to expected output plus
+  headroom, reporting overflow as a case failure. Migrate existing goldens
+  without changing their expected bytes. Verification: all fourteen existing
+  golden executions remain active and failure reports identify the case.
+- [ ] **ZEP-076** Expand markup and escaping fixtures (M-001–M-013, E-001,
+  E-010). Cover all fourteen HTML void tags in both opening forms, mixed case,
+  boolean versus quoted attributes, both attribute quote styles, multiple
+  interpolation segments, delimiter escapes, comments and doctypes. Cover XML
+  fragments, case-sensitive names, empty-element spelling, declarations,
+  entities, and literal CDATA. Exercise all five escape-sensitive characters
+  in HTML/XML text and both attribute quote styles. Verification: exact bytes
+  and corresponding invalid-markup cases through the public compiler.
+- [ ] **ZEP-077** Expand expression/value fixtures (E-002–E-009, E-011–E-012).
+  Cover every operator, adjacent precedence levels, associativity, grouping,
+  numeric forms, all six string escapes, literal/name case sensitivity,
+  dynamic indexes, nested access, and short-circuit skipping of failing
+  accesses/calls. Exercise built-in and registered calls, argument counts,
+  nested calls, pipelines, overrides, and native value adapters. Use context
+  operands as well as literals so optimizer folding cannot replace all VM
+  coverage. Verification: output and specified failure categories/spans.
+- [ ] **ZEP-078** Expand control-flow fixtures (F-001–F-011). Cover both
+  branches, nested conditions, empty/single/multiple-item loops, nested loops,
+  root and outer-binding restoration, break/continue in nested branches, and
+  selectors on local values. Reuse compiled templates across differing
+  contexts, including a failed render followed by success. Verification:
+  exact output, runtime condition/iterable errors, and invalid nesting cases.
+- [ ] **ZEP-079** Expand whitespace fixtures (W-001–W-007). Exercise all three
+  policies in both formats, element-only and mixed content, empty dynamic
+  output, conditional/loop-generated siblings, custom indentation, and every
+  HTML whitespace-sensitive element. Verify XML names do not inherit HTML
+  sensitivity. Verification: independently authored byte-exact goldens,
+  including leading/trailing spaces, tabs, and final-newline differences.
+- [ ] **ZEP-080** Complete compile/render diagnostic fixture tables
+  (C-001–C-005, R-001–R-003, and failures from earlier groups). Cover malformed
+  delimiters, literal syntax, selectors, operators, calls, declarations,
+  entities, comments, CDATA, attributes, and directives. Cover missing names,
+  invalid selectors/operands/conditions/iterables, unknown callables, invalid
+  arity/types, and callback failures. Add leading multibyte source text to
+  representative cases to verify byte offsets. Verification: exact category
+  and half-open span; compile failures never proceed to rendering. Assert
+  partial output only where the architecture defines that behavior.
+- [ ] **ZEP-081** Add fixture-backed cache/include scenarios (K-001–K-008).
+  Cover hits, distinct identities, all output-affecting options including
+  indentation, reload success/failure, nested/repeated includes, changed child
+  output without parent recompilation, missing roots/children, initial child
+  compile failure, cycles, and retained leases across replacement/eviction.
+  Verification: output plus dependency identities, directive spans, child
+  diagnostics, and specified lease/version behavior through public APIs.
+- [ ] **ZEP-082** Complete dedicated lifecycle and concurrency integration
+  harnesses (R-004–R-008, F-011, K-007–K-008). Reuse representative fixture
+  inputs for writer failures in static/dynamic/include output, freed source
+  and option buffers, scratch cleanup on success and failures, and overlapping
+  renders/reloads/evictions. Use synchronization to establish overlap rather
+  than timing sleeps. Retain allocator-failure checks and internal optimizer
+  assertions in their appropriate focused tests. Verification: original writer
+  errors, allocation cleanup, valid retained storage, and isolated outputs.
+- [ ] **ZEP-083** Audit suite completeness and update fixture documentation.
+  Ensure every registered input/output exists, every enabled fixture is
+  registered, IDs are unique, and catalog paths/statuses match execution.
+  Record actual fixture and execution counts and remaining pending API cases.
+  Verification: run `zig fmt` on changed Zig files, `zig build`, and
+  `zig build test`; also run the suite in ReleaseSafe to check behavior with
+  optimization enabled. Check each task only after its verification passes.
+
+For each batch, format changed Zig files and run `zig build` and
+`zig build test` before marking coverage enabled. If a fixture exposes a
+clear implementation defect against the architecture, fix it with that
+regression case. If expected behavior requires a new product or architecture
+decision, ask in the conversation before defining the fixture. Do not derive
+goldens automatically from current renderer output or silently weaken an
+expectation to make a test pass.
+
 ## Completion policy
 
 Implement phases in order. A later phase may begin only when the preceding
