@@ -14,7 +14,7 @@ requirements.
 
 | Status | Meaning |
 | --- | --- |
-| `Fixture` | At least one active golden source/output execution covers the row. The audit lists remaining boundaries. |
+| `Fixture` | At least one active golden source/output execution covers the row. The catalog lists coverage targets. |
 | `Focused` | Active focused tests cover at least part of the row, but it has no dedicated golden coverage. This may include parser tests rather than public compile/render tests. |
 | `Unit` | Internal representation or ownership assertions belong in focused unit tests. |
 | `Benchmark` | A standalone benchmark workload exists; it is separate from correctness fixtures. |

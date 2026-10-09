@@ -41,20 +41,30 @@ literal template delimiter may be produced through interpolation, such as
 `{{ "{{" }}` or `{{ "{%" }}`. Template delimiters in comments and CDATA
 remain literal.
 
-Control directives use `{% ... %}` in template text:
+Block syntax uses explicit opening, branch, and closing prefixes in template
+text:
 
-- `{% if expression %}`, `{% elif expression %}`, `{% else %}`, `{% endif %}`
-- `{% for name in expression %}`, optional `{% else %}`, `{% endfor %}`
+- `{#if expression}`, `{:else if expression}`, `{:else}`, `{/if}`
+- `{#for name in expression}`, optional `{:else}`, `{/for}`
+
+Standalone directives use `{% ... %}`:
+
 - `{% break %}` and `{% continue %}`
 - `{% include "identity" %}`
 
-`elif` and loop `else` are specified future behavior and remain listed in the
-implementation plan until available.
+Interpolation uses `{{ expression }}`. Closing blocks contain only the block
+name; they do not repeat the opening expression. Branches and closing blocks
+MUST match the innermost open block. A conditional permits zero or more
+`{:else if expression}` branches followed by at most one `{:else}` branch.
+Conditions are evaluated in order until one is true; only its body runs.
+Percent-delimited directives accept only include, break, and continue.
 
 Conditions MUST be booleans. A loop operand MUST be a sequence. The loop body
 runs once per item; its `else` body runs only when the sequence is empty. A loop
 creates a lexical binding that may shadow an outer loop or root name. `break`
 and `continue` target the innermost loop and are invalid outside a loop.
+The loop binding and iteration scope exist only in its main body. Its `else`
+body uses the enclosing scope; controls there target an enclosing loop, if any.
 
 An include identity is a double-quoted, non-interpolated byte string without
 escapes. Zeft does not interpret it as a filesystem path. Compilation records

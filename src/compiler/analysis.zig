@@ -72,6 +72,7 @@ const Analyzer = struct {
                     try self.locals.append(self.allocator, .{ .name = loop.name });
                     try self.visit(loop.children);
                     self.locals.items.len -= 1;
+                    try self.visit(loop.else_nodes);
                 },
                 .element => |element| {
                     for (element.attributes) |attribute| {

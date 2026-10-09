@@ -23,11 +23,15 @@ entities, and empty-element syntax.
 Current HTML limitations include unquoted attribute values, optional end tags,
 nonvoid self-closing syntax, doctypes other than the HTML5 form, browser-style
 error recovery, and complete raw-text handling for elements such as `script`
-and `style`. Dynamic tag and attribute names, trusted raw output, `elif`, loop
-`else`, generalized postfix expressions, a unified callable API, numeric and
+and `style`. Dynamic tag and attribute names, trusted raw output, generalized
+postfix expressions, a unified callable API, numeric and
 optional native context fields, and comptime compilation are also not
 implemented yet. See the
 [implementation plan](docs/design/implementation-plan.md) for future work.
+
+Blocks use `{#if expression}`, `{:else if expression}`, `{:else}`, and
+`{/if}`, or `{#for name in expression}`, optional `{:else}`, and `{/for}`.
+Standalone include, break, and continue directives use `{% ... %}`.
 
 See the [architecture](docs/architecture/README.md) for the language and API
 contracts.

@@ -2,6 +2,10 @@
 
 ## Architecture and planning
 
+- Documents must describe only the current or desired state of the project.
+  Do not include history, migration narratives, superseded behavior, or
+  retrospective change logs. Git history records project changes.
+
 - Treat `docs/architecture/` as normative. Requirements there define the
   required behavior and boundaries of the system.
 - Keep `docs/design/internals.md` aligned with the current implementation. It

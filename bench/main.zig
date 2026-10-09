@@ -67,7 +67,7 @@ pub fn main() !void {
         .{ .name = "small", .source = "<p>Hello, {{ name }}!</p>" },
         .{ .name = "large", .source = large.items },
         .{ .name = "dynamic", .source = "<p>{{ name }}</p><p>{{ name }}</p><p>{{ name }}</p>" },
-        .{ .name = "control-flow", .source = "{% if show %}<ul>{% for item in items %}<li>{{ item }}</li>{% endfor %}</ul>{% else %}hidden{% endif %}" },
+        .{ .name = "control-flow", .source = "{#if show}<ul>{#for item in items}<li>{{ item }}</li>{/for}</ul>{:else}hidden{/if}" },
     };
     std.debug.print("case,compile_ns,render_ns,compile_allocs,compile_bytes,render_allocs,render_bytes,write_calls,output_bytes,compiled_bytes\n", .{});
     for (cases) |case| try runCase(case);

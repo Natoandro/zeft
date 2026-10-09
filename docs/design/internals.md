@@ -41,7 +41,13 @@ flowchart LR
 Parsing produces a temporary document tree containing text, serialized static
 markup, elements, attributes, interpolations, conditionals, loops, loop
 control, and includes. Expression source spans are parsed separately into
-expression trees during analysis, then lowered into expression IR.
+expression trees during analysis, then lowered into expression IR. Block tokens
+use `{#`, `{:`, and `{/` prefixes; standalone directives use `{% ... %}`.
+Else-if chains are represented as conditionals nested in the preceding else
+body. Loops carry separate iteration and empty-sequence bodies. Analysis and
+lowering process the empty-sequence body after leaving the iteration binding.
+The loop-entry empty target reaches that body; normal exhaustion and loop
+controls bypass it.
 
 Analysis assigns root symbol IDs in first-occurrence order, resolves known loop
 bindings to local slots, and records whether interpolations occur in text or an

@@ -96,17 +96,23 @@ const Lowerer = struct {
                     const body_target: u32 = @intCast(self.instructions.items.len);
                     try self.locals.append(self.allocator, .{ .name = loop.name, .slot = slot });
                     try self.loop_stack.append(self.allocator, .{ .begin = begin });
-                    if (self.options.whitespace == .pretty and self.inline_depth == 0 and self.in_structural_children and self.verbatim_depth == 0 and isElementOnly(loop.children)) {
+                    if (self.options.whitespace == .pretty and self.inline_depth == 0 and self.in_structural_children and self.verbatim_depth == 0 and isElementOnly(loop.children) and isElementOnly(loop.else_nodes)) {
                         try self.visitPrettyChildren(loop.children, self.pretty_depth);
                     } else try self.visit(loop.children);
                     const next = self.instructions.items.len;
                     try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .loop_next = .{ .body_target = body_target, .exit_target = 0 } } });
-                    const exit_target: u32 = @intCast(self.instructions.items.len);
-                    self.instructions.items[begin].data.loop_begin.exit_target = exit_target;
-                    self.instructions.items[next].data.loop_next.exit_target = exit_target;
-                    self.patchLoopControls(next, exit_target);
-                    self.loop_stack.items.len -= 1;
+                    const skip_else = self.instructions.items.len;
+                    try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .jump = 0 } });
+                    self.instructions.items[begin].data.loop_begin.exit_target = @intCast(self.instructions.items.len);
+                    self.patchLoopControls(next, @intCast(skip_else));
                     self.locals.items.len -= 1;
+                    self.loop_stack.items.len -= 1;
+                    if (self.options.whitespace == .pretty and self.inline_depth == 0 and self.in_structural_children and self.verbatim_depth == 0 and isElementOnly(loop.children) and isElementOnly(loop.else_nodes)) {
+                        try self.visitPrettyChildren(loop.else_nodes, self.pretty_depth);
+                    } else try self.visit(loop.else_nodes);
+                    const exit_target: u32 = @intCast(self.instructions.items.len);
+                    self.instructions.items[skip_else].data.jump = exit_target;
+                    self.instructions.items[next].data.loop_next.exit_target = exit_target;
                 },
                 .element => |element| {
                     const structural = isElementOnly(element.children);
@@ -376,7 +382,7 @@ fn isWhitespaceOnly(text: []const u8) bool {
 fn isElementOnly(nodes: []const parser.Node) bool {
     for (nodes) |node| switch (node.data) {
         .element => {},
-        .loop => |loop| if (!isElementOnly(loop.children)) return false,
+        .loop => |loop| if (!isElementOnly(loop.children) or !isElementOnly(loop.else_nodes)) return false,
         .conditional => |conditional| if (!isElementOnly(conditional.then_nodes) or !isElementOnly(conditional.else_nodes)) return false,
         .break_, .continue_, .include => {},
         .text => |text| if (!isWhitespaceOnly(text)) return false,

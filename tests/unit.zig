@@ -396,6 +396,7 @@ fn expectNodeSpansValid(nodes: []const parser.Node, source_len: usize) !void {
                 try std.testing.expect(loop.name_span.isValid(source_len));
                 try std.testing.expect(loop.expression.isValid(source_len));
                 try expectNodeSpansValid(loop.children, source_len);
+                try expectNodeSpansValid(loop.else_nodes, source_len);
             },
             .text, .static_markup, .expression, .break_, .continue_, .include => {},
         }

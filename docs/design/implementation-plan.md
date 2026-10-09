@@ -1,16 +1,15 @@
 # Zeft implementation plan
 
-This plan tracks future work. Each accepted task has a stable reference and is
+This plan tracks implementation tasks. Each accepted task has a stable reference and is
 checked only after its implementation and verification are complete.
-References `ZEP-001` through `ZEP-087` are complete and preserved in Git
-history; references are never reused.
+Task references are never reused.
 
 When behavior changes, update the relevant language or public API contract,
 add or revise the implementation task and its verification, then implement the
 change. The resulting documentation, plan, tests, and code are the record of
 the decision; do not maintain a separate decision log.
 
-## Future work
+## Implementation tasks
 
 - [ ] **ZEP-088** Add optional comptime template compilation using the public
   compile options and the same logical compiled contract as runtime
@@ -45,8 +44,8 @@ the decision; do not maintain a separate decision log.
   mismatches. Verification: cover every allowed and rejected context while
   confirming that ordinary strings remain escaped.
 
-- [ ] **ZEP-094** Implement `{% elif %}` and loop `{% else %}` as specified by
-  the language contract. Verification: cover empty, nested, shadowed, break,
+- [x] **ZEP-094** Implement conditional `{:else if expression}` and loop
+  `{:else}` as specified by the language contract. Verification: cover empty, nested, shadowed, break,
   and continue behavior with exact diagnostics for invalid placement.
 
 - [ ] **ZEP-095** Make null equality compatible with every value type: null
@@ -70,6 +69,15 @@ the decision; do not maintain a separate decision log.
   access may follow any primary expression, including grouped expressions and
   call results. Verification: cover chained calls, properties, and indexes,
   their precedence, and invalid postfix syntax.
+
+- [x] **ZEP-099** Support block directives
+  `{#if expression}`, `{:else if expression}`, `{:else}`, `{/if}`,
+  `{#for name in expression}`, and `{/for}`. Keep `{{ expression }}`
+  interpolation and the existing standalone include, break, and continue
+  directives. Accept only these block forms and preserve fixture case IDs.
+  Verification: cover nested blocks, mixed markup, attributes, literal content,
+  mismatched and missing closing blocks, invalid branch placement, rejection
+  of old forms, and exact diagnostic spans.
 
 Add future work here only after its required behavior and boundaries have been
 decided. Record unresolved ideas outside the implementation plan until they
