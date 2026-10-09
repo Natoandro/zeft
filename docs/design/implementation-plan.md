@@ -247,9 +247,10 @@ already established by tests.
 **Outcome:** a large, traceable suite exercises the public compile/render and
 cache APIs against the specified architecture, covering successful output and
 failures. Compiler-internal assertions remain in unit tests. Comptime cases
-T-001 and T-002 remain pending until their public API is defined. Unspecified
-value semantics remain pending by user decision; record only those unresolved
-behaviors in the catalog without adding normative expectations.
+T-001 and T-002 remain pending until the recorded comptime API direction is
+implemented and its build-failure behavior can be verified. Unspecified value
+semantics remain pending by user decision; record only unresolved behaviors in
+the catalog without adding normative expectations.
 
 ### Coverage and fixture structure
 
@@ -368,6 +369,9 @@ reviewed independently of the renderer's actual output.
   `==`/`!=` across different value tags and division/modulo by positive or
   negative zero return `invalid_operand` at the operator span. Keep optimizer
   folding consistent with runtime evaluation.
+- [x] **ZEP-087** Record comptime compilation decisions: source is a comptime
+  string, options are comptime-known `CompileOptions`, and compile failures
+  fail the build. Leave implementation and executable cases pending.
   Verification: literal mismatches remain runtime errors and exact spans match.
 
 For each batch, format changed Zig files and run `zig build` and
@@ -393,7 +397,7 @@ for Zig commands because the repository filesystem has limited free space.
 ReleaseSafe exposed a byte-array string adapter lifetime defect; a storage
 borrowing fix and pointer/value/nested context regression cover it. Fixture
 line endings are preserved as exact bytes in Git. Comptime API cases remain
-pending until their public API is defined.
+pending until the recorded direction is implemented and can be verified.
 
 ## Completion policy
 

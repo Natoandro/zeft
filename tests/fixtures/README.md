@@ -89,6 +89,7 @@ registrations, 37 render-error registrations, and 17 scenario harnesses. A
 harness may execute several compile/render operations. The counts describe
 registrations rather than Zig test blocks or individual assertions.
 
-The two comptime cases remain pending until their API is defined. Numeric and
+The two comptime cases remain pending until the recorded API direction is
+implemented and can be verified. Numeric and
 optional native fields remain unsupported by the current adapter; numeric/null
 expression values are exercised through literals and callables.

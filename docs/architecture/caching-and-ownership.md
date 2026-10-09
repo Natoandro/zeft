@@ -79,6 +79,12 @@ deinitialization, including after replacement or eviction.
 
 ## Comptime compilation
 
+The comptime compilation operation MUST accept template source as a comptime
+string and compile options as a comptime-known object. It MUST use the existing
+`CompileOptions` fields (`format`, `whitespace`, and `indentation`) rather than
+define a second set of compile settings. Comptime compile failures MUST fail
+the Zig build.
+
 Comptime compilation MUST produce the same logical Render IR contract used by
 the runtime renderer. The renderer MUST be independent of whether a template
 was compiled at runtime or comptime.

@@ -146,7 +146,8 @@ element-only document formatting whitespace is removed.
 | T-001 | Pending | Same supported fixture compiled at runtime and comptime | Produce equivalent logical program and identical rendered bytes. |
 | T-002 | Pending | Diagnostics for shared invalid fixtures | Runtime/comptime entry points report equivalent categories and spans where supported. |
 
-Comptime cases remain pending until their API is defined.
+Comptime cases remain pending until the API direction recorded in the
+architecture is implemented and compile-failure verification is available.
 
 ## Executable coverage audit (ZEP-074)
 
@@ -241,8 +242,8 @@ and passes verification. Future syntax/API cases stay pending.
 | O-001 | src/compiler/optimize.zig tests | Retain focused IR/span/destination assertions; no new golden-only substitute. |
 | O-002 | Z finalization interns repeated strings and symbol names | Retain focused storage-sharing assertion. |
 | B-001 | bench/main.zig workloads | Benchmark execution is separate from fixture verification; no timing thresholds. |
-| T-001 | No executable owner; API not defined | Pending comptime API; do not invent fixture syntax or enable. |
-| T-002 | No executable owner; API not defined | Pending comptime API; do not invent diagnostic entry point or enable. |
+| T-001 | No executable owner; implementation pending | API direction is recorded; enable after same-output runtime/comptime coverage is implemented. |
+| T-002 | No executable owner; implementation pending | API direction is recorded; enable after build-failure diagnostics can be verified. |
 
 ## Value coverage boundaries
 
