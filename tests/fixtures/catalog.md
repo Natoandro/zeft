@@ -16,6 +16,11 @@ allocation assertions remain in focused tests.
   E-001/E-010, including every HTML void opening form, all escaping contexts,
   XML fragments, declarations, entities, and literal comments/CDATA.
 
+- **ZEP-078/079:** `tests/e2e_control_flow.zig` and `tests/e2e_whitespace.zig`
+  register 57 named executions: 16 control-flow goldens, two runtime errors,
+  one compiled-template reuse/recovery harness, and 38 whitespace goldens.
+  Covers F-001–F-010 and W-001–W-007; synchronized reuse is in ZEP-082.
+
 ## Markup and serialization
 
 | ID | Status | Fixture or scenario | Expected result |
@@ -71,13 +76,13 @@ The scenarios below use the syntax specified by ZEP-038: `{% if expression %}`,
 | --- | --- | --- | --- |
 | F-001 | Fixture | Control-flow fixture and focused cases | True/false conditions emit only the selected branch. |
 | F-002 | Fixture | Control-flow fixture and focused cases | Alternate branch and nested conditions preserve document order. |
-| F-003 | Focused | Control-flow integration cases | Empty loops emit nothing; non-empty loops emit once per item. |
+| F-003 | Fixture | Control-flow integration cases | Empty loops emit nothing; non-empty loops emit once per item. |
 | F-004 | Fixture | `html/control-flow.tmpl` | Loop local resolves before root context and expires after its body. |
-| F-005 | Focused | Control-flow integration cases | Nested loops keep independent iteration state and bindings. |
-| F-006 | Focused | Control-flow integration cases | Inner loop shadows outer name; outer binding is visible again afterward. |
+| F-005 | Fixture | Control-flow integration cases | Nested loops keep independent iteration state and bindings. |
+| F-006 | Fixture | Control-flow integration cases | Inner loop shadows outer name; outer binding is visible again afterward. |
 | F-007 | Fixture | `html/control-flow.tmpl` | Root variable with the loop binding's name is visible before and after the loop. |
-| F-008 | Focused | Control-flow integration cases | Non-sequence input returns `non_iterable` at the loop expression span. |
-| F-009 | Focused | Control-flow integration cases | `continue`/`break` target innermost loop; reject invalid placement. |
+| F-008 | Fixture | Control-flow integration cases | Non-sequence input returns `non_iterable` at the loop expression span. |
+| F-009 | Fixture | Control-flow integration cases | `continue`/`break` target innermost loop; reject invalid placement. |
 | F-010 | Fixture | Control-flow fixture and focused cases | Branch/loop combinations keep explicit destinations and local scopes. |
 | F-011 | Focused | Control-flow integration cases | Repeated renders keep state isolated; compiled template remains immutable. |
 

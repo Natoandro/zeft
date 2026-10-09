@@ -1,0 +1,1 @@
+{% for group in groups %}{{ group.name }}:{% for item in group.items %}{% if !item.enabled %}{% continue %}{% endif %}{{ item.name }}{% endfor %};{% endfor %}

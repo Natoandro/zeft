@@ -63,3 +63,7 @@ invented API or executable fixtures.
 `tests/e2e_markup.zig` embeds the `markup/` group: 51 successful output cases
 and 21 compile failures, each with a unique MK case ID. Public diagnostic
 fixtures have `.tmpl` inputs and category/span expectations in Zig descriptors.
+
+`tests/e2e_control_flow.zig` supplies 19 named executions, including a reusable
+compiled-template harness. `tests/e2e_whitespace.zig` supplies 38 exact output
+executions across formats, policies, and dynamic contexts.

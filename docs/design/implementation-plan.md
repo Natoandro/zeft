@@ -310,13 +310,13 @@ reviewed independently of the renderer's actual output.
   nested calls, pipelines, overrides, and native value adapters. Use context
   operands as well as literals so optimizer folding cannot replace all VM
   coverage. Verification: output and specified failure categories/spans.
-- [ ] **ZEP-078** Expand control-flow fixtures (F-001–F-011). Cover both
+- [x] **ZEP-078** Expand control-flow fixtures (F-001–F-011). Cover both
   branches, nested conditions, empty/single/multiple-item loops, nested loops,
   root and outer-binding restoration, break/continue in nested branches, and
   selectors on local values. Reuse compiled templates across differing
   contexts, including a failed render followed by success. Verification:
   exact output, runtime condition/iterable errors, and invalid nesting cases.
-- [ ] **ZEP-079** Expand whitespace fixtures (W-001–W-007). Exercise all three
+- [x] **ZEP-079** Expand whitespace fixtures (W-001–W-007). Exercise all three
   policies in both formats, element-only and mixed content, empty dynamic
   output, conditional/loop-generated siblings, custom indentation, and every
   HTML whitespace-sensitive element. Verify XML names do not inherit HTML

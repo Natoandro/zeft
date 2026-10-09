@@ -6,6 +6,11 @@ test "markup fixture suite" {
     _ = @import("e2e_markup.zig");
 }
 
+test "control flow and whitespace fixture suites" {
+    _ = @import("e2e_control_flow.zig");
+    _ = @import("e2e_whitespace.zig");
+}
+
 const SharedControlContext = struct { show: bool, items: []const []const u8 };
 const ConcurrentRender = struct {
     template: *const zeft.CompiledTemplate,
