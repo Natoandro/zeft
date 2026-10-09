@@ -364,6 +364,11 @@ reviewed independently of the renderer's actual output.
   values. Null emits no bytes; sequences and objects fail with `invalid_operand`
   at the interpolation span. Include a golden using `default` for null.
   Verification: exact output and runtime categories/spans through public APIs.
+- [x] **ZEP-086** Define cross-type equality and zero-divisor behavior. Make
+  `==`/`!=` across different value tags and division/modulo by positive or
+  negative zero return `invalid_operand` at the operator span. Keep optimizer
+  folding consistent with runtime evaluation.
+  Verification: literal mismatches remain runtime errors and exact spans match.
 
 For each batch, format changed Zig files and run `zig build` and
 `zig build test` before marking coverage enabled. If a fixture exposes a
@@ -375,10 +380,10 @@ expectation to make a test pass.
 
 ### Phase 9 verification record
 
-The completed inventory has 290 named registrations: 14 original goldens,
-72 markup, 57 expressions, 19 control-flow, 38 whitespace, 74 diagnostics,
+The completed inventory has 301 named registrations: 14 original goldens,
+72 markup, 60 expressions, 19 control-flow, 38 whitespace, 82 diagnostics,
 seven cache/include scenarios, and nine lifecycle/concurrency scenarios.
-There are 260 template files and 192 golden output files. Counts include
+There are 271 template files and 195 golden output files. Counts include
 option/context variants and multi-step harnesses, not individual assertions.
 
 `python3 tests/check_fixture_inventory.py`, `zig build`, `zig build test`, and
@@ -388,8 +393,7 @@ for Zig commands because the repository filesystem has limited free space.
 ReleaseSafe exposed a byte-array string adapter lifetime defect; a storage
 borrowing fix and pointer/value/nested context regression cover it. Fixture
 line endings are preserved as exact bytes in Git. Comptime API cases remain
-pending. Cross-type equality and division/modulo by zero remain unresolved
-parts of E-013.
+pending until their public API is defined.
 
 ## Completion policy
 

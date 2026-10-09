@@ -89,6 +89,12 @@ pub const render_failure_cases = [_]fixtures.RenderFailure{
     .{ .id = "DG-74", .path = "fixtures/render-errors/index-huge.tmpl", .source = @embedFile("fixtures/render-errors/index-huge.tmpl"), .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 15 } } },
     .{ .id = "DG-075", .path = "fixtures/render-errors/interpolate-sequence.tmpl", .source = @embedFile("fixtures/render-errors/interpolate-sequence.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 0, .end = 11 } } },
     .{ .id = "DG-076", .path = "fixtures/render-errors/interpolate-object.tmpl", .source = @embedFile("fixtures/render-errors/interpolate-object.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 0, .end = 9 } } },
+    .{ .id = "DG-077", .path = "fixtures/render-errors/equality-cross-number-string.tmpl", .source = @embedFile("fixtures/render-errors/equality-cross-number-string.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 5, .end = 7 } } },
+    .{ .id = "DG-078", .path = "fixtures/render-errors/inequality-cross-number-string.tmpl", .source = @embedFile("fixtures/render-errors/inequality-cross-number-string.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 5, .end = 7 } } },
+    .{ .id = "DG-079", .path = "fixtures/render-errors/equality-cross-null-bool.tmpl", .source = @embedFile("fixtures/render-errors/equality-cross-null-bool.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 8, .end = 10 } } },
+    .{ .id = "DG-080", .path = "fixtures/render-errors/inequality-cross-null-bool.tmpl", .source = @embedFile("fixtures/render-errors/inequality-cross-null-bool.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 8, .end = 10 } } },
+    .{ .id = "DG-081", .path = "fixtures/render-errors/divide-zero.tmpl", .source = @embedFile("fixtures/render-errors/divide-zero.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 5, .end = 6 } } },
+    .{ .id = "DG-082", .path = "fixtures/render-errors/modulo-negative-zero.tmpl", .source = @embedFile("fixtures/render-errors/modulo-negative-zero.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 5, .end = 6 } } },
 };
 
 test "compile diagnostics identify category and exact byte span" {

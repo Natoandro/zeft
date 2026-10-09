@@ -251,6 +251,11 @@ left-to-right. Their precedence, from lowest to highest, MUST be:
 | 7 | unary `!`, unary `-` |
 | 8 | property and index selectors |
 
+Equality (`==`, `!=`) MUST compare operands of the same value type. Comparing
+different value types MUST return the `invalid_operand` runtime error at the
+operator span. Division and modulo by positive or negative zero MUST return
+`invalid_operand` at the operator span.
+
 Logical operators MUST short-circuit. Arithmetic operators MUST operate on
 numeric values; `+` MUST NOT implicitly concatenate strings.
 

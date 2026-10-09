@@ -497,6 +497,7 @@ fn builtinTrim(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []const
 
 fn applyBinary(op: ir.Operator, left: Value, right: Value) ?Value {
     if (op == .equal or op == .not_equal) {
+        if (std.meta.activeTag(left) != std.meta.activeTag(right)) return null;
         const equal = switch (left) {
             .null => right == .null,
             .boolean => |a| switch (right) {
