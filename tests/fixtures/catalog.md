@@ -9,6 +9,13 @@ and the remaining public-API coverage work. Multiple rows may share a fixture;
 one row is not necessarily one execution. Internal IR, symbol numbering, and
 allocation assertions remain in focused tests.
 
+## Verified expansion batches
+
+- **ZEP-076:** `tests/e2e_markup.zig` registers MK-001–MK-072: 51 exact
+  output cases and 21 compile diagnostic cases. Covers M-001–M-013 and
+  E-001/E-010, including every HTML void opening form, all escaping contexts,
+  XML fragments, declarations, entities, and literal comments/CDATA.
+
 ## Markup and serialization
 
 | ID | Status | Fixture or scenario | Expected result |
@@ -17,15 +24,15 @@ allocation assertions remain in focused tests.
 | M-002 | Fixture | `html/static.tmpl` | `\{{` emits `{{`; `\\` emits one backslash; comment contents remain literal. |
 | M-003 | Fixture | `html/static.tmpl` | Mixed-case void tags preserve their original opening tags and get no end tag. |
 | M-004 | Fixture | `html/static.tmpl` | HTML5 doctype casing and whitespace are preserved. |
-| M-005 | Focused | `tests/integration.zig` static-attribute case | Bare boolean attributes and quoted boolean-looking values remain distinct and exact. |
-| M-006 | Focused | HTML void-element table from the architecture, in `<tag>` and `<tag/>` forms | Every listed void element is accepted and preserved; children/end tags and non-void self-closing tags fail. |
-| M-007 | Focused | Parser unit cases | Comments preserve bytes; unterminated comments and unsupported declarations fail as invalid markup. |
-| M-008 | Focused | Parser unit cases | Nested elements, mixed content, source spelling, and malformed tag spans are checked. |
-| M-009 | Focused | Parser unit cases | XML name case sensitivity, quoted attributes, and empty-element spelling are checked. |
+| M-005 | Fixture | `tests/integration.zig` static-attribute case | Bare boolean attributes and quoted boolean-looking values remain distinct and exact. |
+| M-006 | Fixture | HTML void-element table from the architecture, in `<tag>` and `<tag/>` forms | Every listed void element is accepted and preserved; children/end tags and non-void self-closing tags fail. |
+| M-007 | Fixture | Parser unit cases | Comments preserve bytes; unterminated comments and unsupported declarations fail as invalid markup. |
+| M-008 | Fixture | Parser unit cases | Nested elements, mixed content, source spelling, and malformed tag spans are checked. |
+| M-009 | Fixture | Parser unit cases | XML name case sensitivity, quoted attributes, and empty-element spelling are checked. |
 | M-010 | Fixture | `xml/fragment.tmpl` | XML declaration, empty child, CDATA, and dynamic XML text/attribute escaping render exactly. |
-| M-011 | Focused | Parser unit cases | XML entity references are retained; invalid references, raw `<`, `]]>`, malformed comments, declarations, and CDATA fail. |
-| M-012 | Focused | HTML attribute interpolation with both quote styles and multiple dynamic/static segments | Escape `&<>"'` in either attribute quote style; preserve all surrounding source bytes. |
-| M-013 | Planned | XML fragment with multiple top-level text, comments, and elements | Render a fragment without imposing one-document-element validation. |
+| M-011 | Fixture | Parser unit cases | XML entity references are retained; invalid references, raw `<`, `]]>`, malformed comments, declarations, and CDATA fail. |
+| M-012 | Fixture | HTML attribute interpolation with both quote styles and multiple dynamic/static segments | Escape `&<>"'` in either attribute quote style; preserve all surrounding source bytes. |
+| M-013 | Fixture | XML fragment with multiple top-level text, comments, and elements | Render a fragment without imposing one-document-element validation. |
 
 ## Expressions and values
 
@@ -40,7 +47,7 @@ allocation assertions remain in focused tests.
 | E-007 | Focused | Expression table for every binary operator and precedence boundary | Verify `||`, `&&`, equality, comparisons, additive, and multiplicative precedence; all binary operators associate left-to-right. |
 | E-008 | Focused | Expression table for numeric syntax and string escapes | Accept specified decimal/exponent forms and six escapes; reject unknown escapes, unescaped line breaks, and malformed numbers. `null`, `true`, and `false` are reserved case-sensitively; other case spellings remain identifiers. |
 | E-009 | Focused | Function/filter syntax table: no args, multiple args, nested calls, filter arguments and pipelines | Parse zero or more arguments; execute left-to-right pipelines; report callable arity/type errors at call sites. |
-| E-010 | Focused | Expression output matrix for HTML/XML text/attributes | Test `&`, `<`, `>`, `"`, and `'` for each output context and format. |
+| E-010 | Fixture | Expression output matrix for HTML/XML text/attributes | Test `&`, `<`, `>`, `"`, and `'` for each output context and format. |
 | E-011 | Focused | Root names repeated and in different case | Repeated case-sensitive roots reuse symbols; distinct names resolve independently and missing roots fail by default. |
 | E-012 | Focused | Dynamic values across null, bool, number, string, sequence, and object adapters | Verify supported value rendering, property lookup, indexing, and invalid operation categories. |
 

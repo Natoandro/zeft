@@ -294,7 +294,7 @@ reviewed independently of the renderer's actual output.
   headroom, reporting overflow as a case failure. Migrate existing goldens
   without changing their expected bytes. Verification: all fourteen existing
   golden executions remain active and failure reports identify the case.
-- [ ] **ZEP-076** Expand markup and escaping fixtures (M-001–M-013, E-001,
+- [x] **ZEP-076** Expand markup and escaping fixtures (M-001–M-013, E-001,
   E-010). Cover all fourteen HTML void tags in both opening forms, mixed case,
   boolean versus quoted attributes, both attribute quote styles, multiple
   interpolation segments, delimiter escapes, comments and doctypes. Cover XML

@@ -57,3 +57,9 @@ Expected bytes and diagnostic spans must be authored from requirements and
 reviewed independently of observed renderer output. Preserve final-newline
 and whitespace differences in `.out` files. Pending comptime cases have no
 invented API or executable fixtures.
+
+## Expanded suites
+
+`tests/e2e_markup.zig` embeds the `markup/` group: 51 successful output cases
+and 21 compile failures, each with a unique MK case ID. Public diagnostic
+fixtures have `.tmpl` inputs and category/span expectations in Zig descriptors.

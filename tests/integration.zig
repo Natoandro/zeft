@@ -2,6 +2,10 @@ const std = @import("std");
 const zeft = @import("zeft");
 const fixtures = @import("fixture_runner.zig");
 
+test "markup fixture suite" {
+    _ = @import("e2e_markup.zig");
+}
+
 const SharedControlContext = struct { show: bool, items: []const []const u8 };
 const ConcurrentRender = struct {
     template: *const zeft.CompiledTemplate,
