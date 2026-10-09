@@ -30,7 +30,7 @@ allocation assertions remain in focused tests.
   jump destinations, and empty interpolation spans.
 
 - **ZEP-081/082:** `tests/e2e_cache.zig` has seven named cache/include scenarios;
-  `tests/e2e_lifecycle.zig` has eight lifecycle/concurrency scenarios. Covers
+  `tests/e2e_lifecycle.zig` has nine lifecycle/concurrency scenarios. Covers
   K-001–K-008, R-004–R-008, and F-011 with deterministic concurrent overlap.
 
 ## Markup and serialization
@@ -253,3 +253,16 @@ Direct null/collection interpolation, cross-type equality, and division/modulo
 by zero remain outside the new expectations by user decision until their language semantics are
 settled in the conversation and architecture. This does not disable specified
 boolean, string, sequence lookup, numeric expression, or callable coverage.
+
+## Final inventory audit (ZEP-083)
+
+The registered suite has 290 named executions across 260 template sources
+and 192 output files. `tests/check_fixture_inventory.py` validates reachable
+modules, unique IDs, descriptor paths, missing files, and orphan files. All
+registered cases run in the integration test binary; Debug and ReleaseSafe
+checks pass. LC-009 and EX-029 retain fixed byte-array storage through root
+pointer/value and nested context adapters. The baseline audit above is retained
+for traceability; verified expansion batches identify the current suite owners.
+
+E-013 is pending by explicit user decision. T-001/T-002 remain pending until
+the comptime API exists. No fixture invents expectations for these cases.

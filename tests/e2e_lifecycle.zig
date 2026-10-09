@@ -10,11 +10,32 @@ pub const harness_ids = [_][]const u8{
     "LC-006/diagnostic-error-scratch",
     "LC-007/overlapping-compiled-renders",
     "LC-008/active-child-eviction-and-reload",
+    "LC-009/byte-array-context-storage",
 };
 
 const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true, .stack_trace_frames = 0, .enable_memory_limit = true });
 const ValueContext = struct { value: []const u8 = "value" };
 const copy_registration = [_]zeft.Registration{.{ .name = "copy", .callback = copyValue }};
+
+test "LC-009 byte arrays retain context storage for pointer value and nested contexts" {
+    const Bytes = struct { bytes: [4]u8 };
+    const context = Bytes{ .bytes = "byte".* };
+    var root = try compile(@embedFile("fixtures/lifecycle/array-root.tmpl"), .{});
+    defer root.deinit();
+    var buffer: [32]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    try std.testing.expectEqual(zeft.RenderResult.success, try root.render(&writer, &context));
+    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/array.out"), writer.buffered());
+    writer = .fixed(&buffer);
+    try std.testing.expectEqual(zeft.RenderResult.success, try root.render(&writer, context));
+    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/array.out"), writer.buffered());
+    var nested = try compile(@embedFile("fixtures/lifecycle/array-nested.tmpl"), .{});
+    defer nested.deinit();
+    const nested_context = struct { record: Bytes }{ .record = context };
+    writer = .fixed(&buffer);
+    try std.testing.expectEqual(zeft.RenderResult.success, try nested.render(&writer, &nested_context));
+    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/array.out"), writer.buffered());
+}
 
 fn compile(source: []const u8, options: zeft.CompileOptions) !zeft.CompiledTemplate {
     return switch (try zeft.compile(std.testing.allocator, source, options)) {

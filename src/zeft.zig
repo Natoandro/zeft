@@ -415,11 +415,18 @@ fn renderContext(program: ir.Program, writer: *std.Io.Writer, context: anytype, 
         entries[index] = .{
             .name = field.name,
             .value = if (comptime runtime.isString(field.type)) blk: {
-                const field_value = if (comptime context_is_pointer)
-                    @field(context.*, field.name)
+                if (comptime field.is_comptime) {
+                    const value = comptime if (context_is_pointer) @field(context.*, field.name) else @field(context, field.name);
+                    const Static = struct {
+                        const stored = value;
+                    };
+                    break :blk .{ .string = runtime.stringValue(field.type, &Static.stored) };
+                }
+                const field_pointer = if (comptime context_is_pointer)
+                    &@field(context.*, field.name)
                 else
-                    @field(context, field.name);
-                break :blk .{ .string = runtime.stringValue(field.type, field_value) };
+                    &@field(context, field.name);
+                break :blk .{ .string = runtime.stringValue(field.type, field_pointer) };
             } else if (comptime context_is_pointer) blk: {
                 break :blk runtime.adapt(field.type, &@field(context.*, field.name));
             } else @compileError("nested context values require passing a pointer to the context struct"),

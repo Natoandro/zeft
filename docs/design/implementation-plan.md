@@ -348,7 +348,7 @@ reviewed independently of the renderer's actual output.
   than timing sleeps. Retain allocator-failure checks and internal optimizer
   assertions in their appropriate focused tests. Verification: original writer
   errors, allocation cleanup, valid retained storage, and isolated outputs.
-- [ ] **ZEP-083** Audit suite completeness and update fixture documentation.
+- [x] **ZEP-083** Audit suite completeness and update fixture documentation.
   Ensure every registered input/output exists, every enabled fixture is
   registered, IDs are unique, and catalog paths/statuses match execution.
   Record actual fixture and execution counts and remaining pending API cases.
@@ -363,6 +363,23 @@ regression case. If expected behavior requires a new product or architecture
 decision, ask in the conversation before defining the fixture. Do not derive
 goldens automatically from current renderer output or silently weaken an
 expectation to make a test pass.
+
+### Phase 9 verification record
+
+The completed inventory has 290 named registrations: 14 original goldens,
+72 markup, 57 expressions, 19 control-flow, 38 whitespace, 74 diagnostics,
+seven cache/include scenarios, and nine lifecycle/concurrency scenarios.
+There are 260 template files and 192 golden output files. Counts include
+option/context variants and multi-step harnesses, not individual assertions.
+
+`python3 tests/check_fixture_inventory.py`, `zig build`, `zig build test`, and
+`zig build test -Doptimize=ReleaseSafe` pass with Zig 0.16.0. In this workspace,
+use `--cache-dir /tmp/zeft-local-cache --global-cache-dir /tmp/zeft-zig-cache`
+for Zig commands because the repository filesystem has limited free space.
+ReleaseSafe exposed a byte-array string adapter lifetime defect; a storage
+borrowing fix and pointer/value/nested context regression cover it. Fixture
+line endings are preserved as exact bytes in Git. Comptime API cases and
+E-013 value semantics remain explicitly pending.
 
 ## Completion policy
 

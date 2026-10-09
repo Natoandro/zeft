@@ -72,6 +72,23 @@ executions across formats, policies, and dynamic contexts.
 `tests/e2e_diagnostics.zig` registers 74 exact compile/render failures.
 
 `tests/e2e_cache.zig` runs seven cache/include scenarios, and
-`tests/e2e_lifecycle.zig` runs eight lifecycle/concurrency scenarios with
+`tests/e2e_lifecycle.zig` runs nine lifecycle/concurrency scenarios with
 synchronized overlap. `.gitattributes` disables line-ending conversion for
 fixture sources and outputs, preserving diagnostic offsets and golden bytes.
+
+## Inventory verification
+
+Run `python3 tests/check_fixture_inventory.py` to check reachable fixture
+modules, unique execution IDs, descriptor paths, missing files, and orphan
+inputs/outputs. This is a static inventory check; `zig build test` verifies
+behavior. Run `zig build test -Doptimize=ReleaseSafe` for optimized behavior.
+
+Current inventory: **290 named registrations**, **260 `.tmpl` files**, and
+**192 `.out` files**. There are 176 named successful goldens, 68 compile-error
+registrations, 29 render-error registrations, and 17 scenario harnesses. A
+harness may execute several compile/render operations. The counts describe
+registrations rather than Zig test blocks or individual assertions.
+
+E-013 and the two comptime cases remain pending. Numeric and optional native
+fields remain unsupported by the current adapter; numeric/null expression
+values are exercised through literals and callables.

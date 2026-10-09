@@ -54,12 +54,12 @@ pub fn isString(comptime T: type) bool {
             @typeInfo(type_info.pointer.child).array.child == u8);
 }
 
-pub fn stringValue(comptime T: type, value: T) []const u8 {
+pub fn stringValue(comptime T: type, pointer: *const T) []const u8 {
     if (comptime isString(T)) {
         const type_info = @typeInfo(T);
-        if (type_info == .array) return value[0..];
-        if (type_info == .pointer and type_info.pointer.size == .one and @typeInfo(type_info.pointer.child) == .array) return value[0..];
-        return value;
+        if (type_info == .array) return pointer[0..];
+        if (type_info == .pointer and type_info.pointer.size == .one and @typeInfo(type_info.pointer.child) == .array) return pointer.*[0..];
+        return pointer.*;
     }
     unreachable;
 }
@@ -73,7 +73,7 @@ pub fn adapt(comptime T: type, pointer: *const T) Value {
         return .{ .string = pointer.* };
     }
     if (type_info == .array and type_info.array.child == u8) {
-        return .{ .string = pointer.*[0..] };
+        return .{ .string = pointer[0..] };
     }
     if (T == bool) return .{ .boolean = pointer.* };
     if (type_info == .pointer and type_info.pointer.size == .slice) {
