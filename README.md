@@ -1,29 +1,23 @@
 # Zeft
 
-Zeft is a runtime-first template compiler and renderer written in Zig. It is
-designed to compile template source into an immutable `CompiledTemplate`, then
-render that compiled representation against application data. See the
-[normative architecture](docs/architecture/README.md) for the required design
-and the [implementation plan](docs/design/implementation-plan.md) for its
-phased delivery.
+Zeft is an HTML and XML template engine written in Zig. It compiles templates
+at runtime into an immutable representation that can be rendered repeatedly
+against application data.
 
-## Project status
+## Features
 
-The project currently compiles and renders a small HTML/XML template language:
-static text, nested elements, HTML boolean and quoted attributes, XML quoted
-attributes, comments, the HTML doctype, XML declarations, CDATA, and
-format-specific empty-element rules. Text-position and attribute-value
-interpolations support root identifiers, nested struct properties, and
-non-negative literal indexes into arrays and slices. Expression operators are
-specified in the architecture and remain planned. Dynamic text and attribute
-values use format- and context-specific escaping; attribute values escape both
-quote characters. Contexts are generic Zig structs with byte-string leaves;
-pass aggregate contexts by pointer. Compile options default to HTML with
-source whitespace preserved; compact and pretty modes are also available.
-Pretty mode uses two spaces by default and accepts a custom indentation string
-through `CompileOptions.indentation`.
-See the implementation plan for the current supported subset and remaining
-work.
+- Structured HTML and XML parsing with context-aware escaping
+- Expressions, property and index access, functions, and filters
+- Conditionals, loops, lexical bindings, `break`, and `continue`
+- Preserve, compact, and pretty whitespace policies
+- Thread-safe template caching, explicit reloads, and includes
+- Structured compile and render diagnostics with source spans
+
+See the [architecture](docs/architecture/README.md) for the language and API
+contracts, and the [implementation plan](docs/design/implementation-plan.md)
+for completed and planned work.
+
+## Example
 
 ~~~zig
 pub fn renderExample(allocator: std.mem.Allocator, writer: *std.Io.Writer) !void {
@@ -45,46 +39,10 @@ pub fn renderExample(allocator: std.mem.Allocator, writer: *std.Io.Writer) !void
 Compilation syntax/markup failures and runtime template failures are returned
 as diagnostic results. Writer failures propagate as Zig errors.
 
-The allocator passed to `compile` must remain valid until the compiled
-template's `deinit`; the template owns its finalized data and does not retain
-the source buffer or compile options' indentation slice. Call `deinit` exactly
-once after all renders have finished. Each render owns its control-flow state
-and scratch arena. The renderer releases render-local allocations through
-`RenderOptions.allocator` when rendering ends, subject to that allocator's
-semantics. Strings returned by registered callbacks must remain valid through
-the end of that render and must be allocated from the supplied allocator when
-newly created. The default allocator is thread-safe; if concurrent renders
-share a custom allocator, that allocator must support concurrent use.
-
-An immutable compiled template can be rendered concurrently as long as it is
-not deinitialized during a render. Each call must have its own writer and
-should use immutable context and callback data, or synchronize any shared
-mutable data itself.
-
-`TemplateCache` is an explicit, thread-safe cache. The caller supplies the
-identity bytes, source bytes, and compile options; Zeft does not read files.
-Submit updated source with `getOrCompile` to reload. A compile failure leaves
-the last valid entry available. A returned `TemplateLease` must be deinitialized
-exactly once and before its cache. Lease rendering pins that root version.
-
-Includes use `{% include "path" %}`. The bytes inside the quotes are the exact
-child identity. Populate children independently with `getOrCompile`; cache
-rendering resolves the current child on each include. Missing children,
-initial child compile failures, and cycles return runtime diagnostics with the
-child identity and parent include span. Replaced or evicted templates remain
-alive while a lease or render uses them. Include identity strings in returned
-diagnostics remain valid until the cache is deinitialized.
-
-~~~zig
-var cache = zeft.TemplateCache.init(allocator);
-defer cache.deinit();
-var page = switch (try cache.getOrCompile("page", source, .{})) {
-    .success => |lease| lease,
-    .failure => return error.TemplateCompileFailed,
-};
-defer page.deinit();
-const rendered = try page.render(&writer, .{ .name = "Ada" });
-~~~
+Compiled templates own their finalized data and must be deinitialized. See
+[runtime](docs/architecture/runtime.md) and
+[caching and ownership](docs/architecture/caching-and-ownership.md) for value
+semantics, allocator lifetimes, concurrency, callbacks, caching, and includes.
 
 ## Requirements
 
@@ -99,6 +57,40 @@ zig build test
 
 `zig build` builds the static library. `zig build test` runs unit and
 integration tests. The public Zig module is named `zeft`.
+
+## Use as a dependency
+
+Add the current `main` branch to an application's `build.zig.zon` with
+`zig fetch`:
+
+```sh
+zig fetch --save-exact=zeft 'git+https://github.com/Natoandro/zeft.git#main'
+```
+
+Then import the public module from the application's `build.zig`:
+
+```zig
+const zeft_dep = b.dependency("zeft", .{
+    .target = target,
+    .optimize = optimize,
+});
+const zeft = zeft_dep.module("zeft");
+
+const app = b.addExecutable(.{
+    .name = "my-app",
+    .root_module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "zeft", .module = zeft }},
+    }),
+});
+```
+
+Application source can then use `const zeft = @import("zeft");`. The module
+provides the compiler, compiled template, renderer, and template cache APIs.
+
+## Benchmark
 
 Run the standalone compiler and renderer benchmark with:
 
@@ -118,5 +110,6 @@ the measurement method and current results.
 - `tests/unit.zig` — unit specifications.
 - `tests/integration.zig` — end-to-end specifications.
 - `tests/fixtures/` — template and expected-output fixtures.
+- `tests/fixtures/catalog.md` — suite coverage inventory.
 - `docs/architecture/` — normative architecture requirements.
 - `docs/design/implementation-plan.md` — sequenced implementation checklist.
