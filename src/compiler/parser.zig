@@ -195,13 +195,7 @@ const Lexer = struct {
 
         var decoded: std.ArrayList(u8) = .empty;
         while (self.offset < self.source.len) {
-            if (startsWith(self.source, self.offset, "\\\\")) {
-                try decoded.append(self.allocator, '\\');
-                self.offset += 2;
-            } else if (startsWith(self.source, self.offset, "\\{{")) {
-                try decoded.appendSlice(self.allocator, "{{");
-                self.offset += 3;
-            } else if (self.format == .xml and self.source[self.offset] == '&') {
+            if (self.format == .xml and self.source[self.offset] == '&') {
                 const end = xmlReferenceEnd(self.source, self.offset, self.xml_1_1) orelse {
                     self.failure = .{ .kind = .invalid_markup, .span = .{ .start = self.offset, .end = @min(self.offset + 1, self.source.len) } };
                     return null;

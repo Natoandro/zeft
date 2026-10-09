@@ -38,7 +38,7 @@ allocation assertions remain in focused tests.
 | ID | Status | Fixture or scenario | Expected result |
 | --- | --- | --- | --- |
 | M-001 | Fixture | `html/static.tmpl` | Nested HTML serializes exactly; source spelling, static attributes, and final newline are retained. |
-| M-002 | Fixture | `html/static.tmpl` | `\{{` emits `{{`; `\\` emits one backslash; comment contents remain literal. |
+| M-002 | Fixture | `html/static.tmpl` | Backslashes remain literal; interpolation can emit delimiter text; comment contents remain literal. |
 | M-003 | Fixture | `html/static.tmpl` | Mixed-case void tags preserve their original opening tags and get no end tag. |
 | M-004 | Fixture | `html/static.tmpl` | HTML5 doctype casing and whitespace are preserved. |
 | M-005 | Fixture | `tests/integration.zig` static-attribute case | Bare boolean attributes and quoted boolean-looking values remain distinct and exact. |
@@ -69,6 +69,8 @@ allocation assertions remain in focused tests.
 | E-012 | Fixture | Supported native bool/string/array/slice/struct adapters; numeric/null literals and callback values | Verify supported value operations, property lookup, indexing, and invalid operation categories. Native numeric/optional fields remain unsupported. |
 | E-013 | Fixture | Direct null/sequence/object interpolation, nonnull cross-type equality, division/modulo by zero | Null emits no bytes; sequences and objects fail direct interpolation; nonnull cross-type equality and division/modulo by zero return `invalid_operand`. |
 | E-014 | Planned | Equality and inequality between null and every value tag | Null equals null and differs from every nonnull value; implement and enable with ZEP-095. |
+| E-015 | Planned | Direct and piped calls through one registration namespace | Both forms resolve the same callable, with the piped value supplied first; implement and enable with ZEP-097. |
+| E-016 | Planned | Properties and indexes following grouped expressions and calls | Postfix operations compose uniformly and retain their precedence; implement and enable with ZEP-098. |
 
 ## Compile diagnostics
 
@@ -177,7 +179,7 @@ and passes verification. Future syntax/API cases stay pending.
 | ID | Current executable owner | Concrete remaining coverage / owning task |
 | --- | --- | --- |
 | M-001 | G html/static | ZEP-076: expand independent markup boundaries. |
-| M-002 | G html/static; U lexer tracks raw spans and decodes text delimiter escapes | ZEP-076: left-to-right escape combinations and ordinary backslashes through compile/render. |
+| M-002 | G html/static; U lexer preserves backslashes and tracks interpolation spans | Literal backslashes and interpolation-produced delimiter text through compile/render. |
 | M-003 | G html/static; I HTML void elements preserve their opening spelling without closing tags | ZEP-076: all fourteen tags in both forms and mixed case. |
 | M-004 | G html/static; U parser represents comments and the HTML doctype as static markup | ZEP-076: casing/whitespace variants through public compile/render. |
 | M-005 | I static attributes are preserved exactly during compilation and rendering | ZEP-076: named golden with both quote styles and source spacing. |

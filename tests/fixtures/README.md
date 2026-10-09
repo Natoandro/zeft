@@ -34,7 +34,7 @@ output files.
 
 | Source basename | Output basename(s) | Coverage |
 | --- | --- | --- |
-| `html/static` | `html/static` | Nested markup, exact static attributes, void elements, doctype, comments, and text delimiter escapes |
+| `html/static` | `html/static` | Nested markup, exact static attributes, void elements, doctype, comments, literal backslashes, and delimiter output |
 | `html/dynamic` | `html/dynamic` | Text and quoted-attribute interpolation with HTML escaping |
 | `html/expressions` | `html/expressions` | Property and index access, operators, short-circuiting, and built-in filters/functions |
 | `html/control-flow` | `html/control-flow` | Conditional branches, loop bindings, root-name restoration, and lexical scope |

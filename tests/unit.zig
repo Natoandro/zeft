@@ -20,8 +20,8 @@ test "compile options default to HTML with preserved whitespace" {
     try std.testing.expectEqual(zeft.WhitespacePolicy.preserve, options.whitespace);
 }
 
-test "lexer tracks raw spans and decodes text delimiter escapes" {
-    const source = "a\\{{b}}\\\\{{ name }}";
+test "lexer preserves backslashes and tracks interpolation spans" {
+    const source = "a\\path{{ name }}";
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const result = try parser.lex(arena.allocator(), source);
@@ -31,9 +31,9 @@ test "lexer tracks raw spans and decodes text delimiter escapes" {
     };
 
     try std.testing.expectEqual(@as(usize, 2), tokens.len);
-    try std.testing.expectEqualStrings("a{{b}}\\", tokens[0].data.text);
-    try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 0, .end = 9 }), tokens[0].span);
-    try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 9, .end = source.len }), tokens[1].span);
+    try std.testing.expectEqualStrings("a\\path", tokens[0].data.text);
+    try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 0, .end = 6 }), tokens[0].span);
+    try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 6, .end = source.len }), tokens[1].span);
     try std.testing.expectEqualStrings("name", source[tokens[1].data.expression.start..tokens[1].data.expression.end]);
 }
 

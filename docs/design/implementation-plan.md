@@ -29,10 +29,11 @@ the decision; do not maintain a separate decision log.
   fixtures derived from HTML syntax rules and negative boundary cases for each
   batch.
 
-- [ ] **ZEP-091** Align compact and pretty serialization with the simplified
-  whitespace contract. Treat includes as opaque boundaries and preserve raw,
-  preformatted, XML, mixed, and dynamic content. Verification: extend the
-  whitespace matrix without asserting CSS-dependent visual layout.
+- [ ] **ZEP-091** Reimplement compact serialization as a normalization pass
+  over the already parsed template. Keep pretty serialization as a separate
+  pass over the same structure. Treat includes as opaque boundaries and
+  preserve raw, preformatted, XML, mixed, and dynamic content. Verification:
+  extend the whitespace matrix without asserting CSS-dependent visual layout.
 
 - [ ] **ZEP-092** Add a public include-resolver interface independent of
   `TemplateCache`, then implement that interface for the cache. Verification:
@@ -44,10 +45,9 @@ the decision; do not maintain a separate decision log.
   mismatches. Verification: cover every allowed and rejected context while
   confirming that ordinary strings remain escaped.
 
-- [ ] **ZEP-094** Implement `{% elif %}`, loop `{% else %}`, and loop metadata
-  (`index0`, `index`, `first`, `last`, and `length`) as specified by the
-  language contract. Verification: cover empty, nested, shadowed, break, and
-  continue behavior with exact diagnostics for invalid placement.
+- [ ] **ZEP-094** Implement `{% elif %}` and loop `{% else %}` as specified by
+  the language contract. Verification: cover empty, nested, shadowed, break,
+  and continue behavior with exact diagnostics for invalid placement.
 
 - [ ] **ZEP-095** Make null equality compatible with every value type: null
   equals null, differs from every nonnull value, and does not relax other
@@ -58,6 +58,18 @@ the decision; do not maintain a separate decision log.
   helpers, ordered include stacks, callback failure details, and documented
   partial-output behavior. Verification: cover nested includes, multibyte
   prefixes, callback errors, and writer failures through public APIs.
+
+- [ ] **ZEP-097** Replace separate function and filter registrations with one
+  callable namespace. Treat pipe notation solely as alternate call syntax that
+  supplies its input as the first argument. Migrate built-ins, diagnostics,
+  public render options, expression IR, and existing callers together.
+  Verification: cover direct and piped calls, overrides, name collisions,
+  failures, argument order, and left-to-right pipelines.
+
+- [ ] **ZEP-098** Generalize postfix expressions so property access and index
+  access may follow any primary expression, including grouped expressions and
+  call results. Verification: cover chained calls, properties, and indexes,
+  their precedence, and invalid postfix syntax.
 
 Add future work here only after its required behavior and boundaries have been
 decided. Record unresolved ideas outside the implementation plan until they

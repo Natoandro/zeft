@@ -24,8 +24,9 @@ Current HTML limitations include unquoted attribute values, optional end tags,
 nonvoid self-closing syntax, doctypes other than the HTML5 form, browser-style
 error recovery, and complete raw-text handling for elements such as `script`
 and `style`. Dynamic tag and attribute names, trusted raw output, `elif`, loop
-`else`, loop metadata, numeric and optional native context fields, and comptime
-compilation are also not implemented yet. See the
+`else`, generalized postfix expressions, a unified callable API, numeric and
+optional native context fields, and comptime compilation are also not
+implemented yet. See the
 [implementation plan](docs/design/implementation-plan.md) for future work.
 
 See the [architecture](docs/architecture/README.md) for the language and API

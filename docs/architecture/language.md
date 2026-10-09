@@ -36,9 +36,10 @@ recovery.
 closes it; delimiters do not nest. ASCII whitespace immediately inside the
 delimiters is excluded from the expression span.
 
-In text, `\{{` emits literal `{{` and `\\` emits one backslash. Escapes are
-recognized left-to-right. Template delimiters in comments and CDATA remain
-literal.
+Backslashes in template text have no special meaning and are preserved. A
+literal template delimiter may be produced through interpolation, such as
+`{{ "{{" }}` or `{{ "{%" }}`. Template delimiters in comments and CDATA
+remain literal.
 
 Control directives use `{% ... %}` in template text:
 
@@ -47,15 +48,13 @@ Control directives use `{% ... %}` in template text:
 - `{% break %}` and `{% continue %}`
 - `{% include "identity" %}`
 
-`elif`, loop `else`, and loop metadata are specified future behavior and remain
-listed in the implementation plan until available.
+`elif` and loop `else` are specified future behavior and remain listed in the
+implementation plan until available.
 
 Conditions MUST be booleans. A loop operand MUST be a sequence. The loop body
 runs once per item; its `else` body runs only when the sequence is empty. A loop
-creates a lexical binding that may shadow an outer loop or root name. Each loop
-also exposes `loop.index0`, `loop.index`, `loop.first`, `loop.last`, and
-`loop.length`. Nested loops receive independent `loop` objects. `break` and
-`continue` target the innermost loop and are invalid outside a loop.
+creates a lexical binding that may shadow an outer loop or root name. `break`
+and `continue` target the innermost loop and are invalid outside a loop.
 
 An include identity is a double-quoted, non-interpolated byte string without
 escapes. Zeft does not interpret it as a filesystem path. Compilation records
@@ -72,11 +71,10 @@ An access begins with an identifier and may contain `.property` and
 `[expression]` selectors. Properties are case-sensitive. Sequence indexes are
 zero-based non-negative integers. Parentheses group expressions.
 
-Functions use `name(argument, ...)`. Filters use `value | name` or
-`value | name(argument, ...)` and associate left-to-right. Pipe syntax resolves
-a filter first, then a function with the piped value as its first argument.
-Direct call syntax resolves only functions. Caller registrations override
-built-ins of the same kind.
+Calls use `name(argument, ...)`. Pipe syntax, written as `value | name` or
+`value | name(argument, ...)`, is alternate call syntax that passes the piped
+value as the first argument and associates left-to-right. Calls and pipes use
+one callable namespace. Caller registrations override built-ins.
 
 Unary operators associate right-to-left. Binary operators associate
 left-to-right with this precedence, lowest first:
@@ -100,10 +98,10 @@ For equality, `null == null` is true. Comparing null with a nonnull value is
 false, and `!=` is the inverse. Equality between two different nonnull value
 types fails with `invalid_operand`. Ordering requires compatible value types.
 
-The built-ins are `length(value)` for strings and sequences and the `default`,
-`upper`, `lower`, and `trim` filters. `length` is also callable through pipe
-syntax. `default` selects its fallback for null or an empty string. Case
-conversion and trimming operate on ASCII bytes.
+The built-ins are `length`, `default`, `upper`, `lower`, and `trim`; each may be
+used with direct or pipe syntax. `length` accepts strings and sequences.
+`default` selects its fallback for null or an empty string. Case conversion and
+trimming operate on ASCII bytes.
 
 ## Values and output
 
@@ -126,8 +124,10 @@ fail rather than silently bypass escaping. Ordinary strings remain escaped.
 Whitespace policy is selected at compilation. `preserve` is the default and
 MUST preserve source whitespace exactly, including around dynamic output.
 
-`compact` and `pretty` are serialization policies, not guarantees about visual
-browser layout. They MUST preserve whitespace inside HTML `pre`, `textarea`,
+`compact` and `pretty` are compile-time serialization policies over the parsed
+template; they do not require a second parse and do not affect expression or
+rendering semantics. They are not guarantees about visual browser layout. They
+MUST preserve whitespace inside HTML `pre`, `textarea`,
 `script`, and `style`, and at meaningful mixed-content boundaries in either
 format. Compact mode may collapse formatting whitespace between structural
 elements. Pretty mode may add line breaks and configured indentation between

@@ -26,10 +26,9 @@ switch (rendered) {
 ```
 
 Template runtime failures are returned in `RenderResult`. Writer and allocator
-errors propagate as underlying Zig errors. Callback failures map to their
-filter or function diagnostic category. A failed render may have written a
-prefix of its output; rendering is streaming and does not provide transactional
-rollback.
+errors propagate as underlying Zig errors. Callback failures map to a callable
+diagnostic category. A failed render may have written a prefix of its output;
+rendering is streaming and does not provide transactional rollback.
 
 The allocator passed to compilation remains valid until the compiled template
 is deinitialized. A compiled template owns all finalized data and does not
@@ -49,11 +48,11 @@ keep it valid and MUST synchronize mutable context shared by concurrent renders.
 
 ## Callbacks and trusted values
 
-Filters and functions are registered per render with a case-sensitive name,
-callback, and optional user-data pointer. A callback receives evaluated values
-and the render scratch allocator. Registrations, user data, arguments, and
-borrowed callback results remain valid for the render call. Scratch-backed
-results MUST NOT escape it.
+Callables are registered per render with a case-sensitive name, callback, and
+optional user-data pointer. Direct calls and pipes resolve through the same
+registration set. A callback receives evaluated values and the render scratch
+allocator. Registrations, user data, arguments, and borrowed callback results
+remain valid for the render call. Scratch-backed results MUST NOT escape it.
 
 Trusted HTML and XML values are explicit public value variants or wrapper
 types. Construction is an application trust boundary. Their format and valid

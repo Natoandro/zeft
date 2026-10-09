@@ -37,10 +37,11 @@ Expressions execute from the compiled representation and preserve source order
 except where short-circuiting or semantics-preserving optimization explicitly
 skips evaluation. Callable arguments are evaluated before invocation.
 
-Filters and functions resolve from render-local registrations followed by
-built-ins. Registrations and callback user data are never retained by a
-compiled template. Callback results remain valid until consumed during that
-render. Scratch-backed results MUST NOT escape the render call.
+Callables resolve from render-local registrations followed by built-ins.
+Direct calls and pipes use the same namespace. Registrations and callback user
+data are never retained by a compiled template. Callback results remain valid
+until consumed during that render. Scratch-backed results MUST NOT escape the
+render call.
 
 ## Includes
 
