@@ -8,6 +8,8 @@ pub const WhitespacePolicy = enum { preserve, compact, pretty };
 pub const CompileOptions = struct {
     format: OutputFormat = .html,
     whitespace: WhitespacePolicy = .preserve,
+    /// Indentation bytes for pretty output; defaults to two spaces.
+    indentation: []const u8 = "  ",
 };
 
 pub const SourceSpan = struct {

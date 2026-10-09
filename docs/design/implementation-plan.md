@@ -169,19 +169,19 @@ and inner loop bindings shadow outer and root names.
 **Outcome:** preserve, compact, and pretty output are compile-time policies
 that respect markup and text semantics.
 
-- [ ] **ZEP-047** Specify preserve-mode behavior for source whitespace and
+- [x] **ZEP-047** Specify preserve-mode behavior for source whitespace and
   dynamic boundaries.
-- [ ] **ZEP-048** Implement compact-mode whitespace normalization in the
+- [x] **ZEP-048** Implement compact-mode whitespace normalization in the
   compiler and serializer.
-- [ ] **ZEP-049** Implement pretty-mode structural indentation in lowering or
+- [x] **ZEP-049** Implement pretty-mode structural indentation in lowering or
   static serialization.
-- [ ] **ZEP-050** Preserve whitespace in whitespace-sensitive elements and
+- [x] **ZEP-050** Preserve whitespace in whitespace-sensitive elements and
   meaningful inline text boundaries in every applicable mode.
-- [ ] **ZEP-051** Add whitespace tests for `pre`-like content, form text,
+- [x] **ZEP-051** Add whitespace tests for `pre`-like content, form text,
   inline elements, and dynamic loop output.
-- [ ] **ZEP-052** Ensure format and whitespace settings are retained as
+- [x] **ZEP-052** Ensure format and whitespace settings are retained as
   compiled metadata and distinguish compiled outputs.
-- [ ] **ZEP-053** Add golden-output fixtures for representative HTML and XML
+- [x] **ZEP-053** Add golden-output fixtures for representative HTML and XML
   templates in every supported whitespace mode.
 
 ## Phase 6 — Finish runtime diagnostics and lifecycle guarantees

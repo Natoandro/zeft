@@ -78,19 +78,19 @@ The scenarios below use the syntax specified by ZEP-038: `{% if expression %}`,
 
 ## Whitespace policies
 
-The compact and pretty outputs must be fixed from the policy requirements in
-ZEP-047–050 before golden bytes are written. These cases define the coverage
-without prematurely choosing normalization details.
+The whitespace golden fixtures exercise preserve, compact, and pretty output
+for both HTML and XML. Compact golden files omit a final newline where
+element-only document formatting whitespace is removed.
 
 | ID | Status | Scenario | Expected result |
 | --- | --- | --- | --- |
-| W-001 | Defined | Preserve mode over mixed text and nested markup | Output retains source whitespace exactly. |
-| W-002 | Pending policy detail | Compact mode over block and inline elements | Normalize only whitespace allowed by the policy; preserve meaningful text boundaries. |
-| W-003 | Pending policy detail | Pretty mode over nested block elements | Apply documented structural indentation and line breaks. |
-| W-004 | Pending policy detail | `pre`-like/whitespace-sensitive content in all modes | Preserve text whitespace inside sensitive elements. |
-| W-005 | Pending policy detail | Form text and inline element boundaries in all modes | Preserve whitespace that changes rendered text. |
-| W-006 | Pending control-flow | Dynamic expression/loop output at whitespace boundaries | Keep output semantics when dynamic output is empty, one item, or many items. |
-| W-007 | Defined | Compile identical source with each whitespace policy | Metadata/output identity distinguishes policies; preserve output matches source. |
+| W-001 | Enabled | `html/whitespace.tmpl` preserve output | Preserve source whitespace exactly. |
+| W-002 | Enabled | `html/whitespace-compact.out` and `xml/whitespace-compact.out` | Remove formatting whitespace in element-only content and collapse ordinary text runs. |
+| W-003 | Enabled | `html/whitespace-pretty.out` and `xml/whitespace-pretty.out` | Format nested element-only content with two-space indentation; mixed content stays inline. |
+| W-004 | Enabled | `html/whitespace.tmpl` in all modes | Preserve whitespace in `pre`, `textarea`, `script`, and `style`. |
+| W-005 | Enabled | HTML whitespace fixture and dynamic boundary integration case | Retain form text and meaningful inline boundaries. |
+| W-006 | Enabled | `html/whitespace-dynamic.tmpl` golden outputs and pretty loop integration cases | Preserve inline boundaries for empty/repeated output and indent loop-generated elements. |
+| W-007 | Enabled | All whitespace golden cases and configurable-indentation case | Outputs distinguish policies and custom indentation is used in pretty mode. |
 
 ## Runtime errors and lifecycle
 

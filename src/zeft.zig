@@ -114,11 +114,6 @@ pub fn compile(
     source: []const u8,
     options: CompileOptions,
 ) std.mem.Allocator.Error!CompileResult {
-    if (options.whitespace != .preserve) return .{ .failure = .{
-        .kind = .unsupported_syntax,
-        .span = .{ .start = 0, .end = source.len },
-    } };
-
     var temporary = std.heap.ArenaAllocator.init(allocator);
     defer temporary.deinit();
     const temp_allocator = temporary.allocator();
@@ -133,7 +128,7 @@ pub fn compile(
         .success => |value| value,
         .failure => |diagnostic| return .{ .failure = diagnostic },
     };
-    const lowered = try lower.lower(temp_allocator, document, analyzed);
+    const lowered = try lower.lower(temp_allocator, document, analyzed, options);
     const program = switch (lowered) {
         .success => |value| value,
         .failure => |diagnostic| return .{ .failure = diagnostic },
@@ -179,6 +174,8 @@ fn finalize(
         expressions[index] = .{ .instructions = instructions };
     }
 
+    const indentation = try persistent.dupe(u8, options.indentation);
+    const instructions = try persistent.dupe(ir.Instruction, program.instructions);
     const finalized = try allocator.create(FinalizedTemplate);
     finalized.* = .{
         .owner_allocator = allocator,
@@ -187,10 +184,11 @@ fn finalize(
             .strings = strings,
             .symbols = symbols,
             .expressions = expressions,
-            .instructions = try persistent.dupe(ir.Instruction, program.instructions),
+            .instructions = instructions,
         },
         .options = options,
     };
+    finalized.options.indentation = indentation;
     return .{ .impl = finalized };
 }
 
@@ -229,19 +227,32 @@ test "compile returns syntax diagnostics before rendering" {
     }
 }
 
-test "unsupported whitespace policies return a compile diagnostic" {
+test "compact whitespace policy compiles successfully" {
     const result = try compile(std.testing.allocator, "text", .{ .whitespace = .compact });
-    switch (result) {
-        .success => |value| {
-            var template = value;
-            template.deinit();
-            return error.ExpectedDiagnostic;
-        },
-        .failure => |diagnostic| {
-            try std.testing.expectEqual(CompileErrorKind.unsupported_syntax, diagnostic.kind);
-            try std.testing.expectEqual(@as(?SourceSpan, .{ .start = 0, .end = 4 }), diagnostic.span);
-        },
-    }
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+}
+
+test "compiled template owns its pretty indentation option" {
+    const allocator = std.testing.allocator;
+    const indentation = try allocator.dupe(u8, "\t");
+    defer allocator.free(indentation);
+
+    const result = try compile(allocator, "<root><item>x</item></root>", .{ .whitespace = .pretty, .indentation = indentation });
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    @memset(indentation, 'x');
+
+    var output: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    try std.testing.expectEqual(RenderResult.success, try template.render(&writer, .{}));
+    try std.testing.expectEqualStrings("<root>\n\t<item>x</item>\n</root>\n", std.Io.Writer.buffered(&writer));
 }
 
 test "render reports missing identifiers with their source span" {

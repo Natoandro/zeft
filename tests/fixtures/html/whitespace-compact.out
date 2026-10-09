@@ -1,0 +1,3 @@
+<div><section><p>Hello <em>there</em>!</p><p>Second line</p></section><form><label>Name</label><textarea>  keep  spaces
+  </textarea></form><pre>  a  b
+ c</pre><script>if (a  < b) { x(); }</script><style>.x  { color: red; }</style></div>

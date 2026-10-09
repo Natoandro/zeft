@@ -285,6 +285,26 @@ MUST account for markup semantics; it MUST NOT be implemented as a global
 trim or regular-expression pass. In particular, whitespace-sensitive
 elements and meaningful text boundaries MUST be preserved.
 
+Preserve mode MUST emit source whitespace exactly, including whitespace
+around dynamic output. Compact mode MUST collapse runs of markup whitespace
+in ordinary text to one space. Within element-only content, whitespace-only
+text nodes are formatting and MUST be removed. In mixed content, whitespace
+that separates text from inline markup or dynamic output MUST remain as one
+space. Pretty mode MUST format element-only content with line breaks and a
+two-space default indentation; callers MAY set the indentation string through
+compile options. Mixed content MUST remain inline. These structural rules
+apply equally to HTML and XML.
+
+Conditional and loop bodies whose possible output is element-only MUST
+participate in structural formatting. Loop-generated elements MUST receive
+the same indentation as static siblings. Dynamic constructs inside mixed
+content MUST remain inline.
+
+HTML `pre`, `textarea`, `script`, and `style` contents MUST preserve source
+whitespace in all modes. XML element names do not imply whitespace
+sensitivity. Formatting-generated whitespace is applied only to element-only
+content; source whitespace is retained verbatim in preserve mode.
+
 The selected format and whitespace policy MUST affect the compiled output and
 MUST be included in template identity for caching.
 

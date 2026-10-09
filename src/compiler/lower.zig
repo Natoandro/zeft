@@ -16,12 +16,20 @@ pub fn lower(
     allocator: std.mem.Allocator,
     document: parser.Document,
     analyzed: analysis.Result,
+    options: zeft.CompileOptions,
 ) std.mem.Allocator.Error!LowerResult {
     var lowerer = Lowerer{
         .allocator = allocator,
         .analyzed = analyzed,
+        .options = options,
     };
-    try lowerer.visit(document.nodes);
+    if (options.whitespace == .compact and isElementOnly(document.nodes)) {
+        try lowerer.visitCompactChildren(document.nodes);
+    } else if (options.whitespace == .pretty and isElementOnly(document.nodes) and hasRenderableChildren(document.nodes)) {
+        try lowerer.visitPrettyChildren(document.nodes, 0);
+    } else {
+        try lowerer.visit(document.nodes);
+    }
     if (lowerer.failure) |diagnostic| return .{ .failure = diagnostic };
     const source_end = if (document.nodes.len == 0) 0 else document.nodes[document.nodes.len - 1].span.end;
     try lowerer.instructions.append(allocator, .{
@@ -39,6 +47,7 @@ pub fn lower(
 const Lowerer = struct {
     allocator: std.mem.Allocator,
     analyzed: analysis.Result,
+    options: zeft.CompileOptions,
     expression_index: usize = 0,
     strings: std.ArrayList([]const u8) = .empty,
     expressions: std.ArrayList(ir.ExpressionProgram) = .empty,
@@ -47,11 +56,15 @@ const Lowerer = struct {
     locals: std.ArrayList(struct { name: []const u8, slot: u32 }) = .empty,
     loop_stack: std.ArrayList(struct { begin: usize }) = .empty,
     next_slot: u32 = 0,
+    pretty_depth: usize = 0,
+    verbatim_depth: usize = 0,
+    in_structural_children: bool = false,
+    inline_depth: usize = 0,
 
     fn visit(self: *Lowerer, nodes: []const parser.Node) std.mem.Allocator.Error!void {
         for (nodes) |node| {
             switch (node.data) {
-                .text => |text| try self.writeStatic(text, node.span),
+                .text => |text| try self.writeText(text, node.span),
                 .static_markup => |markup| try self.writeStatic(markup.serialized, node.span),
                 .break_ => try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .loop_break = 0 } }),
                 .continue_ => try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .loop_continue = 0 } }),
@@ -59,11 +72,15 @@ const Lowerer = struct {
                     const condition_id = try self.compileExpression(conditional.condition);
                     const branch_index = self.instructions.items.len;
                     try self.instructions.append(self.allocator, .{ .span = conditional.condition, .data = .{ .jump_if_false = .{ .expression_id = condition_id, .target = 0 } } });
-                    try self.visit(conditional.then_nodes);
+                    if (self.options.whitespace == .pretty and self.inline_depth == 0 and self.in_structural_children and self.verbatim_depth == 0 and isElementOnly(conditional.then_nodes) and isElementOnly(conditional.else_nodes)) {
+                        try self.visitPrettyChildren(conditional.then_nodes, self.pretty_depth);
+                    } else try self.visit(conditional.then_nodes);
                     const jump_index = self.instructions.items.len;
                     try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .jump = 0 } });
                     self.instructions.items[branch_index].data.jump_if_false.target = @intCast(self.instructions.items.len);
-                    try self.visit(conditional.else_nodes);
+                    if (self.options.whitespace == .pretty and self.inline_depth == 0 and self.in_structural_children and self.verbatim_depth == 0 and isElementOnly(conditional.then_nodes) and isElementOnly(conditional.else_nodes)) {
+                        try self.visitPrettyChildren(conditional.else_nodes, self.pretty_depth);
+                    } else try self.visit(conditional.else_nodes);
                     self.instructions.items[jump_index].data.jump = @intCast(self.instructions.items.len);
                 },
                 .loop => |loop| {
@@ -75,7 +92,9 @@ const Lowerer = struct {
                     const body_target: u32 = @intCast(self.instructions.items.len);
                     try self.locals.append(self.allocator, .{ .name = loop.name, .slot = slot });
                     try self.loop_stack.append(self.allocator, .{ .begin = begin });
-                    try self.visit(loop.children);
+                    if (self.options.whitespace == .pretty and self.inline_depth == 0 and self.in_structural_children and self.verbatim_depth == 0 and isElementOnly(loop.children)) {
+                        try self.visitPrettyChildren(loop.children, self.pretty_depth);
+                    } else try self.visit(loop.children);
                     const next = self.instructions.items.len;
                     try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .loop_next = .{ .body_target = body_target, .exit_target = 0 } } });
                     const exit_target: u32 = @intCast(self.instructions.items.len);
@@ -86,8 +105,26 @@ const Lowerer = struct {
                     self.locals.items.len -= 1;
                 },
                 .element => |element| {
+                    const structural = isElementOnly(element.children);
                     try self.writeOpeningTag(element, node.span.start);
-                    try self.visit(element.children);
+                    if (self.verbatim_depth > 0 or self.isWhitespaceSensitive(element.name)) {
+                        try self.visitVerbatim(element.children);
+                    } else if (self.inline_depth == 0 and structural and self.options.whitespace != .preserve) {
+                        if (self.options.whitespace == .pretty and hasRenderableChildren(element.children)) {
+                            try self.writeStatic("\n", node.span);
+                            try self.visitPrettyChildren(element.children, self.pretty_depth + 1);
+                            for (0..self.pretty_depth) |_| try self.writeStatic(self.options.indentation, node.span);
+                        } else if (self.options.whitespace == .compact) {
+                            try self.visitCompactChildren(element.children);
+                        }
+                    } else {
+                        const force_inline = self.options.whitespace == .pretty and (!structural or self.inline_depth > 0);
+                        if (force_inline) self.inline_depth += 1;
+                        defer {
+                            if (force_inline) self.inline_depth -= 1;
+                        }
+                        try self.visit(element.children);
+                    }
                     if (element.closing_tag.len != 0) {
                         try self.writeStatic(element.closing_tag, .{
                             .start = node.span.end - element.closing_tag.len,
@@ -99,6 +136,70 @@ const Lowerer = struct {
             }
             if (self.failure != null) return;
         }
+    }
+
+    fn visitVerbatim(self: *Lowerer, nodes: []const parser.Node) std.mem.Allocator.Error!void {
+        self.verbatim_depth += 1;
+        defer self.verbatim_depth -= 1;
+        try self.visit(nodes);
+    }
+
+    fn visitPrettyChildren(self: *Lowerer, nodes: []const parser.Node, depth: usize) std.mem.Allocator.Error!void {
+        for (nodes, 0..) |node, index| {
+            if (node.data == .text and isWhitespaceOnly(node.data.text)) continue;
+            if (node.data == .conditional or node.data == .loop) {
+                const previous_depth = self.pretty_depth;
+                const previous_layout = self.in_structural_children;
+                self.pretty_depth = depth;
+                self.in_structural_children = true;
+                try self.visit(nodes[index .. index + 1]);
+                self.pretty_depth = previous_depth;
+                self.in_structural_children = previous_layout;
+                continue;
+            }
+            if (node.data == .break_ or node.data == .continue_) {
+                try self.visit(nodes[index .. index + 1]);
+                continue;
+            }
+            for (0..depth) |_| try self.writeStatic(self.options.indentation, node.span);
+            const previous_depth = self.pretty_depth;
+            const previous_layout = self.in_structural_children;
+            self.pretty_depth = depth;
+            self.in_structural_children = false;
+            try self.visit(nodes[index .. index + 1]);
+            self.pretty_depth = previous_depth;
+            self.in_structural_children = previous_layout;
+            if (self.options.whitespace == .pretty) try self.writeStatic("\n", node.span);
+        }
+    }
+
+    fn visitCompactChildren(self: *Lowerer, nodes: []const parser.Node) std.mem.Allocator.Error!void {
+        for (nodes, 0..) |node, index| {
+            if (node.data == .text and isWhitespaceOnly(node.data.text)) continue;
+            try self.visit(nodes[index .. index + 1]);
+        }
+    }
+
+    fn writeText(self: *Lowerer, text: []const u8, span: zeft.SourceSpan) std.mem.Allocator.Error!void {
+        if (self.verbatim_depth > 0 or self.options.whitespace == .preserve or self.options.whitespace == .pretty) return self.writeStatic(text, span);
+        var normalized: std.ArrayList(u8) = .empty;
+        var in_whitespace = false;
+        for (text) |byte| {
+            if (isMarkupWhitespace(byte)) {
+                if (!in_whitespace) try normalized.append(self.allocator, ' ');
+                in_whitespace = true;
+            } else {
+                try normalized.append(self.allocator, byte);
+                in_whitespace = false;
+            }
+        }
+        try self.writeStatic(try normalized.toOwnedSlice(self.allocator), span);
+    }
+
+    fn isWhitespaceSensitive(self: *const Lowerer, name: []const u8) bool {
+        if (self.options.format == .xml) return false;
+        return std.ascii.eqlIgnoreCase(name, "pre") or std.ascii.eqlIgnoreCase(name, "textarea") or
+            std.ascii.eqlIgnoreCase(name, "script") or std.ascii.eqlIgnoreCase(name, "style");
     }
 
     fn writeStatic(self: *Lowerer, bytes: []const u8, span: zeft.SourceSpan) std.mem.Allocator.Error!void {
@@ -252,6 +353,35 @@ const Lowerer = struct {
     }
 };
 
+fn isMarkupWhitespace(byte: u8) bool {
+    return byte == ' ' or byte == '\t' or byte == '\n' or byte == '\r' or byte == 0x0c;
+}
+
+fn isWhitespaceOnly(text: []const u8) bool {
+    for (text) |byte| if (!isMarkupWhitespace(byte)) return false;
+    return true;
+}
+
+fn isElementOnly(nodes: []const parser.Node) bool {
+    for (nodes) |node| switch (node.data) {
+        .element => {},
+        .loop => |loop| if (!isElementOnly(loop.children)) return false,
+        .conditional => |conditional| if (!isElementOnly(conditional.then_nodes) or !isElementOnly(conditional.else_nodes)) return false,
+        .break_, .continue_ => {},
+        .text => |text| if (!isWhitespaceOnly(text)) return false,
+        else => return false,
+    };
+    return true;
+}
+
+fn hasRenderableChildren(nodes: []const parser.Node) bool {
+    for (nodes) |node| switch (node.data) {
+        .text => |text| if (!isWhitespaceOnly(text)) return true,
+        else => return true,
+    };
+    return false;
+}
+
 test "lowers serialized static markup and expression operations" {
     const source = "<p>Hello, {{ name }}!</p>";
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -267,7 +397,7 @@ test "lowers serialized static markup and expression operations" {
         .success => |value| value,
         .failure => return error.UnexpectedAnalysisFailure,
     };
-    const lowered = try lower(allocator, document, analyzed);
+    const lowered = try lower(allocator, document, analyzed, .{});
     const program = switch (lowered) {
         .success => |value| value,
         .failure => return error.UnexpectedLowerFailure,

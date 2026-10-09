@@ -19,7 +19,9 @@ specified in the architecture and remain planned. Dynamic text and attribute
 values use format- and context-specific escaping; attribute values escape both
 quote characters. Contexts are generic Zig structs with byte-string leaves;
 pass aggregate contexts by pointer. Compile options default to HTML with
-source whitespace preserved.
+source whitespace preserved; compact and pretty modes are also available.
+Pretty mode uses two spaces by default and accepts a custom indentation string
+through `CompileOptions.indentation`.
 See the implementation plan for the current supported subset and remaining
 work.
 
