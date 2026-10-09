@@ -100,6 +100,18 @@ zig build test
 `zig build` builds the static library. `zig build test` runs unit and
 integration tests. The public Zig module is named `zeft`.
 
+Run the standalone compiler and renderer benchmark with:
+
+```sh
+zig build -Doptimize=ReleaseFast bench
+```
+
+It reports compile and render timing, allocator activity, writer calls, output
+bytes, and finalized template size for small, large, dynamic, and control-flow
+workloads. It has no performance thresholds; see
+[`docs/design/benchmark-results.md`](docs/design/benchmark-results.md) for
+the measurement method and current results.
+
 ## Repository layout
 
 - `src/` — public module and implementation.

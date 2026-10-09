@@ -37,6 +37,23 @@ Compilation MUST perform these stages in order:
 5. **Finalize.** Produce the immutable persistent `CompiledTemplate` and
    release temporary compiler data.
 
+Optimization passes MUST preserve expression and render source spans. The
+compiler folds literal unary and binary operations, removes unreachable render
+instructions after constant conditions, removes empty static writes, threads
+jumps, and merges adjacent static writes. Every pass that changes render
+instructions MUST remap and validate all branch and loop destinations before
+the next pass runs. Finalization MUST intern repeated symbol names and string
+values in immutable template storage. Static write merging MUST accumulate a
+contiguous run once rather than repeatedly copying an ever-growing prefix.
+
+The standalone benchmark command is `zig build -Doptimize=ReleaseFast bench`.
+It reports compile time, mean render time over 1,000 renders, successful
+allocator calls and requested bytes, write calls per render, output bytes, and
+logical compiled size. It has no performance pass/fail thresholds. The
+workloads cover small static/dynamic output, a large static document, repeated
+dynamic output, and branches with loops. Measurements and environment details
+belong in `docs/design/benchmark-results.md`.
+
 The AST MUST NOT be the persistent representation used by rendering.
 
 ## Markup and template parsing

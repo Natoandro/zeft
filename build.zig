@@ -139,4 +139,15 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_unit_tests.step);
     for (compiler_test_runs) |run| test_step.dependOn(&run.step);
     test_step.dependOn(&run_integration_tests.step);
+
+    const bench_module = b.createModule(.{
+        .root_source_file = b.path("bench/main.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+        .imports = &.{.{ .name = "zeft", .module = zeft }},
+    });
+    const bench = b.addExecutable(.{ .name = "zeft-bench", .root_module = bench_module });
+    const run_bench = b.addRunArtifact(bench);
+    const bench_step = b.step("bench", "Run reproducible compiler and renderer benchmarks");
+    bench_step.dependOn(&run_bench.step);
 }

@@ -117,9 +117,9 @@ element-only document formatting whitespace is removed.
 | K-006 | Enabled | Missing/invalid child and include cycle | Return explicit errors with dependency context; never substitute stale child content. |
 | K-007 | Enabled | Evict/replace while render is active | Active render keeps its compiled entry alive until completion. |
 | K-008 | Enabled | Concurrent cache lookup and rendering | Cache publication and reference accounting remain safe across concurrent callers. |
-| O-001 | Internal unit test | Adjacent static writes, constants, empty operations, dead branches | Optimizations preserve output and source diagnostics; validate branch destinations. |
-| O-002 | Internal unit test | Repeated identifiers/strings and compiled metadata | Interning preserves stable symbol/string behavior. |
-| B-001 | Benchmark fixture | Representative small, large, dynamic, and control-flow templates | Record compile/render time, allocations, write calls, and compiled size. |
+| O-001 | Enabled unit tests | `src/compiler/optimize.zig` optimizer cases | Constant folding preserves spans; empty writes and unreachable branches are removed; jump targets remain valid. |
+| O-002 | Enabled unit tests | `src/zeft.zig` finalization case | Repeated strings and symbol names share finalized storage while preserving output. |
+| B-001 | Enabled benchmark | `bench/main.zig` small, large, dynamic, and control-flow cases | `zig build -Doptimize=ReleaseFast bench` reports compile/render time, allocator activity, write calls, and compiled size without thresholds. |
 | T-001 | Pending comptime | Same supported fixture compiled at runtime and comptime | Produce equivalent logical program and identical rendered bytes. |
 | T-002 | Pending comptime | Diagnostics for shared invalid fixtures | Runtime/comptime entry points report equivalent categories and spans where supported. |
 

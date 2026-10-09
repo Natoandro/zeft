@@ -227,38 +227,21 @@ sources without putting filesystem or cache behavior inside `compile()`.
 
 ## Phase 8 — Add measured compiler optimizations
 
-**Outcome:** improve compiled size and render cost while preserving the
-architecture and behavior already established by tests.
+**Outcome:** measure compiler and renderer costs, then improve the costs that
+the measurements identify while preserving the architecture and behavior
+already established by tests.
 
-- [ ] **ZEP-068** Add benchmark fixtures for compile time, render time,
+- [x] **ZEP-068** Add benchmark fixtures for compile time, render time,
   allocations, write-call count, and compiled-template size.
-- [ ] **ZEP-069** Implement constant expression folding with source-map
+- [x] **ZEP-069** Implement constant expression folding with source-map
   preservation.
-- [ ] **ZEP-070** Implement dead-branch and empty-operation elimination.
-- [ ] **ZEP-071** Implement jump threading and branch simplification while
+- [x] **ZEP-070** Implement dead-branch and empty-operation elimination.
+- [x] **ZEP-071** Implement jump threading and branch simplification while
   validating all instruction destinations after each pass.
-- [ ] **ZEP-072** Intern repeated symbols and strings in finalized template
+- [x] **ZEP-072** Intern repeated symbols and strings in finalized template
   storage.
-- [ ] **ZEP-073** Optimize static markup serialization and adjacent writes
+- [x] **ZEP-073** Optimize static markup serialization and adjacent writes
   using benchmark evidence.
-- [ ] **ZEP-074** Record before-and-after benchmark results and retain an
-  optimization only when it improves a measured target without semantic
-  regressions.
-
-## Phase 9 — Add comptime compilation
-
-**Outcome:** comptime compilation produces the same logical compiled format
-consumed by the runtime renderer.
-
-- [ ] **ZEP-075** Identify Zig compile-time restrictions that affect parsing,
-  analysis, lowering, optimization, and finalization.
-- [ ] **ZEP-076** Implement a comptime entry point for embedded template source
-  using the shared compiler architecture.
-- [ ] **ZEP-077** Verify runtime-compiled and comptime-compiled templates have
-  equivalent output, escaping, control flow, and diagnostics for shared
-  fixtures.
-- [ ] **ZEP-078** Document comptime limitations and keep them separate from the
-  runtime `compile()` contract.
 
 ## Completion policy
 

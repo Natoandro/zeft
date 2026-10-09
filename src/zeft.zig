@@ -67,6 +67,32 @@ pub const CompiledTemplate = struct {
         self.* = undefined;
     }
 
+    /// Returns the logical byte size of finalized IR and owned string data.
+    /// Allocator and arena bookkeeping overhead is excluded.
+    pub fn compiledSize(self: *const CompiledTemplate) usize {
+        const data = self.finalized();
+        const program = data.program;
+        var size = program.strings.len * @sizeOf([]const u8) +
+            program.symbols.len * @sizeOf(analysis.Symbol) +
+            program.instructions.len * @sizeOf(ir.Instruction) +
+            program.expressions.len * @sizeOf(ir.ExpressionProgram) +
+            data.options.indentation.len;
+        for (program.expressions) |expression| size += expression.instructions.len * @sizeOf(ir.ExpressionInstruction);
+        var payload_index: usize = 0;
+        while (payloadAt(program, payload_index)) |payload| : (payload_index += 1) {
+            var first = true;
+            for (0..payload_index) |previous_index| {
+                const previous = payloadAt(program, previous_index).?;
+                if (previous.ptr == payload.ptr and previous.len == payload.len) {
+                    first = false;
+                    break;
+                }
+            }
+            if (first) size += payload.len;
+        }
+        return size;
+    }
+
     /// Render against a struct with byte-string fields, or pass a pointer when
     /// the context contains nested structs, arrays, or slices. Runtime template
     /// errors are returned as diagnostics; writer errors propagate unchanged.
@@ -447,23 +473,28 @@ fn finalize(
     }
     const persistent = storage.allocator();
 
-    const strings = try persistent.alloc([]const u8, program.strings.len);
-    for (program.strings, 0..) |value, index| strings[index] = try persistent.dupe(u8, value);
+    var interned: std.ArrayList([]const u8) = .empty;
+    const string_map = try persistent.alloc(ir.StringId, program.strings.len);
+    for (program.strings, 0..) |value, index| {
+        const canonical = try internBytes(persistent, &interned, value);
+        string_map[index] = @intCast(indexOfBytes(interned.items, canonical));
+    }
+    const strings = try persistent.dupe([]const u8, interned.items);
 
     const symbols = try persistent.dupe(analysis.Symbol, program.symbols);
-    for (symbols) |*symbol| symbol.name = try persistent.dupe(u8, symbol.name);
+    for (symbols) |*symbol| symbol.name = try internBytes(persistent, &interned, symbol.name);
 
     const expressions = try persistent.alloc(ir.ExpressionProgram, program.expressions.len);
     for (program.expressions, 0..) |expression, index| {
         const instructions = try persistent.dupe(ir.ExpressionInstruction, expression.instructions);
         for (instructions) |*instruction| switch (instruction.data) {
-            .get_property => |name| instruction.data = .{ .get_property = try persistent.dupe(u8, name) },
+            .get_property => |name| instruction.data = .{ .get_property = try internBytes(persistent, &interned, name) },
             .push_literal => |literal| switch (literal) {
-                .string => |value| instruction.data = .{ .push_literal = .{ .string = try persistent.dupe(u8, value) } },
+                .string => |value| instruction.data = .{ .push_literal = .{ .string = try internBytes(persistent, &interned, value) } },
                 else => {},
             },
-            .call_function => |call| instruction.data = .{ .call_function = .{ .name = try persistent.dupe(u8, call.name), .argument_count = call.argument_count } },
-            .call_filter => |call| instruction.data = .{ .call_filter = .{ .name = try persistent.dupe(u8, call.name), .argument_count = call.argument_count } },
+            .call_function => |call| instruction.data = .{ .call_function = .{ .name = try internBytes(persistent, &interned, call.name), .argument_count = call.argument_count } },
+            .call_filter => |call| instruction.data = .{ .call_filter = .{ .name = try internBytes(persistent, &interned, call.name), .argument_count = call.argument_count } },
             else => {},
         };
         expressions[index] = .{ .instructions = instructions };
@@ -471,6 +502,11 @@ fn finalize(
 
     const indentation = try persistent.dupe(u8, options.indentation);
     const instructions = try persistent.dupe(ir.Instruction, program.instructions);
+    for (instructions) |*instruction| switch (instruction.data) {
+        .write_static => |*id| id.* = string_map[id.*],
+        .include => |*include| include.identity = string_map[include.identity],
+        else => {},
+    };
     const finalized = try allocator.create(FinalizedTemplate);
     finalized.* = .{
         .owner_allocator = allocator,
@@ -487,10 +523,70 @@ fn finalize(
     return .{ .impl = finalized };
 }
 
+fn payloadAt(program: ir.Program, index: usize) ?[]const u8 {
+    if (index < program.strings.len) return program.strings[index];
+    var current = index - program.strings.len;
+    if (current < program.symbols.len) return program.symbols[current].name;
+    current -= program.symbols.len;
+    for (program.expressions) |expression| {
+        for (expression.instructions) |instruction| {
+            const value: ?[]const u8 = switch (instruction.data) {
+                .get_property => |name| name,
+                .push_literal => |literal| switch (literal) {
+                    .string => |value| value,
+                    else => null,
+                },
+                .call_function => |call| call.name,
+                .call_filter => |call| call.name,
+                else => null,
+            };
+            if (value) |bytes| {
+                if (current == 0) return bytes;
+                current -= 1;
+            }
+        }
+    }
+    return null;
+}
+
+fn internBytes(allocator: std.mem.Allocator, values: *std.ArrayList([]const u8), value: []const u8) std.mem.Allocator.Error![]const u8 {
+    for (values.items) |existing| if (std.mem.eql(u8, existing, value)) return existing;
+    const owned = try allocator.dupe(u8, value);
+    try values.append(allocator, owned);
+    return owned;
+}
+
+fn indexOfBytes(values: []const []const u8, value: []const u8) usize {
+    for (values, 0..) |existing, index| if (existing.ptr == value.ptr and existing.len == value.len) return index;
+    unreachable;
+}
+
 test "compile options default to HTML with preserved whitespace" {
     const options: CompileOptions = .{};
     try std.testing.expectEqual(OutputFormat.html, options.format);
     try std.testing.expectEqual(WhitespacePolicy.preserve, options.whitespace);
+}
+
+test "finalization interns repeated strings and symbol names" {
+    const symbol_values = [_]analysis.Symbol{ .{ .id = 0, .name = "item" }, .{ .id = 1, .name = "item" } };
+    const static_values = [_][]const u8{ "same", "same" };
+    const instructions = [_]ir.Instruction{
+        .{ .span = .{ .start = 0, .end = 4 }, .data = .{ .write_static = 0 } },
+        .{ .span = .{ .start = 4, .end = 8 }, .data = .{ .write_static = 1 } },
+        .{ .span = .{ .start = 8, .end = 8 }, .data = .end },
+    };
+    const program: ir.Program = .{
+        .strings = @constCast(&static_values),
+        .symbols = @constCast(&symbol_values),
+        .expressions = &.{},
+        .instructions = @constCast(&instructions),
+    };
+    var template = try finalize(std.testing.allocator, program, .{});
+    defer template.deinit();
+    const finalized = template.finalized().program;
+    try std.testing.expectEqual(@as(usize, 1), finalized.strings.len);
+    try std.testing.expectEqual(@as(u32, 0), finalized.instructions[0].data.write_static);
+    try std.testing.expectEqual(finalized.symbols[0].name.ptr, finalized.symbols[1].name.ptr);
 }
 
 test "compiled template owns finalized storage and renders after source release" {
