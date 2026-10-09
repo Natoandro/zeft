@@ -4,6 +4,9 @@
 
 - Treat `docs/architecture/` as normative. Requirements there define the
   required behavior and boundaries of the system.
+- Keep `docs/design/internals.md` aligned with the current implementation. It
+  is descriptive and non-normative; update it when modules, data flow, storage,
+  or execution design materially change.
 - Keep implementation sequencing and progress in
   `docs/design/implementation-plan.md`. Each task has a stable reference;
   preserve those references and check an item only after its implementation
@@ -11,6 +14,9 @@
 - If implementation requires a product or architectural decision not settled
   by the existing requirements, ask the user in the conversation. Do not put
   unresolved alternatives into normative documents.
+- Record settled product and architectural decisions through the resulting
+  changes to normative documentation, the implementation plan, tests, and
+  implementation. Do not create or maintain a separate decision log.
 
 ## Zig and verification
 

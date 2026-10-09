@@ -13,9 +13,23 @@ against application data.
 - Thread-safe template caching, explicit reloads, and includes
 - Structured compile and render diagnostics with source spans
 
+## Format support
+
+Zeft currently supports structured HTML with paired and void elements, quoted
+and boolean attributes, comments, and the HTML5 doctype. XML support includes
+fragments, quoted attributes, declarations, comments, CDATA, predefined
+entities, and empty-element syntax.
+
+Current HTML limitations include unquoted attribute values, optional end tags,
+nonvoid self-closing syntax, doctypes other than the HTML5 form, browser-style
+error recovery, and complete raw-text handling for elements such as `script`
+and `style`. Dynamic tag and attribute names, trusted raw output, `elif`, loop
+`else`, loop metadata, numeric and optional native context fields, and comptime
+compilation are also not implemented yet. See the
+[implementation plan](docs/design/implementation-plan.md) for future work.
+
 See the [architecture](docs/architecture/README.md) for the language and API
-contracts, and the [implementation plan](docs/design/implementation-plan.md)
-for future work.
+contracts.
 
 ## Example
 
@@ -40,7 +54,7 @@ Compilation syntax/markup failures and runtime template failures are returned
 as diagnostic results. Writer failures propagate as Zig errors.
 
 Compiled templates own their finalized data and must be deinitialized. See
-[runtime](docs/architecture/runtime.md) and
+[the public API](docs/architecture/public-api.md) and
 [caching and ownership](docs/architecture/caching-and-ownership.md) for value
 semantics, allocator lifetimes, concurrency, callbacks, caching, and includes.
 
@@ -112,4 +126,5 @@ the measurement method and current results.
 - `tests/fixtures/` — template and expected-output fixtures.
 - `tests/fixtures/catalog.md` — suite coverage inventory.
 - `docs/architecture/` — normative architecture requirements.
+- `docs/design/internals.md` — current non-normative implementation design.
 - `docs/design/implementation-plan.md` — sequenced implementation checklist.

@@ -6,8 +6,9 @@ compiled data is owned.
 ## Compilation and cache boundary
 
 `compile()` MUST remain deterministic and independent of caches, filesystems,
-and global state. Caching MUST be provided by an explicit, application-owned,
-thread-safe `TemplateCache`.
+resolvers, and global state. Includes resolve through the public resolver
+contract during rendering. Caching is provided by an explicit,
+application-owned, thread-safe `TemplateCache` that implements that contract.
 
 The cache MUST provide a get-or-compile operation for caller-supplied stable
 identity bytes, source bytes, and compile options. It MUST NOT read files or
@@ -37,20 +38,19 @@ independently from their parents. Changing an included template MUST make the
 next render observe the newly compiled child without requiring the parent
 template's static content to be recompiled.
 
-The syntax MUST be `{% include "path" %}`. Bytes inside the quotes are the
-child's exact stable identity; the compiler MUST NOT interpret them as a file
-path. The instruction MUST retain those bytes and the directive source span.
-`compile()` MUST compile the parent without looking up the child.
+Include syntax and identity semantics are defined by the language contract.
+`compile()` MUST compile a parent without looking up its children.
 
-Cache-backed rendering MUST resolve the current child entry on each include
-execution. Callers MUST populate or reload children with get-or-compile before
+Rendering MUST ask its resolver for the current child on each include
+execution. A resolver MUST retain each returned child for the duration of its
+use. Cache callers populate or reload children with get-or-compile before
 rendering. A lease render pins that lease's root version while resolving
 children from the current cache. A cache render pins the current root version.
 Missing children, children whose initial compilation failed, and include
 cycles MUST return runtime diagnostics with the relevant include identity and
-the including template identity and directive span. An initial child compile failure MUST also
-retain the child's compile category and source span. A failed reload MUST
-preserve the last valid entry, which remains renderable.
+the including template identity and directive span. An initial child compile
+failure MUST also retain the child's compile category and source span. A failed
+reload MUST preserve the last valid entry, which remains renderable.
 
 Lookup, compilation publication, replacement, eviction, and reference
 accounting MUST be synchronized. Compilation MAY be serialized within a cache.
@@ -60,15 +60,9 @@ destroyed only after all leases to them are released.
 
 ## Ownership and lifetime
 
-The allocator supplied to compilation MUST own the persistent data of the
-returned `CompiledTemplate`. Deinitializing the template MUST release that
-data exactly once.
-
-Temporary compiler structures, including tokens, AST nodes, temporary
-expression trees, and optimization worklists, SHOULD share a temporary arena
-or equivalent lifetime and MUST be released after finalization. Persistent
-Render IR, expression IR, strings, symbols, and retained debug metadata MUST
-not refer to released temporary memory.
+Compiled-template ownership follows the public API contract. Temporary compiler
+structures MUST be released after compilation and MUST NOT be referenced by a
+cache entry.
 
 The cache MUST own its entries. A `TemplateLease` MUST be released exactly
 once. The cache MUST outlive all its leases and renders; deinitialization MUST
@@ -76,18 +70,3 @@ assert that no active or retired entry still has a lease. The cache allocator
 MUST remain valid through cache deinitialization. Include identity strings in
 diagnostics returned from cache-backed rendering MUST remain valid until cache
 deinitialization, including after replacement or eviction.
-
-## Comptime compilation
-
-The comptime compilation operation MUST accept template source as a comptime
-string and compile options as a comptime-known object. It MUST use the existing
-`CompileOptions` fields (`format`, `whitespace`, and `indentation`) rather than
-define a second set of compile settings. Comptime compile failures MUST fail
-the Zig build.
-
-Comptime compilation MUST produce the same logical Render IR contract used by
-the runtime renderer. The renderer MUST be independent of whether a template
-was compiled at runtime or comptime.
-
-Comptime support MUST NOT require a second rendering architecture or change the
-semantics of already compiled templates.

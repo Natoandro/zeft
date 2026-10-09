@@ -67,7 +67,8 @@ allocation assertions remain in focused tests.
 | E-010 | Fixture | Expression output matrix for HTML/XML text/attributes | Test `&`, `<`, `>`, `"`, and `'` for each output context and format. |
 | E-011 | Fixture | Root names repeated and in different case | Repeated case-sensitive roots reuse symbols; distinct names resolve independently and missing roots fail by default. |
 | E-012 | Fixture | Supported native bool/string/array/slice/struct adapters; numeric/null literals and callback values | Verify supported value operations, property lookup, indexing, and invalid operation categories. Native numeric/optional fields remain unsupported. |
-| E-013 | Fixture | Direct null/sequence/object interpolation, cross-type equality, division/modulo by zero | Null emits no bytes; sequences, objects, cross-type equality, and division/modulo by zero return `invalid_operand` where specified. |
+| E-013 | Fixture | Direct null/sequence/object interpolation, nonnull cross-type equality, division/modulo by zero | Null emits no bytes; sequences and objects fail direct interpolation; nonnull cross-type equality and division/modulo by zero return `invalid_operand`. |
+| E-014 | Planned | Equality and inequality between null and every value tag | Null equals null and differs from every nonnull value; implement and enable with ZEP-095. |
 
 ## Compile diagnostics
 
@@ -251,9 +252,10 @@ Numbers and null values are covered through specified literal and callback
 operations. Native adapters currently support booleans, byte strings, structs,
 arrays, and slices; numeric and optional fields are not accepted by the adapter.
 Direct null interpolation and direct sequence/object interpolation are covered
-by EX-060 and DG-075–DG-076. Cross-type equality and zero-divisor arithmetic
-are covered by DG-077–DG-082. Numeric and optional native fields remain
-unsupported by the adapter.
+by EX-060 and DG-075–DG-076. Nonnull cross-type equality and zero-divisor
+arithmetic are covered by DG-077–DG-078 and DG-081–DG-082. DG-079–DG-080 record
+the current null-comparison failure until ZEP-095 implements E-014. Numeric and
+optional native fields remain unsupported by the adapter.
 
 ## Final inventory audit (ZEP-083)
 
