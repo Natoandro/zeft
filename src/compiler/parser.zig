@@ -61,8 +61,18 @@ pub const Node = struct {
     };
 };
 
-pub const Conditional = struct { condition: zeft.SourceSpan, then_nodes: []Node, else_nodes: []Node };
-pub const Loop = struct { name: []const u8, name_span: zeft.SourceSpan, expression: zeft.SourceSpan, children: []Node, else_nodes: []Node = &.{} };
+pub const Conditional = struct {
+    condition: zeft.SourceSpan,
+    then_nodes: []Node,
+    else_nodes: []Node,
+};
+pub const Loop = struct {
+    name: []const u8,
+    name_span: zeft.SourceSpan,
+    expression: zeft.SourceSpan,
+    children: []Node,
+    else_nodes: []Node = &.{},
+};
 
 pub const Element = struct {
     name: []const u8,
@@ -166,7 +176,10 @@ pub fn parseWithFormat(
     };
     const parsed = try parser.parseChildren(null, null, 0);
     if (parser.failure) |diagnostic| return .{ .failure = diagnostic };
-    if (parsed.stop != null) return .{ .failure = .{ .kind = .invalid_construct, .span = parsed.stop_span } };
+    if (parsed.stop != null) return .{ .failure = .{
+        .kind = .invalid_construct,
+        .span = parsed.stop_span,
+    } };
     return .{ .success = .{ .nodes = parsed.nodes } };
 }
 
@@ -183,30 +196,68 @@ const Lexer = struct {
         const start = self.offset;
 
         if (startsWith(self.source, self.offset, "<!--")) return self.commentToken();
-        if (self.format == .html and startsWithAsciiIgnoreCase(self.source, self.offset, "<!doctype")) return self.doctypeToken();
-        if (self.format == .xml and startsWith(self.source, self.offset, "<![CDATA[")) return self.cdataToken();
-        if (self.format == .xml and startsWith(self.source, self.offset, "<?xml")) return self.xmlDeclarationToken();
+        if (self.format == .html and startsWithAsciiIgnoreCase(
+            self.source,
+            self.offset,
+            "<!doctype",
+        )) return self.doctypeToken();
+        if (self.format == .xml and startsWith(
+            self.source,
+            self.offset,
+            "<![CDATA[",
+        )) return self.cdataToken();
+        if (self.format == .xml and startsWith(
+            self.source,
+            self.offset,
+            "<?xml",
+        )) return self.xmlDeclarationToken();
         if (startsWith(self.source, self.offset, "<!") or startsWith(self.source, self.offset, "<?")) {
             return self.invalidSpecialMarkup(start);
         }
         if (startsWith(self.source, self.offset, "{{")) return self.expressionToken();
         if (startsDirective(self.source, self.offset)) return self.directiveToken();
         if (startsTag(self.source, self.offset)) return self.tagToken();
-        if (self.format == .xml and self.source[self.offset] == '<') return self.invalidSpecialMarkup(start);
+        if (self.format == .xml and self.source[self.offset] == '<')
+            return self.invalidSpecialMarkup(start);
 
         var decoded: std.ArrayList(u8) = .empty;
         while (self.offset < self.source.len) {
             if (self.format == .xml and self.source[self.offset] == '&') {
                 const end = xmlReferenceEnd(self.source, self.offset, self.xml_1_1) orelse {
-                    self.failure = .{ .kind = .invalid_markup, .span = .{ .start = self.offset, .end = @min(self.offset + 1, self.source.len) } };
+                    self.failure = .{
+                        .kind = .invalid_markup,
+                        .span = .{
+                            .start = self.offset,
+                            .end = @min(
+                                self.offset + 1,
+                                self.source.len,
+                            ),
+                        },
+                    };
                     return null;
                 };
                 try decoded.appendSlice(self.allocator, self.source[self.offset..end]);
                 self.offset = end;
             } else if (self.format == .xml and startsWith(self.source, self.offset, "]]>")) {
-                self.failure = .{ .kind = .invalid_markup, .span = .{ .start = self.offset, .end = self.offset + 3 } };
+                self.failure = .{
+                    .kind = .invalid_markup,
+                    .span = .{
+                        .start = self.offset,
+                        .end = self.offset + 3,
+                    },
+                };
                 return null;
-            } else if (startsWith(self.source, self.offset, "{{") or startsDirective(self.source, self.offset) or startsTag(self.source, self.offset) or
+            } else if (startsWith(
+                self.source,
+                self.offset,
+                "{{",
+            ) or startsDirective(
+                self.source,
+                self.offset,
+            ) or startsTag(
+                self.source,
+                self.offset,
+            ) or
                 startsSpecialMarkup(self.source, self.offset, self.format))
             {
                 break;
@@ -242,7 +293,13 @@ const Lexer = struct {
             } else if (startsWith(self.source, self.offset, closing)) break;
         }
         if (self.offset >= self.source.len) {
-            self.failure = .{ .kind = .syntax, .span = .{ .start = start, .end = self.source.len } };
+            self.failure = .{
+                .kind = .syntax,
+                .span = .{
+                    .start = start,
+                    .end = self.source.len,
+                },
+            };
             return null;
         }
         const content_end = self.offset;
@@ -277,19 +334,35 @@ const Lexer = struct {
             if (in_index) |found| {
                 const name_span = trimSpan(self.source, rest_start, rest_start + found);
                 const expr_span = trimSpan(self.source, rest_start + found + 4, content.end);
-                if (validIdentifier(self.source[name_span.start..name_span.end]) and expr_span.start < expr_span.end) {
-                    directive = .{ .for_ = .{ .name = self.source[name_span.start..name_span.end], .name_span = name_span, .expression = expr_span } };
+                if (validIdentifier(self.source[name_span.start..name_span.end]) and
+                    expr_span.start < expr_span.end)
+                {
+                    directive = .{ .for_ = .{
+                        .name = self.source[name_span.start..name_span.end],
+                        .name_span = name_span,
+                        .expression = expr_span,
+                    } };
                 }
             }
         }
-        return .{ .span = .{ .start = start, .end = self.offset }, .data = .{ .directive = directive } };
+        return .{
+            .span = .{
+                .start = start,
+                .end = self.offset,
+            },
+            .data = .{ .directive = directive },
+        };
     }
 
     fn expressionToken(self: *Lexer) std.mem.Allocator.Error!?Token {
         const start = self.offset;
         self.offset += 2;
         const content_start = self.offset;
-        while (self.offset + 1 < self.source.len and !startsWith(self.source, self.offset, "}}")) : (self.offset += 1) {}
+        while (self.offset + 1 < self.source.len and !startsWith(
+            self.source,
+            self.offset,
+            "}}",
+        )) : (self.offset += 1) {}
         if (self.offset + 1 >= self.source.len) {
             self.failure = .{
                 .kind = .invalid_expression,
@@ -310,7 +383,11 @@ const Lexer = struct {
     fn commentToken(self: *Lexer) std.mem.Allocator.Error!?Token {
         const start = self.offset;
         self.offset += "<!--".len;
-        while (self.offset + "-->".len <= self.source.len and !startsWith(self.source, self.offset, "-->")) : (self.offset += 1) {
+        while (self.offset + "-->".len <= self.source.len and !startsWith(
+            self.source,
+            self.offset,
+            "-->",
+        )) : (self.offset += 1) {
             if (self.format == .xml and startsWith(self.source, self.offset, "--")) {
                 self.failure = .{
                     .kind = .invalid_markup,
@@ -327,7 +404,10 @@ const Lexer = struct {
             self.offset = self.source.len;
             return null;
         }
-        if (self.format == .xml and self.offset > start + "<!--".len and self.source[self.offset - 1] == '-') {
+        if (self.format == .xml and self.offset > start + "<!--".len and self.source[
+            self.offset -
+                1
+        ] == '-') {
             self.failure = .{
                 .kind = .invalid_markup,
                 .span = .{ .start = start, .end = self.offset + "-->".len },
@@ -337,14 +417,21 @@ const Lexer = struct {
         self.offset += "-->".len;
         return .{
             .span = .{ .start = start, .end = self.offset },
-            .data = .{ .static_markup = .{ .kind = .comment, .serialized = self.source[start..self.offset] } },
+            .data = .{ .static_markup = .{
+                .kind = .comment,
+                .serialized = self.source[start..self.offset],
+            } },
         };
     }
 
     fn cdataToken(self: *Lexer) std.mem.Allocator.Error!?Token {
         const start = self.offset;
         self.offset += "<![CDATA[".len;
-        while (self.offset + "]]>".len <= self.source.len and !startsWith(self.source, self.offset, "]]>")) : (self.offset += 1) {}
+        while (self.offset + "]]>".len <= self.source.len and !startsWith(
+            self.source,
+            self.offset,
+            "]]>",
+        )) : (self.offset += 1) {}
         if (self.offset + "]]>".len > self.source.len) {
             self.failure = .{
                 .kind = .invalid_markup,
@@ -356,7 +443,10 @@ const Lexer = struct {
         self.offset += "]]>".len;
         return .{
             .span = .{ .start = start, .end = self.offset },
-            .data = .{ .static_markup = .{ .kind = .cdata, .serialized = self.source[start..self.offset] } },
+            .data = .{ .static_markup = .{
+                .kind = .cdata,
+                .serialized = self.source[start..self.offset],
+            } },
         };
     }
 
@@ -364,8 +454,11 @@ const Lexer = struct {
         const start = self.offset;
         if (start != 0) return self.invalidSpecialMarkup(start);
         self.offset += "<?xml".len;
-        if (self.offset >= self.source.len or !isMarkupWhitespace(self.source[self.offset])) return self.invalidSpecialMarkup(start);
-        while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
+        if (self.offset >= self.source.len or !isMarkupWhitespace(self.source[self.offset]))
+            return self.invalidSpecialMarkup(start);
+        while (self.offset < self.source.len and
+            isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1)
+        {}
 
         const version = self.xmlPseudoAttribute(start) orelse return null;
         if (!std.mem.eql(u8, version.name, "version") or
@@ -382,19 +475,35 @@ const Lexer = struct {
                 self.offset += 2;
                 return .{
                     .span = .{ .start = start, .end = self.offset },
-                    .data = .{ .static_markup = .{ .kind = .xml_declaration, .serialized = self.source[start..self.offset] } },
+                    .data = .{ .static_markup = .{
+                        .kind = .xml_declaration,
+                        .serialized = self.source[start..self.offset],
+                    } },
                 };
             }
-            if (self.offset >= self.source.len or !isMarkupWhitespace(self.source[self.offset])) return self.invalidSpecialMarkup(start);
-            while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
+            if (self.offset >= self.source.len or
+                !isMarkupWhitespace(self.source[self.offset]))
+                return self.invalidSpecialMarkup(start);
+            while (self.offset < self.source.len and
+                isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1)
+            {}
             if (startsWith(self.source, self.offset, "?>")) continue;
 
             const attribute = self.xmlPseudoAttribute(start) orelse return null;
             if (std.mem.eql(u8, attribute.name, "encoding")) {
-                if (encoding_seen or standalone_seen or !isValidXmlEncoding(attribute.value)) return self.invalidSpecialMarkup(start);
+                if (encoding_seen or standalone_seen or
+                    !isValidXmlEncoding(attribute.value)) return self.invalidSpecialMarkup(start);
                 encoding_seen = true;
             } else if (std.mem.eql(u8, attribute.name, "standalone")) {
-                if (standalone_seen or !(std.mem.eql(u8, attribute.value, "yes") or std.mem.eql(u8, attribute.value, "no"))) {
+                if (standalone_seen or !(std.mem.eql(
+                    u8,
+                    attribute.value,
+                    "yes",
+                ) or std.mem.eql(
+                    u8,
+                    attribute.value,
+                    "no",
+                ))) {
                     return self.invalidSpecialMarkup(start);
                 }
                 standalone_seen = true;
@@ -411,23 +520,33 @@ const Lexer = struct {
             return null;
         }
         self.offset += 1;
-        while (self.offset < self.source.len and std.ascii.isAlphabetic(self.source[self.offset])) : (self.offset += 1) {}
+        while (self.offset < self.source.len and
+            std.ascii.isAlphabetic(self.source[self.offset])) : (self.offset += 1)
+        {}
         const name = self.source[name_start..self.offset];
-        while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
+        while (self.offset < self.source.len and
+            isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1)
+        {}
         if (self.offset >= self.source.len or self.source[self.offset] != '=') {
             _ = self.invalidSpecialMarkup(tag_start);
             return null;
         }
         self.offset += 1;
-        while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
-        if (self.offset >= self.source.len or (self.source[self.offset] != '\'' and self.source[self.offset] != '"')) {
+        while (self.offset < self.source.len and
+            isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1)
+        {}
+        if (self.offset >= self.source.len or (self.source[self.offset] != '\'' and
+            self.source[self.offset] != '"'))
+        {
             _ = self.invalidSpecialMarkup(tag_start);
             return null;
         }
         const quote = self.source[self.offset];
         self.offset += 1;
         const value_start = self.offset;
-        while (self.offset < self.source.len and self.source[self.offset] != quote) : (self.offset += 1) {}
+        while (self.offset < self.source.len and
+            self.source[self.offset] != quote) : (self.offset += 1)
+        {}
         if (self.offset >= self.source.len) {
             _ = self.invalidSpecialMarkup(tag_start);
             return null;
@@ -440,24 +559,41 @@ const Lexer = struct {
     fn doctypeToken(self: *Lexer) std.mem.Allocator.Error!?Token {
         const start = self.offset;
         self.offset += "<!doctype".len;
-        if (self.offset >= self.source.len or !isMarkupWhitespace(self.source[self.offset])) return self.invalidSpecialMarkup(start);
-        while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
-        if (!startsWithAsciiIgnoreCase(self.source, self.offset, "html")) return self.invalidSpecialMarkup(start);
+        if (self.offset >= self.source.len or !isMarkupWhitespace(self.source[self.offset]))
+            return self.invalidSpecialMarkup(start);
+        while (self.offset < self.source.len and
+            isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1)
+        {}
+        if (!startsWithAsciiIgnoreCase(
+            self.source,
+            self.offset,
+            "html",
+        )) return self.invalidSpecialMarkup(start);
         self.offset += "html".len;
-        if (self.offset < self.source.len and self.source[self.offset] != '>' and !isMarkupWhitespace(self.source[self.offset])) {
+        if (self.offset < self.source.len and self.source[self.offset] != '>' and
+            !isMarkupWhitespace(self.source[self.offset]))
+        {
             return self.invalidSpecialMarkup(start);
         }
-        while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
-        if (self.offset >= self.source.len or self.source[self.offset] != '>') return self.invalidSpecialMarkup(start);
+        while (self.offset < self.source.len and
+            isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1)
+        {}
+        if (self.offset >= self.source.len or self.source[self.offset] != '>')
+            return self.invalidSpecialMarkup(start);
         self.offset += 1;
         return .{
             .span = .{ .start = start, .end = self.offset },
-            .data = .{ .static_markup = .{ .kind = .doctype, .serialized = self.source[start..self.offset] } },
+            .data = .{ .static_markup = .{
+                .kind = .doctype,
+                .serialized = self.source[start..self.offset],
+            } },
         };
     }
 
     fn invalidSpecialMarkup(self: *Lexer, start: usize) ?Token {
-        while (self.offset < self.source.len and self.source[self.offset] != '>') : (self.offset += 1) {}
+        while (self.offset < self.source.len and
+            self.source[self.offset] != '>') : (self.offset += 1)
+        {}
         if (self.offset < self.source.len) self.offset += 1;
         self.failure = .{
             .kind = .invalid_markup,
@@ -480,11 +616,14 @@ const Lexer = struct {
             return null;
         }
         self.offset += 1;
-        while (self.offset < self.source.len and isNameContinue(self.source[self.offset])) : (self.offset += 1) {}
+        while (self.offset < self.source.len and
+            isNameContinue(self.source[self.offset])) : (self.offset += 1)
+        {}
         const name = self.source[name_start..self.offset];
 
         if (closing) {
-            if (self.offset >= self.source.len or self.source[self.offset] != '>') return self.invalidTag(start);
+            if (self.offset >= self.source.len or self.source[self.offset] != '>')
+                return self.invalidTag(start);
             self.offset += 1;
             return .{
                 .span = .{ .start = start, .end = self.offset },
@@ -495,11 +634,14 @@ const Lexer = struct {
         var attributes: std.ArrayList(Attribute) = .empty;
         while (self.offset < self.source.len) {
             const whitespace_start = self.offset;
-            while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
+            while (self.offset < self.source.len and
+                isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1)
+            {}
             if (self.offset >= self.source.len) break;
             if (self.source[self.offset] == '/') {
                 self.offset += 1;
-                if (self.offset >= self.source.len or self.source[self.offset] != '>') return self.invalidTag(start);
+                if (self.offset >= self.source.len or self.source[self.offset] != '>')
+                    return self.invalidTag(start);
                 self.offset += 1;
                 return .{
                     .span = .{ .start = start, .end = self.offset },
@@ -526,18 +668,26 @@ const Lexer = struct {
             if (self.offset == whitespace_start) return self.invalidTag(start);
 
             const attribute_start = self.offset;
-            while (self.offset < self.source.len and isAttributeNameByte(self.source[self.offset])) : (self.offset += 1) {}
+            while (self.offset < self.source.len and
+                isAttributeNameByte(self.source[self.offset])) : (self.offset += 1)
+            {}
             if (self.offset == attribute_start) return self.invalidTag(start);
             const attribute_name = self.source[attribute_start..self.offset];
             const name_end = self.offset;
 
-            while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
+            while (self.offset < self.source.len and
+                isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1)
+            {}
             var value: ?AttributeValue = null;
             var attribute_end = name_end;
             if (self.offset < self.source.len and self.source[self.offset] == '=') {
                 self.offset += 1;
-                while (self.offset < self.source.len and isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1) {}
-                if (self.offset >= self.source.len or (self.source[self.offset] != '\'' and self.source[self.offset] != '"')) {
+                while (self.offset < self.source.len and
+                    isMarkupWhitespace(self.source[self.offset])) : (self.offset += 1)
+                {}
+                if (self.offset >= self.source.len or (self.source[self.offset] != '\'' and
+                    self.source[self.offset] != '"'))
+                {
                     return self.invalidTag(start);
                 }
                 const quote = self.source[self.offset];
@@ -546,9 +696,14 @@ const Lexer = struct {
                 var segments: std.ArrayList(ValueSegment) = .empty;
                 var text_start = value_start;
                 while (self.offset < self.source.len and self.source[self.offset] != quote) {
-                    if (self.format == .xml and self.source[self.offset] == '<') return self.invalidTag(start);
+                    if (self.format == .xml and self.source[self.offset] == '<')
+                        return self.invalidTag(start);
                     if (self.format == .xml and self.source[self.offset] == '&') {
-                        self.offset = xmlReferenceEnd(self.source, self.offset, self.xml_1_1) orelse return self.invalidTag(start);
+                        self.offset = xmlReferenceEnd(
+                            self.source,
+                            self.offset,
+                            self.xml_1_1,
+                        ) orelse return self.invalidTag(start);
                         continue;
                     }
                     if (startsWith(self.source, self.offset, "{{")) {
@@ -559,7 +714,11 @@ const Lexer = struct {
                         const expression_start = self.offset;
                         self.offset += 2;
                         const content_start = self.offset;
-                        while (self.offset + 1 < self.source.len and !startsWith(self.source, self.offset, "}}")) : (self.offset += 1) {}
+                        while (self.offset + 1 < self.source.len and !startsWith(
+                            self.source,
+                            self.offset,
+                            "}}",
+                        )) : (self.offset += 1) {}
                         if (self.offset + 1 >= self.source.len) {
                             self.failure = .{
                                 .kind = .invalid_expression,
@@ -572,7 +731,11 @@ const Lexer = struct {
                         self.offset += 2;
                         try segments.append(self.allocator, .{
                             .span = .{ .start = expression_start, .end = self.offset },
-                            .data = .{ .expression = trimSpan(self.source, content_start, content_end) },
+                            .data = .{ .expression = trimSpan(
+                                self.source,
+                                content_start,
+                                content_end,
+                            ) },
                         });
                         text_start = self.offset;
                     } else {
@@ -581,10 +744,12 @@ const Lexer = struct {
                 }
                 if (self.offset >= self.source.len) return self.invalidTag(start);
                 const value_end = self.offset;
-                if (text_start < value_end or segments.items.len == 0) try segments.append(self.allocator, .{
-                    .span = .{ .start = text_start, .end = value_end },
-                    .data = .{ .text = self.source[text_start..value_end] },
-                });
+                if (text_start < value_end or segments.items.len == 0) {
+                    try segments.append(self.allocator, .{
+                        .span = .{ .start = text_start, .end = value_end },
+                        .data = .{ .text = self.source[text_start..value_end] },
+                    });
+                }
                 self.offset += 1;
                 attribute_end = self.offset;
                 value = .{
@@ -607,7 +772,9 @@ const Lexer = struct {
     }
 
     fn invalidTag(self: *Lexer, start: usize) ?Token {
-        while (self.offset < self.source.len and self.source[self.offset] != '>') : (self.offset += 1) {}
+        while (self.offset < self.source.len and
+            self.source[self.offset] != '>') : (self.offset += 1)
+        {}
         if (self.offset < self.source.len) self.offset += 1;
         self.failure = .{
             .kind = .invalid_markup,
@@ -637,7 +804,14 @@ const Parser = struct {
     index: usize = 0,
     failure: ?zeft.CompileDiagnostic = null,
 
-    fn parseConditional(self: *Parser, opening: zeft.SourceSpan, condition: zeft.SourceSpan, parent_name: ?[]const u8, parent_span: ?zeft.SourceSpan, loop_depth: usize) std.mem.Allocator.Error!Node {
+    fn parseConditional(
+        self: *Parser,
+        opening: zeft.SourceSpan,
+        condition: zeft.SourceSpan,
+        parent_name: ?[]const u8,
+        parent_span: ?zeft.SourceSpan,
+        loop_depth: usize,
+    ) std.mem.Allocator.Error!Node {
         const body = try self.parseChildren(parent_name, parent_span, loop_depth);
         var else_nodes: []Node = &.{};
         var end_span = body.stop_span orelse opening;
@@ -645,7 +819,13 @@ const Parser = struct {
             if (body.stop) |stop| switch (stop) {
                 .endif => {},
                 .else_if => |next_condition| {
-                    const next = try self.parseConditional(end_span, next_condition, parent_name, parent_span, loop_depth);
+                    const next = try self.parseConditional(
+                        end_span,
+                        next_condition,
+                        parent_name,
+                        parent_span,
+                        loop_depth,
+                    );
                     else_nodes = try self.allocator.alloc(Node, 1);
                     else_nodes[0] = next;
                     end_span = next.span;
@@ -654,13 +834,26 @@ const Parser = struct {
                     const tail = try self.parseChildren(parent_name, parent_span, loop_depth);
                     else_nodes = tail.nodes;
                     if (!isEndIf(tail.stop) and self.failure == null)
-                        self.failure = .{ .kind = .invalid_construct, .span = tail.stop_span orelse opening };
+                        self.failure = .{
+                            .kind = .invalid_construct,
+                            .span = tail.stop_span orelse opening,
+                        };
                     end_span = tail.stop_span orelse opening;
                 },
                 else => self.failure = .{ .kind = .invalid_construct, .span = end_span },
             } else self.failure = .{ .kind = .invalid_construct, .span = opening };
         }
-        return .{ .span = .{ .start = opening.start, .end = end_span.end }, .data = .{ .conditional = .{ .condition = condition, .then_nodes = body.nodes, .else_nodes = else_nodes } } };
+        return .{
+            .span = .{
+                .start = opening.start,
+                .end = end_span.end,
+            },
+            .data = .{ .conditional = .{
+                .condition = condition,
+                .then_nodes = body.nodes,
+                .else_nodes = else_nodes,
+            } },
+        };
     }
 
     fn parseChildren(
@@ -674,7 +867,14 @@ const Parser = struct {
             const token = self.tokens[self.index];
             self.index += 1;
             switch (token.data) {
-                .text => |text| try nodes.append(self.allocator, .{ .span = token.span, .data = .{ .text = text } }),
+                .text => |text| try nodes.append(
+                    self.allocator,
+                    .{
+                        .span = token.span,
+                        .data = .{ .text = text },
+                    },
+                ),
+
                 .static_markup => |markup| try nodes.append(self.allocator, .{
                     .span = token.span,
                     .data = .{ .static_markup = markup },
@@ -684,14 +884,29 @@ const Parser = struct {
                     .data = .{ .expression = .{ .source_span = expression_span } },
                 }),
                 .directive => |directive| switch (directive) {
-                    .else_, .else_if, .endif, .endfor => return .{ .nodes = try nodes.toOwnedSlice(self.allocator), .close_span = null, .stop = directive, .stop_span = token.span },
+                    .else_, .else_if, .endif, .endfor => return .{
+                        .nodes = try nodes.toOwnedSlice(self.allocator),
+                        .close_span = null,
+                        .stop = directive,
+                        .stop_span = token.span,
+                    },
                     .if_ => |condition| {
-                        const conditional = try self.parseConditional(token.span, condition, parent_name, parent_span, loop_depth);
+                        const conditional = try self.parseConditional(
+                            token.span,
+                            condition,
+                            parent_name,
+                            parent_span,
+                            loop_depth,
+                        );
                         if (self.failure != null) break;
                         try nodes.append(self.allocator, conditional);
                     },
                     .for_ => |loop| {
-                        const body = try self.parseChildren(parent_name, parent_span, loop_depth + 1);
+                        const body = try self.parseChildren(
+                            parent_name,
+                            parent_span,
+                            loop_depth + 1,
+                        );
                         if (self.failure != null) break;
                         var end = body;
                         var else_nodes: []Node = &.{};
@@ -701,10 +916,28 @@ const Parser = struct {
                             if (self.failure != null) break;
                         }
                         if (!isEndFor(end.stop)) {
-                            self.failure = .{ .kind = .invalid_construct, .span = end.stop_span orelse token.span };
+                            self.failure = .{
+                                .kind = .invalid_construct,
+                                .span = end.stop_span orelse token.span,
+                            };
                             break;
                         }
-                        try nodes.append(self.allocator, .{ .span = .{ .start = token.span.start, .end = end.stop_span.?.end }, .data = .{ .loop = .{ .name = loop.name, .name_span = loop.name_span, .expression = loop.expression, .children = body.nodes, .else_nodes = else_nodes } } });
+                        try nodes.append(
+                            self.allocator,
+                            .{
+                                .span = .{
+                                    .start = token.span.start,
+                                    .end = end.stop_span.?.end,
+                                },
+                                .data = .{ .loop = .{
+                                    .name = loop.name,
+                                    .name_span = loop.name_span,
+                                    .expression = loop.expression,
+                                    .children = body.nodes,
+                                    .else_nodes = else_nodes,
+                                } },
+                            },
+                        );
                     },
                     .break_ => {
                         if (loop_depth == 0) {
@@ -718,9 +951,21 @@ const Parser = struct {
                             self.failure = .{ .kind = .invalid_construct, .span = token.span };
                             break;
                         }
-                        try nodes.append(self.allocator, .{ .span = token.span, .data = .continue_ });
+                        try nodes.append(
+                            self.allocator,
+                            .{
+                                .span = token.span,
+                                .data = .continue_,
+                            },
+                        );
                     },
-                    .include => |path| try nodes.append(self.allocator, .{ .span = token.span, .data = .{ .include = path } }),
+                    .include => |path| try nodes.append(
+                        self.allocator,
+                        .{
+                            .span = token.span,
+                            .data = .{ .include = path },
+                        },
+                    ),
                     .unknown => {
                         self.failure = .{ .kind = .syntax, .span = token.span };
                         break;
@@ -736,7 +981,10 @@ const Parser = struct {
                             self.failure = .{ .kind = .invalid_markup, .span = token.span };
                             break;
                         }
-                        return .{ .nodes = try nodes.toOwnedSlice(self.allocator), .close_span = token.span };
+                        return .{
+                            .nodes = try nodes.toOwnedSlice(self.allocator),
+                            .close_span = token.span,
+                        };
                     }
                     self.failure = .{ .kind = .invalid_markup, .span = token.span };
                     break;
@@ -821,7 +1069,8 @@ fn startsWithAsciiIgnoreCase(source: []const u8, offset: usize, needle: []const 
 fn isValidXmlEncoding(value: []const u8) bool {
     if (value.len == 0 or !std.ascii.isAlphabetic(value[0])) return false;
     for (value[1..]) |byte| {
-        if (!std.ascii.isAlphanumeric(byte) and byte != '.' and byte != '_' and byte != '-') return false;
+        if (!std.ascii.isAlphanumeric(byte) and byte != '.' and byte != '_' and byte != '-')
+            return false;
     }
     return true;
 }
@@ -830,7 +1079,8 @@ fn xmlReferenceEnd(source: []const u8, start: usize, xml_1_1: bool) ?usize {
     if (start >= source.len or source[start] != '&') return null;
     var end = start + 1;
     while (end < source.len and source[end] != ';') : (end += 1) {
-        if (source[end] == '&' or source[end] == '<' or isMarkupWhitespace(source[end])) return null;
+        if (source[end] == '&' or source[end] == '<' or isMarkupWhitespace(source[end]))
+            return null;
     }
     if (end == source.len or end == start + 1) return null;
     const body = source[start + 1 .. end];
@@ -891,7 +1141,8 @@ fn isNameStart(byte: u8) bool {
 }
 
 fn isNameContinue(byte: u8) bool {
-    return std.ascii.isAlphanumeric(byte) or byte == '_' or byte == '-' or byte == ':' or byte == '.';
+    return std.ascii.isAlphanumeric(byte) or byte == '_' or byte == '-' or byte == ':' or
+        byte == '.';
 }
 
 fn isExpressionWhitespace(byte: u8) bool {
@@ -954,5 +1205,21 @@ fn isEndFor(directive: ?Directive) bool {
 }
 
 fn startsDirective(source: []const u8, offset: usize) bool {
-    return startsWith(source, offset, "{%") or startsWith(source, offset, "{#") or startsWith(source, offset, "{:") or startsWith(source, offset, "{/");
+    return startsWith(
+        source,
+        offset,
+        "{%",
+    ) or startsWith(
+        source,
+        offset,
+        "{#",
+    ) or startsWith(
+        source,
+        offset,
+        "{:",
+    ) or startsWith(
+        source,
+        offset,
+        "{/",
+    );
 }

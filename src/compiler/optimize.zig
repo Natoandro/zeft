@@ -6,7 +6,10 @@ const ir = @import("zeft_ir");
 
 /// Merge adjacent static output instructions. This pass is valid even when it
 /// finds nothing to change, so callers always run it in the compile pipeline.
-pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Allocator.Error!ir.Program {
+pub fn optimize(
+    allocator: std.mem.Allocator,
+    program: ir.Program,
+) std.mem.Allocator.Error!ir.Program {
     const folded_expressions = try foldExpressions(allocator, program.expressions);
     var strings: std.ArrayList([]const u8) = .empty;
     var instructions: std.ArrayList(ir.Instruction) = .empty;
@@ -37,7 +40,13 @@ pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Alloc
         switch (instruction.data) {
             .write_static => |old_id| {
                 const bytes = program.strings[old_id];
-                if (targeted[old_index]) try flushStaticRun(allocator, &strings, &instructions, &static_run, &static_run_span);
+                if (targeted[old_index]) try flushStaticRun(
+                    allocator,
+                    &strings,
+                    &instructions,
+                    &static_run,
+                    &static_run_span,
+                );
                 old_to_new[old_index] = @intCast(instructions.items.len);
                 if (bytes.len == 0) {
                     continue;
@@ -48,13 +57,25 @@ pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Alloc
                 try static_run.appendSlice(allocator, bytes);
             },
             else => {
-                try flushStaticRun(allocator, &strings, &instructions, &static_run, &static_run_span);
+                try flushStaticRun(
+                    allocator,
+                    &strings,
+                    &instructions,
+                    &static_run,
+                    &static_run_span,
+                );
                 if (instruction.data == .include) {
                     const include = instruction.data.include;
                     std.debug.assert(include.identity < program.strings.len);
                     const mapped = old_string_to_new[include.identity] orelse blk: {
                         const id = std.math.cast(ir.StringId, strings.items.len) orelse unreachable;
-                        try strings.append(allocator, try allocator.dupe(u8, program.strings[include.identity]));
+                        try strings.append(
+                            allocator,
+                            try allocator.dupe(
+                                u8,
+                                program.strings[include.identity],
+                            ),
+                        );
                         old_string_to_new[include.identity] = id;
                         break :blk id;
                     };
@@ -96,7 +117,11 @@ pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Alloc
     for (instructions.items) |*instruction| switch (instruction.data) {
         .jump_if_false => |*branch| branch.target = threadJump(instructions.items, branch.target),
         .jump => |*target| target.* = threadJump(instructions.items, target.*),
-        .loop_begin => |*begin| begin.exit_target = threadJump(instructions.items, begin.exit_target),
+        .loop_begin => |*begin| begin.exit_target = threadJump(
+            instructions.items,
+            begin.exit_target,
+        ),
+
         .loop_next => |*next| {
             next.body_target = threadJump(instructions.items, next.body_target);
             next.exit_target = threadJump(instructions.items, next.exit_target);
@@ -125,7 +150,9 @@ pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Alloc
 fn threadJump(instructions: []const ir.Instruction, initial: u32) u32 {
     var target = initial;
     var steps: usize = 0;
-    while (target < instructions.len and instructions[target].data == .jump and steps < instructions.len) : (steps += 1) {
+    while (target < instructions.len and instructions[target].data == .jump and steps <
+        instructions.len) : (steps += 1)
+    {
         const next = instructions[target].data.jump;
         if (next == target) break;
         target = next;
@@ -179,7 +206,13 @@ fn simplifyAndPrune(
             .jump => |target| try queue.append(allocator, target),
             .jump_if_false => |branch| {
                 if (constantBoolean(expressions, branch.expression_id)) |value| {
-                    if (value) try queue.append(allocator, pc + 1) else try queue.append(allocator, branch.target);
+                    if (value) try queue.append(
+                        allocator,
+                        pc + 1,
+                    ) else try queue.append(
+                        allocator,
+                        branch.target,
+                    );
                 } else {
                     try queue.append(allocator, branch.target);
                     try queue.append(allocator, pc + 1);
@@ -225,7 +258,8 @@ fn simplifyAndPrune(
 fn constantBoolean(expressions: []const ir.ExpressionProgram, id: ir.ExpressionId) ?bool {
     if (id >= expressions.len) return null;
     const instructions = expressions[id].instructions;
-    if (instructions.len != 2 or instructions[0].data != .push_literal or instructions[1].data != .return_value) return null;
+    if (instructions.len != 2 or instructions[0].data != .push_literal or
+        instructions[1].data != .return_value) return null;
     return switch (instructions[0].data.push_literal) {
         .boolean => |value| value,
         else => null,
@@ -235,7 +269,10 @@ fn constantBoolean(expressions: []const ir.ExpressionProgram, id: ir.ExpressionI
 /// Fold literal unary and binary operations. The replacement keeps the full
 /// source span of the folded expression so later runtime diagnostics continue
 /// to refer to original template bytes.
-fn foldExpressions(allocator: std.mem.Allocator, programs: []ir.ExpressionProgram) std.mem.Allocator.Error![]ir.ExpressionProgram {
+fn foldExpressions(
+    allocator: std.mem.Allocator,
+    programs: []ir.ExpressionProgram,
+) std.mem.Allocator.Error![]ir.ExpressionProgram {
     const result = try allocator.alloc(ir.ExpressionProgram, programs.len);
     for (programs, 0..) |program, expression_index| {
         var output: std.ArrayList(ir.ExpressionInstruction) = .empty;
@@ -253,11 +290,22 @@ fn foldExpressions(allocator: std.mem.Allocator, programs: []ir.ExpressionProgra
             // Folding must not combine values from different jump paths.
             if (targets[pc]) block_start = output.items.len;
             mapping[pc] = @intCast(output.items.len);
-            if (instruction.data == .unary and output.items.len > block_start and output.items[output.items.len - 1].data == .push_literal) {
+            if (instruction.data == .unary and output.items.len > block_start and
+                output.items[output.items.len - 1].data == .push_literal)
+            {
                 const previous = output.items[output.items.len - 1];
                 if (foldUnary(instruction.data.unary, previous.data.push_literal)) |literal| {
                     output.items[output.items.len - 1] = .{
-                        .span = .{ .start = @min(previous.span.start, instruction.span.start), .end = @max(previous.span.end, instruction.span.end) },
+                        .span = .{
+                            .start = @min(
+                                previous.span.start,
+                                instruction.span.start,
+                            ),
+                            .end = @max(
+                                previous.span.end,
+                                instruction.span.end,
+                            ),
+                        },
                         .data = .{ .push_literal = literal },
                     };
                     continue;
@@ -269,10 +317,23 @@ fn foldExpressions(allocator: std.mem.Allocator, programs: []ir.ExpressionProgra
             {
                 const right = output.items[output.items.len - 1];
                 const left = output.items[output.items.len - 2];
-                if (foldBinary(instruction.data.binary, left.data.push_literal, right.data.push_literal)) |literal| {
+                if (foldBinary(
+                    instruction.data.binary,
+                    left.data.push_literal,
+                    right.data.push_literal,
+                )) |literal| {
                     output.items.len -= 2;
                     try output.append(allocator, .{
-                        .span = .{ .start = @min(left.span.start, instruction.span.start), .end = @max(right.span.end, instruction.span.end) },
+                        .span = .{
+                            .start = @min(
+                                left.span.start,
+                                instruction.span.start,
+                            ),
+                            .end = @max(
+                                right.span.end,
+                                instruction.span.end,
+                            ),
+                        },
                         .data = .{ .push_literal = literal },
                     });
                     continue;
@@ -378,7 +439,16 @@ test "merges adjacent static writes and preserves surrounding instructions" {
         .{ .span = .{ .start = 0, .end = 3 }, .data = .{ .write_static = 0 } },
         .{ .span = .{ .start = 3, .end = 8 }, .data = .{ .write_static = 1 } },
         .{ .span = .{ .start = 8, .end = 9 }, .data = .{ .write_static = 2 } },
-        .{ .span = .{ .start = 9, .end = 10 }, .data = .{ .write_expression = .{ .expression_id = 0, .escape_context = .text } } },
+        .{
+            .span = .{
+                .start = 9,
+                .end = 10,
+            },
+            .data = .{ .write_expression = .{
+                .expression_id = 0,
+                .escape_context = .text,
+            } },
+        },
         .{ .span = .{ .start = 10, .end = 14 }, .data = .{ .write_static = 3 } },
         .{ .span = .{ .start = 14, .end = 14 }, .data = .end },
     };
@@ -399,14 +469,35 @@ test "merges adjacent static writes and preserves surrounding instructions" {
     try std.testing.expectEqual(@as(usize, 2), optimized.strings.len);
     try std.testing.expectEqualStrings("<p>hello!", optimized.strings[0]);
     try std.testing.expectEqualStrings("</p>", optimized.strings[1]);
-    try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 0, .end = 9 }), optimized.instructions[0].span);
-    try std.testing.expectEqual(ir.Instruction.Data.write_expression, std.meta.activeTag(optimized.instructions[1].data));
+    try std.testing.expectEqual(
+        @as(
+            zeft.SourceSpan,
+            .{
+                .start = 0,
+                .end = 9,
+            },
+        ),
+        optimized.instructions[0].span,
+    );
+    try std.testing.expectEqual(
+        ir.Instruction.Data.write_expression,
+        std.meta.activeTag(optimized.instructions[1].data),
+    );
 }
 
 test "optimizer succeeds when no adjacent static writes exist" {
     const instructions = [_]ir.Instruction{
         .{ .span = .{ .start = 0, .end = 1 }, .data = .{ .write_static = 0 } },
-        .{ .span = .{ .start = 1, .end = 2 }, .data = .{ .write_expression = .{ .expression_id = 0, .escape_context = .text } } },
+        .{
+            .span = .{
+                .start = 1,
+                .end = 2,
+            },
+            .data = .{ .write_expression = .{
+                .expression_id = 0,
+                .escape_context = .text,
+            } },
+        },
         .{ .span = .{ .start = 2, .end = 2 }, .data = .end },
     };
     const program: ir.Program = .{
@@ -428,14 +519,28 @@ test "optimizer succeeds when no adjacent static writes exist" {
 test "optimizer preserves branch destinations when writes merge nearby" {
     const strings = [_][]const u8{ "then", "else", ":" };
     const instructions = [_]ir.Instruction{
-        .{ .span = .{ .start = 0, .end = 1 }, .data = .{ .jump_if_false = .{ .expression_id = 0, .target = 3 } } },
+        .{
+            .span = .{
+                .start = 0,
+                .end = 1,
+            },
+            .data = .{ .jump_if_false = .{
+                .expression_id = 0,
+                .target = 3,
+            } },
+        },
         .{ .span = .{ .start = 1, .end = 2 }, .data = .{ .write_static = 0 } },
         .{ .span = .{ .start = 2, .end = 3 }, .data = .{ .jump = 5 } },
         .{ .span = .{ .start = 3, .end = 4 }, .data = .{ .write_static = 1 } },
         .{ .span = .{ .start = 4, .end = 5 }, .data = .{ .write_static = 2 } },
         .{ .span = .{ .start = 5, .end = 5 }, .data = .end },
     };
-    const program: ir.Program = .{ .strings = @constCast(&strings), .symbols = &.{}, .expressions = &.{}, .instructions = @constCast(&instructions) };
+    const program: ir.Program = .{
+        .strings = @constCast(&strings),
+        .symbols = &.{},
+        .expressions = &.{},
+        .instructions = @constCast(&instructions),
+    };
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const optimized = try optimize(arena.allocator(), program);
@@ -460,10 +565,22 @@ test "folds constant expression operations and retains the original source span"
         std.testing.allocator.free(optimized);
     }
     try std.testing.expectEqual(@as(usize, 2), optimized[0].instructions.len);
-    try std.testing.expectEqual(ir.ExpressionInstruction.Data.push_literal, std.meta.activeTag(optimized[0].instructions[0].data));
+    try std.testing.expectEqual(
+        ir.ExpressionInstruction.Data.push_literal,
+        std.meta.activeTag(optimized[0].instructions[0].data),
+    );
     try std.testing.expectEqual(@as(f64, 7), optimized[0].instructions[0].data.push_literal.number);
-    try std.testing.expectEqual(zeft.SourceSpan{ .start = 2, .end = 9 }, optimized[0].instructions[0].span);
-    try std.testing.expectEqual(ir.ExpressionInstruction.Data.return_value, std.meta.activeTag(optimized[0].instructions[1].data));
+    try std.testing.expectEqual(
+        zeft.SourceSpan{
+            .start = 2,
+            .end = 9,
+        },
+        optimized[0].instructions[0].span,
+    );
+    try std.testing.expectEqual(
+        ir.ExpressionInstruction.Data.return_value,
+        std.meta.activeTag(optimized[0].instructions[1].data),
+    );
 }
 
 test "does not fold division or modulo by zero" {
@@ -482,7 +599,12 @@ test "threads unconditional jump destinations and removes empty static writes" {
         .{ .span = .{ .start = 1, .end = 2 }, .data = .{ .write_static = 1 } },
         .{ .span = .{ .start = 2, .end = 2 }, .data = .end },
     };
-    const program: ir.Program = .{ .strings = @constCast(&strings), .symbols = &.{}, .expressions = &.{}, .instructions = @constCast(&instructions) };
+    const program: ir.Program = .{
+        .strings = @constCast(&strings),
+        .symbols = &.{},
+        .expressions = &.{},
+        .instructions = @constCast(&instructions),
+    };
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const optimized = try optimize(arena.allocator(), program);
@@ -496,10 +618,21 @@ test "constant conditions prune the unreachable branch and preserve selected spa
         .{ .span = .{ .start = 5, .end = 10 }, .data = .{ .push_literal = .{ .boolean = false } } },
         .{ .span = .{ .start = 5, .end = 10 }, .data = .return_value },
     };
-    const expressions = [_]ir.ExpressionProgram{.{ .instructions = @constCast(&expression_instructions) }};
+    const expressions = [_]ir.ExpressionProgram{
+        .{ .instructions = @constCast(&expression_instructions) },
+    };
     const strings = [_][]const u8{ "discard", "keep" };
     const instructions = [_]ir.Instruction{
-        .{ .span = .{ .start = 0, .end = 11 }, .data = .{ .jump_if_false = .{ .expression_id = 0, .target = 3 } } },
+        .{
+            .span = .{
+                .start = 0,
+                .end = 11,
+            },
+            .data = .{ .jump_if_false = .{
+                .expression_id = 0,
+                .target = 3,
+            } },
+        },
         .{ .span = .{ .start = 11, .end = 18 }, .data = .{ .write_static = 0 } },
         .{ .span = .{ .start = 18, .end = 18 }, .data = .{ .jump = 4 } },
         .{ .span = .{ .start = 25, .end = 29 }, .data = .{ .write_static = 1 } },
@@ -515,9 +648,18 @@ test "constant conditions prune the unreachable branch and preserve selected spa
     defer arena.deinit();
     const optimized = try optimize(arena.allocator(), program);
     try std.testing.expectEqual(@as(usize, 3), optimized.instructions.len);
-    try std.testing.expectEqual(ir.Instruction.Data.jump, std.meta.activeTag(optimized.instructions[0].data));
+    try std.testing.expectEqual(
+        ir.Instruction.Data.jump,
+        std.meta.activeTag(optimized.instructions[0].data),
+    );
     try std.testing.expectEqual(@as(u32, 1), optimized.instructions[0].data.jump);
     const selected_id = optimized.instructions[1].data.write_static;
     try std.testing.expectEqualStrings("keep", optimized.strings[selected_id]);
-    try std.testing.expectEqual(zeft.SourceSpan{ .start = 25, .end = 29 }, optimized.instructions[1].span);
+    try std.testing.expectEqual(
+        zeft.SourceSpan{
+            .start = 25,
+            .end = 29,
+        },
+        optimized.instructions[1].span,
+    );
 }

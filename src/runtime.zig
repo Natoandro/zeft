@@ -37,20 +37,35 @@ pub const RenderOptions = struct {
     filters: []const Registration = &.{},
     functions: []const Registration = &.{},
     include_context: ?*anyopaque = null,
-    include_resolver: ?*const fn (*anyopaque, []const u8, *std.Io.Writer, []const ContextEntry, core.OutputFormat, RenderOptions, core.SourceSpan) anyerror!RenderResult = null,
+    include_resolver: ?*const fn (
+        *anyopaque,
+        []const u8,
+        *std.Io.Writer,
+        []const ContextEntry,
+        core.OutputFormat,
+        RenderOptions,
+        core.SourceSpan,
+    ) anyerror!RenderResult = null,
 };
 pub const RenderResult = union(enum) {
     success,
     failure: core.RenderDiagnostic,
 };
 const LocalValue = struct { slot: u32, value: Value };
-const LoopFrame = struct { sequence: Sequence, index: usize, local_base: usize, span: core.SourceSpan };
+const LoopFrame = struct {
+    sequence: Sequence,
+    index: usize,
+    local_base: usize,
+    span: core.SourceSpan,
+};
 
 pub fn isString(comptime T: type) bool {
     const type_info = @typeInfo(T);
-    return (type_info == .pointer and type_info.pointer.size == .slice and type_info.pointer.child == u8) or
+    return (type_info == .pointer and type_info.pointer.size == .slice and
+        type_info.pointer.child == u8) or
         (type_info == .array and type_info.array.child == u8) or
-        (type_info == .pointer and type_info.pointer.size == .one and @typeInfo(type_info.pointer.child) == .array and
+        (type_info == .pointer and type_info.pointer.size == .one and
+            @typeInfo(type_info.pointer.child) == .array and
             @typeInfo(type_info.pointer.child).array.child == u8);
 }
 
@@ -58,7 +73,8 @@ pub fn stringValue(comptime T: type, pointer: *const T) []const u8 {
     if (comptime isString(T)) {
         const type_info = @typeInfo(T);
         if (type_info == .array) return pointer[0..];
-        if (type_info == .pointer and type_info.pointer.size == .one and @typeInfo(type_info.pointer.child) == .array) return pointer.*[0..];
+        if (type_info == .pointer and type_info.pointer.size == .one and
+            @typeInfo(type_info.pointer.child) == .array) return pointer.*[0..];
         return pointer.*;
     }
     unreachable;
@@ -69,7 +85,9 @@ pub fn stringValue(comptime T: type, pointer: *const T) []const u8 {
 /// byte strings in the initial access-only expression subset.
 pub fn adapt(comptime T: type, pointer: *const T) Value {
     const type_info = @typeInfo(T);
-    if (type_info == .pointer and type_info.pointer.size == .slice and type_info.pointer.child == u8) {
+    if (type_info == .pointer and type_info.pointer.size == .slice and
+        type_info.pointer.child == u8)
+    {
         return .{ .string = pointer.* };
     }
     if (type_info == .array and type_info.array.child == u8) {
@@ -101,7 +119,17 @@ fn objectProperty(comptime T: type) *const fn (*const anyopaque, []const u8) ?Va
         fn get(pointer: *const anyopaque, name: []const u8) ?Value {
             const value: *const T = @ptrCast(@alignCast(pointer));
             inline for (@typeInfo(T).@"struct".fields) |field| {
-                if (std.mem.eql(u8, name, field.name)) return adapt(field.type, &@field(value.*, field.name));
+                if (std.mem.eql(
+                    u8,
+                    name,
+                    field.name,
+                )) return adapt(
+                    field.type,
+                    &@field(
+                        value.*,
+                        field.name,
+                    ),
+                );
             }
             return null;
         }
@@ -155,20 +183,47 @@ pub fn renderWithOptions(
         switch (instruction.data) {
             .write_static => |id| try writer.writeAll(program.strings[id]),
             .write_expression => |write| {
-                const value = switch (evaluateExpression(program, write.expression_id, context, options, scratch.allocator(), locals[0..local_count])) {
+                const value = switch (evaluateExpression(
+                    program,
+                    write.expression_id,
+                    context,
+                    options,
+                    scratch.allocator(),
+                    locals[0..local_count],
+                )) {
                     .success => |result| result,
                     .failure => |diagnostic| return .{ .failure = diagnostic },
                 };
                 switch (value) {
-                    .string => |string| try writeEscaped(writer, string, write.escape_context, format),
+                    .string => |string| try writeEscaped(
+                        writer,
+                        string,
+                        write.escape_context,
+                        format,
+                    ),
                     .null => {},
-                    .boolean => |boolean| try writeEscaped(writer, if (boolean) "true" else "false", write.escape_context, format),
+                    .boolean => |boolean| try writeEscaped(
+                        writer,
+                        if (boolean) "true" else "false",
+                        write.escape_context,
+                        format,
+                    ),
                     .number => |number| try writer.print("{d}", .{number}),
-                    else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                    else => return .{ .failure = .{
+                        .kind = .invalid_operand,
+                        .span = instruction.span,
+                    } },
                 }
             },
             .jump_if_false => |branch| {
-                const value = switch (evaluateExpression(program, branch.expression_id, context, options, scratch.allocator(), locals[0..local_count])) {
+                const value = switch (evaluateExpression(
+                    program,
+                    branch.expression_id,
+                    context,
+                    options,
+                    scratch.allocator(),
+                    locals[0..local_count],
+                )) {
                     .success => |result| result,
                     .failure => |diagnostic| return .{ .failure = diagnostic },
                 };
@@ -176,32 +231,62 @@ pub fn renderWithOptions(
                     .boolean => |condition| {
                         if (!condition) pc = branch.target - 1;
                     },
-                    else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                    else => return .{ .failure = .{
+                        .kind = .invalid_operand,
+                        .span = instruction.span,
+                    } },
                 }
             },
             .jump => |target| pc = target - 1,
             .loop_begin => |begin| {
-                const iterable = switch (evaluateExpression(program, begin.expression_id, context, options, scratch.allocator(), locals[0..local_count])) {
+                const iterable = switch (evaluateExpression(
+                    program,
+                    begin.expression_id,
+                    context,
+                    options,
+                    scratch.allocator(),
+                    locals[0..local_count],
+                )) {
                     .success => |result| result,
                     .failure => |diagnostic| return .{ .failure = diagnostic },
                 };
                 const sequence = switch (iterable) {
                     .sequence => |value| value,
-                    else => return .{ .failure = .{ .kind = .non_iterable, .span = instruction.span } },
+                    else => return .{ .failure = .{
+                        .kind = .non_iterable,
+                        .span = instruction.span,
+                    } },
                 };
                 if (sequence.len == 0) {
                     pc = begin.exit_target - 1;
                     continue;
                 }
-                if (loop_count >= loops.len or local_count >= locals.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
-                const item = sequence.get_index(sequence.pointer, 0) orelse return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
-                loops[loop_count] = .{ .sequence = sequence, .index = 0, .local_base = local_count, .span = instruction.span };
+                if (loop_count >= loops.len or local_count >= locals.len) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
+                const item = sequence.get_index(
+                    sequence.pointer,
+                    0,
+                ) orelse return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
+                loops[loop_count] = .{
+                    .sequence = sequence,
+                    .index = 0,
+                    .local_base = local_count,
+                    .span = instruction.span,
+                };
                 loop_count += 1;
                 locals[local_count] = .{ .slot = begin.slot, .value = item };
                 local_count += 1;
             },
             .loop_next => |next| {
-                if (loop_count == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (loop_count == 0) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const frame = &loops[loop_count - 1];
                 frame.index += 1;
                 if (frame.index >= frame.sequence.len) {
@@ -209,13 +294,22 @@ pub fn renderWithOptions(
                     loop_count -= 1;
                     pc = next.exit_target - 1;
                 } else {
-                    const item = frame.sequence.get_index(frame.sequence.pointer, frame.index) orelse return .{ .failure = .{ .kind = .invalid_operand, .span = frame.span } };
+                    const item = frame.sequence.get_index(
+                        frame.sequence.pointer,
+                        frame.index,
+                    ) orelse return .{ .failure = .{
+                        .kind = .invalid_operand,
+                        .span = frame.span,
+                    } };
                     locals[frame.local_base].value = item;
                     pc = next.body_target - 1;
                 }
             },
             .loop_break => |target| {
-                if (loop_count == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (loop_count == 0) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 local_count = loops[loop_count - 1].local_base;
                 loop_count -= 1;
                 pc = target - 1;
@@ -233,7 +327,15 @@ pub fn renderWithOptions(
                     .span = instruction.span,
                     .include_identity = identity,
                 } };
-                switch (try resolver(resolver_context, identity, writer, context, format, options, instruction.span)) {
+                switch (try resolver(
+                    resolver_context,
+                    identity,
+                    writer,
+                    context,
+                    format,
+                    options,
+                    instruction.span,
+                )) {
                     .success => {},
                     .failure => |diagnostic| return .{ .failure = diagnostic },
                 }
@@ -257,7 +359,8 @@ fn evaluateExpression(
     allocator: std.mem.Allocator,
     locals: []const LocalValue,
 ) ExpressionResult {
-    if (expression_id >= program.expressions.len) return .{ .failure = .{ .kind = .invalid_operand } };
+    if (expression_id >= program.expressions.len)
+        return .{ .failure = .{ .kind = .invalid_operand } };
     const expression = program.expressions[expression_id];
     // Expression evaluation is render-local and stack based. Keep a generous
     // fixed cap so rendering does not allocate; malformed/deep programs fail
@@ -269,19 +372,28 @@ fn evaluateExpression(
         const instruction = expression.instructions[pc];
         switch (instruction.data) {
             .load_root_symbol => |symbol_id| {
-                if (symbol_id >= program.symbols.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (symbol_id >= program.symbols.len) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const name = program.symbols[symbol_id].name;
                 var found = false;
                 for (context) |entry| {
                     if (std.mem.eql(u8, name, entry.name)) {
-                        if (depth >= stack.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                        if (depth >= stack.len) return .{ .failure = .{
+                            .kind = .invalid_operand,
+                            .span = instruction.span,
+                        } };
                         stack[depth] = entry.value;
                         depth += 1;
                         found = true;
                         break;
                     }
                 }
-                if (!found) return .{ .failure = .{ .kind = .missing_variable, .span = instruction.span } };
+                if (!found) return .{ .failure = .{
+                    .kind = .missing_variable,
+                    .span = instruction.span,
+                } };
             },
             .load_local => |slot| {
                 var found: ?Value = null;
@@ -293,13 +405,22 @@ fn evaluateExpression(
                         break;
                     }
                 }
-                const value = found orelse return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
-                if (depth >= stack.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                const value = found orelse return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
+                if (depth >= stack.len) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 stack[depth] = value;
                 depth += 1;
             },
             .push_literal => |literal| {
-                if (depth >= stack.len) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (depth >= stack.len) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 stack[depth] = switch (literal) {
                     .null => .null,
                     .boolean => |v| .{ .boolean = v },
@@ -309,78 +430,136 @@ fn evaluateExpression(
                 depth += 1;
             },
             .get_property => |name| {
-                if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (depth == 0) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const current = stack[depth - 1];
                 const next: ?Value = switch (current) {
                     .object => |object| object.get_property(object.pointer, name),
                     else => null,
                 };
-                stack[depth - 1] = next orelse return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
+                stack[depth - 1] = next orelse return .{ .failure = .{
+                    .kind = .invalid_property_access,
+                    .span = instruction.span,
+                } };
             },
             .get_index => |index| {
-                if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (depth == 0) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const current = stack[depth - 1];
                 const next: ?Value = switch (current) {
-                    .sequence => |sequence| if (index < sequence.len) sequence.get_index(sequence.pointer, index) else null,
+                    .sequence => |sequence| if (index < sequence.len) sequence.get_index(
+                        sequence.pointer,
+                        index,
+                    ) else null,
                     else => null,
                 };
-                stack[depth - 1] = next orelse return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
+                stack[depth - 1] = next orelse return .{ .failure = .{
+                    .kind = .invalid_property_access,
+                    .span = instruction.span,
+                } };
             },
             .get_index_dynamic => {
-                if (depth < 2) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (depth < 2) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const selector = stack[depth - 1];
                 const current = stack[depth - 2];
                 const index: usize = switch (selector) {
                     .number => |value| blk: {
                         // The rounded floating limit is exclusive, avoiding an
                         // out-of-range float-to-integer conversion at usize max.
-                        if (!std.math.isFinite(value) or value < 0 or @trunc(value) != value or value >= @as(f64, @floatFromInt(std.math.maxInt(usize))))
-                            return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
+                        if (!std.math.isFinite(value) or value < 0 or @trunc(value) != value or
+                            value >= @as(
+                                f64,
+                                @floatFromInt(std.math.maxInt(usize)),
+                            ))
+                            return .{ .failure = .{
+                                .kind = .invalid_property_access,
+                                .span = instruction.span,
+                            } };
                         break :blk @intFromFloat(value);
                     },
-                    else => return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } },
+                    else => return .{ .failure = .{
+                        .kind = .invalid_property_access,
+                        .span = instruction.span,
+                    } },
                 };
                 const next: ?Value = switch (current) {
-                    .sequence => |sequence| if (index < sequence.len) sequence.get_index(sequence.pointer, index) else null,
+                    .sequence => |sequence| if (index < sequence.len) sequence.get_index(
+                        sequence.pointer,
+                        index,
+                    ) else null,
                     else => null,
                 };
                 depth -= 1;
-                stack[depth - 1] = next orelse return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
+                stack[depth - 1] = next orelse return .{ .failure = .{
+                    .kind = .invalid_property_access,
+                    .span = instruction.span,
+                } };
             },
             .unary => |op| {
-                if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (depth == 0) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 stack[depth - 1] = switch (op) {
                     .not => switch (stack[depth - 1]) {
                         .boolean => |v| .{ .boolean = !v },
-                        else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                        else => return .{ .failure = .{
+                            .kind = .invalid_operand,
+                            .span = instruction.span,
+                        } },
                     },
                     .negate => switch (stack[depth - 1]) {
                         .number => |v| .{ .number = -v },
-                        else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                        else => return .{ .failure = .{
+                            .kind = .invalid_operand,
+                            .span = instruction.span,
+                        } },
                     },
-                    else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                    else => return .{ .failure = .{
+                        .kind = .invalid_operand,
+                        .span = instruction.span,
+                    } },
                 };
             },
             .jump_if_false => |target| {
-                if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (depth == 0) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 switch (stack[depth - 1]) {
                     .boolean => |v| if (!v) {
                         pc = target - 1;
                     } else {
                         depth -= 1;
                     },
-                    else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                    else => return .{ .failure = .{
+                        .kind = .invalid_operand,
+                        .span = instruction.span,
+                    } },
                 }
             },
             .jump_if_true => |target| {
-                if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (depth == 0) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 switch (stack[depth - 1]) {
                     .boolean => |v| if (v) {
                         pc = target - 1;
                     } else {
                         depth -= 1;
                     },
-                    else => return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+                    else => return .{ .failure = .{
+                        .kind = .invalid_operand,
+                        .span = instruction.span,
+                    } },
                 }
             },
             .jump => |target| {
@@ -388,11 +567,24 @@ fn evaluateExpression(
             },
             .call_function => |call| {
                 const count: usize = call.argument_count;
-                if (count > depth) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (count > depth) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const args = stack[depth - count .. depth];
-                const function = findRegistration(options.functions, call.name) orelse findBuiltinFunction(call.name);
+                const function = findRegistration(
+                    options.functions,
+                    call.name,
+                ) orelse findBuiltinFunction(call.name);
                 const result = if (function) |registered|
-                    registered.callback(allocator, registered.user_data, args) catch return .{ .failure = .{ .kind = .function_failure, .span = instruction.span } }
+                    registered.callback(
+                        allocator,
+                        registered.user_data,
+                        args,
+                    ) catch return .{ .failure = .{
+                        .kind = .function_failure,
+                        .span = instruction.span,
+                    } }
                 else
                     return .{ .failure = .{ .kind = .function_failure, .span = instruction.span } };
                 depth -= count;
@@ -401,7 +593,10 @@ fn evaluateExpression(
             },
             .call_filter => |call| {
                 const count: usize = call.argument_count;
-                if (count > depth or count == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (count > depth or count == 0) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const args = stack[depth - count .. depth];
                 // Filter registrations keep precedence. In the absence of a
                 // filter, the same pipe syntax can invoke a function with the
@@ -411,7 +606,14 @@ fn evaluateExpression(
                     findRegistration(options.functions, call.name) orelse
                     findBuiltinFunction(call.name);
                 const result = if (callable) |registered|
-                    registered.callback(allocator, registered.user_data, args) catch return .{ .failure = .{ .kind = .filter_failure, .span = instruction.span } }
+                    registered.callback(
+                        allocator,
+                        registered.user_data,
+                        args,
+                    ) catch return .{ .failure = .{
+                        .kind = .filter_failure,
+                        .span = instruction.span,
+                    } }
                 else
                     return .{ .failure = .{ .kind = .filter_failure, .span = instruction.span } };
                 depth -= count;
@@ -419,20 +621,37 @@ fn evaluateExpression(
                 depth += 1;
             },
             .binary => |op| {
-                if (depth < 2) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                if (depth < 2) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const right = stack[depth - 1];
                 const left = stack[depth - 2];
                 depth -= 1;
-                stack[depth - 1] = applyBinary(op, left, right) orelse return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                stack[depth - 1] = applyBinary(
+                    op,
+                    left,
+                    right,
+                ) orelse return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
             },
-            .return_value => return if (depth == 1) .{ .success = stack[0] } else .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } },
+            .return_value => return if (depth == 1) .{ .success = stack[0] } else .{ .failure = .{
+                .kind = .invalid_operand,
+                .span = instruction.span,
+            } },
         }
     }
     return .{ .failure = .{ .kind = .invalid_operand } };
 }
 
 fn findRegistration(registrations: []const Registration, name: []const u8) ?Registration {
-    for (registrations) |registration| if (std.mem.eql(u8, name, registration.name)) return registration;
+    for (registrations) |registration| if (std.mem.eql(
+        u8,
+        name,
+        registration.name,
+    )) return registration;
     return null;
 }
 
@@ -467,11 +686,19 @@ fn builtinDefault(_: std.mem.Allocator, _: ?*const anyopaque, args: []const Valu
     };
 }
 
-fn builtinUpper(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []const Value) anyerror!Value {
+fn builtinUpper(
+    allocator: std.mem.Allocator,
+    _: ?*const anyopaque,
+    args: []const Value,
+) anyerror!Value {
     return mapCase(allocator, args, true);
 }
 
-fn builtinLower(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []const Value) anyerror!Value {
+fn builtinLower(
+    allocator: std.mem.Allocator,
+    _: ?*const anyopaque,
+    args: []const Value,
+) anyerror!Value {
     return mapCase(allocator, args, false);
 }
 
@@ -482,11 +709,17 @@ fn mapCase(allocator: std.mem.Allocator, args: []const Value, uppercase: bool) a
         else => return error.InvalidArguments,
     };
     const output = try allocator.dupe(u8, input);
-    for (output) |*byte| byte.* = if (uppercase) std.ascii.toUpper(byte.*) else std.ascii.toLower(byte.*);
+    for (output) |*byte| {
+        byte.* = if (uppercase) std.ascii.toUpper(byte.*) else std.ascii.toLower(byte.*);
+    }
     return .{ .string = output };
 }
 
-fn builtinTrim(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []const Value) anyerror!Value {
+fn builtinTrim(
+    allocator: std.mem.Allocator,
+    _: ?*const anyopaque,
+    args: []const Value,
+) anyerror!Value {
     if (args.len != 1) return error.InvalidArguments;
     const input = switch (args[0]) {
         .string => |value| value,
@@ -532,7 +765,12 @@ fn applyBinary(op: ir.Operator, left: Value, right: Value) ?Value {
     };
 }
 
-fn writeEscaped(writer: *std.Io.Writer, value: []const u8, context: ir.EscapeContext, format: core.OutputFormat) anyerror!void {
+fn writeEscaped(
+    writer: *std.Io.Writer,
+    value: []const u8,
+    context: ir.EscapeContext,
+    format: core.OutputFormat,
+) anyerror!void {
     var segment_start: usize = 0;
     for (value, 0..) |byte, index| {
         const replacement: ?[]const u8 = switch (context) {

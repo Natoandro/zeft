@@ -10,91 +10,1166 @@ fn fail(_: std.mem.Allocator, _: ?*const anyopaque, _: []const zeft.Value) anyer
 const registrations = [_]zeft.Registration{.{ .name = "fail", .callback = fail }};
 
 pub const compile_failure_cases = [_]fixtures.CompileFailure{
-    .{ .id = "DG-001", .path = "fixtures/compile-errors/empty.tmpl", .source = @embedFile("fixtures/compile-errors/empty.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 7, .end = 7 } } },
-    .{ .id = "DG-002", .path = "fixtures/compile-errors/string-escape.tmpl", .source = @embedFile("fixtures/compile-errors/string-escape.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 7, .end = 8 } } },
-    .{ .id = "DG-003", .path = "fixtures/compile-errors/string-newline.tmpl", .source = @embedFile("fixtures/compile-errors/string-newline.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 6, .end = 7 } } },
-    .{ .id = "DG-004", .path = "fixtures/compile-errors/string-unclosed.tmpl", .source = @embedFile("fixtures/compile-errors/string-unclosed.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 8, .end = 8 } } },
-    .{ .id = "DG-005", .path = "fixtures/compile-errors/number-fraction.tmpl", .source = @embedFile("fixtures/compile-errors/number-fraction.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 6, .end = 6 } } },
-    .{ .id = "DG-006", .path = "fixtures/compile-errors/number-exponent.tmpl", .source = @embedFile("fixtures/compile-errors/number-exponent.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 7, .end = 7 } } },
-    .{ .id = "DG-007", .path = "fixtures/compile-errors/number-hex.tmpl", .source = @embedFile("fixtures/compile-errors/number-hex.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 5, .end = 8 } } },
-    .{ .id = "DG-008", .path = "fixtures/compile-errors/number-leading-dot.tmpl", .source = @embedFile("fixtures/compile-errors/number-leading-dot.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 4, .end = 5 } } },
-    .{ .id = "DG-009", .path = "fixtures/compile-errors/selector-property.tmpl", .source = @embedFile("fixtures/compile-errors/selector-property.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 8, .end = 8 } } },
-    .{ .id = "DG-010", .path = "fixtures/compile-errors/selector-index.tmpl", .source = @embedFile("fixtures/compile-errors/selector-index.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 10, .end = 11 } } },
-    .{ .id = "DG-011", .path = "fixtures/compile-errors/selector-close.tmpl", .source = @embedFile("fixtures/compile-errors/selector-close.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 11, .end = 11 } } },
-    .{ .id = "DG-012", .path = "fixtures/compile-errors/selector-index-rhs.tmpl", .source = @embedFile("fixtures/compile-errors/selector-index-rhs.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 13, .end = 14 } } },
-    .{ .id = "DG-013", .path = "fixtures/compile-errors/operator-rhs.tmpl", .source = @embedFile("fixtures/compile-errors/operator-rhs.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 7, .end = 7 } } },
-    .{ .id = "DG-014", .path = "fixtures/compile-errors/operator-unknown.tmpl", .source = @embedFile("fixtures/compile-errors/operator-unknown.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 6, .end = 9 } } },
-    .{ .id = "DG-015", .path = "fixtures/compile-errors/operator-single-and.tmpl", .source = @embedFile("fixtures/compile-errors/operator-single-and.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 9, .end = 16 } } },
-    .{ .id = "DG-016", .path = "fixtures/compile-errors/group-close.tmpl", .source = @embedFile("fixtures/compile-errors/group-close.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 10, .end = 10 } } },
-    .{ .id = "DG-017", .path = "fixtures/compile-errors/call-comma.tmpl", .source = @embedFile("fixtures/compile-errors/call-comma.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 11, .end = 12 } } },
-    .{ .id = "DG-018", .path = "fixtures/compile-errors/call-missing-close.tmpl", .source = @embedFile("fixtures/compile-errors/call-missing-close.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 12, .end = 12 } } },
-    .{ .id = "DG-019", .path = "fixtures/compile-errors/filter-name.tmpl", .source = @embedFile("fixtures/compile-errors/filter-name.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 11, .end = 11 } } },
-    .{ .id = "DG-020", .path = "fixtures/compile-errors/filter-comma.tmpl", .source = @embedFile("fixtures/compile-errors/filter-comma.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 18, .end = 19 } } },
-    .{ .id = "DG-021", .path = "fixtures/compile-errors/unicode-expression.tmpl", .source = @embedFile("fixtures/compile-errors/unicode-expression.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 13, .end = 13 } } },
-    .{ .id = "DG-022", .path = "fixtures/compile-errors/interpolation-unclosed.tmpl", .source = @embedFile("fixtures/compile-errors/interpolation-unclosed.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 2, .end = 12 } } },
-    .{ .id = "DG-023", .path = "fixtures/compile-errors/directive-unclosed.tmpl", .source = @embedFile("fixtures/compile-errors/directive-unclosed.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .syntax, .span = .{ .start = 0, .end = 9 } } },
-    .{ .id = "DG-024", .path = "fixtures/compile-errors/html-eof.tmpl", .source = @embedFile("fixtures/compile-errors/html-eof.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 5 } } },
-    .{ .id = "DG-025", .path = "fixtures/compile-errors/html-mismatch.tmpl", .source = @embedFile("fixtures/compile-errors/html-mismatch.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 5, .end = 12 } } },
-    .{ .id = "DG-026", .path = "fixtures/compile-errors/html-attribute-quote.tmpl", .source = @embedFile("fixtures/compile-errors/html-attribute-quote.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 7 } } },
-    .{ .id = "DG-027", .path = "fixtures/compile-errors/xml-name.tmpl", .source = @embedFile("fixtures/compile-errors/xml-name.tmpl"), .compile_options = .{ .format = .xml }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 8 } } },
-    .{ .id = "DG-028", .path = "fixtures/compile-errors/xml-eof.tmpl", .source = @embedFile("fixtures/compile-errors/xml-eof.tmpl"), .compile_options = .{ .format = .xml }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 6 } } },
-    .{ .id = "DG-029", .path = "fixtures/compile-errors/xml-declaration-order.tmpl", .source = @embedFile("fixtures/compile-errors/xml-declaration-order.tmpl"), .compile_options = .{ .format = .xml }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 38 } } },
-    .{ .id = "DG-030", .path = "fixtures/compile-errors/xml-declaration-encoding.tmpl", .source = @embedFile("fixtures/compile-errors/xml-declaration-encoding.tmpl"), .compile_options = .{ .format = .xml }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 37 } } },
-    .{ .id = "DG-031", .path = "fixtures/compile-errors/xml-declaration-standalone.tmpl", .source = @embedFile("fixtures/compile-errors/xml-declaration-standalone.tmpl"), .compile_options = .{ .format = .xml }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 40 } } },
-    .{ .id = "DG-032", .path = "fixtures/compile-errors/xml-declaration-duplicate.tmpl", .source = @embedFile("fixtures/compile-errors/xml-declaration-duplicate.tmpl"), .compile_options = .{ .format = .xml }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 35 } } },
-    .{ .id = "DG-033", .path = "fixtures/compile-errors/unicode-entity.tmpl", .source = @embedFile("fixtures/compile-errors/unicode-entity.tmpl"), .compile_options = .{ .format = .xml }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 6, .end = 7 } } },
-    .{ .id = "DG-034", .path = "fixtures/compile-errors/xml-comment-eof.tmpl", .source = @embedFile("fixtures/compile-errors/xml-comment-eof.tmpl"), .compile_options = .{ .format = .xml }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 6 } } },
-    .{ .id = "DG-035", .path = "fixtures/compile-errors/xml-cdata-eof.tmpl", .source = @embedFile("fixtures/compile-errors/xml-cdata-eof.tmpl"), .compile_options = .{ .format = .xml }, .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 10 } } },
-    .{ .id = "DG-036", .path = "fixtures/compile-errors/directive-unknown.tmpl", .source = @embedFile("fixtures/compile-errors/directive-unknown.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .syntax, .span = .{ .start = 0, .end = 13 } } },
-    .{ .id = "DG-037", .path = "fixtures/compile-errors/directive-duplicate-else.tmpl", .source = @embedFile("fixtures/compile-errors/directive-duplicate-else.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_construct, .span = .{ .start = 19, .end = 26 } } },
-    .{ .id = "DG-038", .path = "fixtures/compile-errors/directive-mismatched-if.tmpl", .source = @embedFile("fixtures/compile-errors/directive-mismatched-if.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_construct, .span = .{ .start = 11, .end = 17 } } },
-    .{ .id = "DG-039", .path = "fixtures/compile-errors/directive-mismatched-for.tmpl", .source = @embedFile("fixtures/compile-errors/directive-mismatched-for.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_construct, .span = .{ .start = 18, .end = 23 } } },
-    .{ .id = "DG-040", .path = "fixtures/compile-errors/directive-if-eof.tmpl", .source = @embedFile("fixtures/compile-errors/directive-if-eof.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_construct, .span = .{ .start = 0, .end = 10 } } },
-    .{ .id = "DG-041", .path = "fixtures/compile-errors/directive-for-eof.tmpl", .source = @embedFile("fixtures/compile-errors/directive-for-eof.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_construct, .span = .{ .start = 0, .end = 17 } } },
-    .{ .id = "DG-042", .path = "fixtures/compile-errors/directive-break-outside.tmpl", .source = @embedFile("fixtures/compile-errors/directive-break-outside.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_construct, .span = .{ .start = 0, .end = 11 } } },
-    .{ .id = "DG-043", .path = "fixtures/compile-errors/directive-continue-outside.tmpl", .source = @embedFile("fixtures/compile-errors/directive-continue-outside.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_construct, .span = .{ .start = 0, .end = 14 } } },
-    .{ .id = "DG-044", .path = "fixtures/compile-errors/directive-else-outside.tmpl", .source = @embedFile("fixtures/compile-errors/directive-else-outside.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_construct, .span = .{ .start = 0, .end = 7 } } },
-    .{ .id = "DG-045", .path = "fixtures/compile-errors/directive-end-outside.tmpl", .source = @embedFile("fixtures/compile-errors/directive-end-outside.tmpl"), .compile_options = .{ .format = .html }, .diagnostic = .{ .kind = .invalid_construct, .span = .{ .start = 0, .end = 5 } } },
-    .{ .id = "DG-070", .path = "fixtures/compile-errors/attribute-empty-expression.tmpl", .source = @embedFile("fixtures/compile-errors/attribute-empty-expression.tmpl"), .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 13, .end = 13 } } },
-    .{ .id = "DG-071", .path = "fixtures/compile-errors/empty-no-whitespace.tmpl", .source = @embedFile("fixtures/compile-errors/empty-no-whitespace.tmpl"), .diagnostic = .{ .kind = .invalid_expression, .span = .{ .start = 2, .end = 2 } } },
+    .{
+        .id = "DG-001",
+        .path = "fixtures/compile-errors/empty.tmpl",
+        .source = @embedFile("fixtures/compile-errors/empty.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 7,
+                .end = 7,
+            },
+        },
+    },
+    .{
+        .id = "DG-002",
+        .path = "fixtures/compile-errors/string-escape.tmpl",
+        .source = @embedFile("fixtures/compile-errors/string-escape.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 7,
+                .end = 8,
+            },
+        },
+    },
+    .{
+        .id = "DG-003",
+        .path = "fixtures/compile-errors/string-newline.tmpl",
+        .source = @embedFile("fixtures/compile-errors/string-newline.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 6,
+                .end = 7,
+            },
+        },
+    },
+    .{
+        .id = "DG-004",
+        .path = "fixtures/compile-errors/string-unclosed.tmpl",
+        .source = @embedFile("fixtures/compile-errors/string-unclosed.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 8,
+                .end = 8,
+            },
+        },
+    },
+    .{
+        .id = "DG-005",
+        .path = "fixtures/compile-errors/number-fraction.tmpl",
+        .source = @embedFile("fixtures/compile-errors/number-fraction.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 6,
+                .end = 6,
+            },
+        },
+    },
+    .{
+        .id = "DG-006",
+        .path = "fixtures/compile-errors/number-exponent.tmpl",
+        .source = @embedFile("fixtures/compile-errors/number-exponent.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 7,
+                .end = 7,
+            },
+        },
+    },
+    .{
+        .id = "DG-007",
+        .path = "fixtures/compile-errors/number-hex.tmpl",
+        .source = @embedFile("fixtures/compile-errors/number-hex.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 5,
+                .end = 8,
+            },
+        },
+    },
+    .{
+        .id = "DG-008",
+        .path = "fixtures/compile-errors/number-leading-dot.tmpl",
+        .source = @embedFile("fixtures/compile-errors/number-leading-dot.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 4,
+                .end = 5,
+            },
+        },
+    },
+    .{
+        .id = "DG-009",
+        .path = "fixtures/compile-errors/selector-property.tmpl",
+        .source = @embedFile("fixtures/compile-errors/selector-property.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 8,
+                .end = 8,
+            },
+        },
+    },
+    .{
+        .id = "DG-010",
+        .path = "fixtures/compile-errors/selector-index.tmpl",
+        .source = @embedFile("fixtures/compile-errors/selector-index.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 10,
+                .end = 11,
+            },
+        },
+    },
+    .{
+        .id = "DG-011",
+        .path = "fixtures/compile-errors/selector-close.tmpl",
+        .source = @embedFile("fixtures/compile-errors/selector-close.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 11,
+                .end = 11,
+            },
+        },
+    },
+    .{
+        .id = "DG-012",
+        .path = "fixtures/compile-errors/selector-index-rhs.tmpl",
+        .source = @embedFile("fixtures/compile-errors/selector-index-rhs.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 13,
+                .end = 14,
+            },
+        },
+    },
+    .{
+        .id = "DG-013",
+        .path = "fixtures/compile-errors/operator-rhs.tmpl",
+        .source = @embedFile("fixtures/compile-errors/operator-rhs.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 7,
+                .end = 7,
+            },
+        },
+    },
+    .{
+        .id = "DG-014",
+        .path = "fixtures/compile-errors/operator-unknown.tmpl",
+        .source = @embedFile("fixtures/compile-errors/operator-unknown.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 6,
+                .end = 9,
+            },
+        },
+    },
+    .{
+        .id = "DG-015",
+        .path = "fixtures/compile-errors/operator-single-and.tmpl",
+        .source = @embedFile("fixtures/compile-errors/operator-single-and.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 9,
+                .end = 16,
+            },
+        },
+    },
+    .{
+        .id = "DG-016",
+        .path = "fixtures/compile-errors/group-close.tmpl",
+        .source = @embedFile("fixtures/compile-errors/group-close.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 10,
+                .end = 10,
+            },
+        },
+    },
+    .{
+        .id = "DG-017",
+        .path = "fixtures/compile-errors/call-comma.tmpl",
+        .source = @embedFile("fixtures/compile-errors/call-comma.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 11,
+                .end = 12,
+            },
+        },
+    },
+    .{
+        .id = "DG-018",
+        .path = "fixtures/compile-errors/call-missing-close.tmpl",
+        .source = @embedFile("fixtures/compile-errors/call-missing-close.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 12,
+                .end = 12,
+            },
+        },
+    },
+    .{
+        .id = "DG-019",
+        .path = "fixtures/compile-errors/filter-name.tmpl",
+        .source = @embedFile("fixtures/compile-errors/filter-name.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 11,
+                .end = 11,
+            },
+        },
+    },
+    .{
+        .id = "DG-020",
+        .path = "fixtures/compile-errors/filter-comma.tmpl",
+        .source = @embedFile("fixtures/compile-errors/filter-comma.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 18,
+                .end = 19,
+            },
+        },
+    },
+    .{
+        .id = "DG-021",
+        .path = "fixtures/compile-errors/unicode-expression.tmpl",
+        .source = @embedFile("fixtures/compile-errors/unicode-expression.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 13,
+                .end = 13,
+            },
+        },
+    },
+    .{
+        .id = "DG-022",
+        .path = "fixtures/compile-errors/interpolation-unclosed.tmpl",
+        .source = @embedFile("fixtures/compile-errors/interpolation-unclosed.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 2,
+                .end = 12,
+            },
+        },
+    },
+    .{
+        .id = "DG-023",
+        .path = "fixtures/compile-errors/directive-unclosed.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-unclosed.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .syntax,
+            .span = .{
+                .start = 0,
+                .end = 9,
+            },
+        },
+    },
+    .{
+        .id = "DG-024",
+        .path = "fixtures/compile-errors/html-eof.tmpl",
+        .source = @embedFile("fixtures/compile-errors/html-eof.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 0,
+                .end = 5,
+            },
+        },
+    },
+    .{
+        .id = "DG-025",
+        .path = "fixtures/compile-errors/html-mismatch.tmpl",
+        .source = @embedFile("fixtures/compile-errors/html-mismatch.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 5,
+                .end = 12,
+            },
+        },
+    },
+    .{
+        .id = "DG-026",
+        .path = "fixtures/compile-errors/html-attribute-quote.tmpl",
+        .source = @embedFile("fixtures/compile-errors/html-attribute-quote.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 0,
+                .end = 7,
+            },
+        },
+    },
+    .{
+        .id = "DG-027",
+        .path = "fixtures/compile-errors/xml-name.tmpl",
+        .source = @embedFile("fixtures/compile-errors/xml-name.tmpl"),
+        .compile_options = .{ .format = .xml },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 0,
+                .end = 8,
+            },
+        },
+    },
+    .{
+        .id = "DG-028",
+        .path = "fixtures/compile-errors/xml-eof.tmpl",
+        .source = @embedFile("fixtures/compile-errors/xml-eof.tmpl"),
+        .compile_options = .{ .format = .xml },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 0,
+                .end = 6,
+            },
+        },
+    },
+    .{
+        .id = "DG-029",
+        .path = "fixtures/compile-errors/xml-declaration-order.tmpl",
+        .source = @embedFile("fixtures/compile-errors/xml-declaration-order.tmpl"),
+        .compile_options = .{ .format = .xml },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 0,
+                .end = 38,
+            },
+        },
+    },
+    .{
+        .id = "DG-030",
+        .path = "fixtures/compile-errors/xml-declaration-encoding.tmpl",
+        .source = @embedFile("fixtures/compile-errors/xml-declaration-encoding.tmpl"),
+        .compile_options = .{ .format = .xml },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 0,
+                .end = 37,
+            },
+        },
+    },
+    .{
+        .id = "DG-031",
+        .path = "fixtures/compile-errors/xml-declaration-standalone.tmpl",
+        .source = @embedFile("fixtures/compile-errors/xml-declaration-standalone.tmpl"),
+        .compile_options = .{ .format = .xml },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 0,
+                .end = 40,
+            },
+        },
+    },
+    .{
+        .id = "DG-032",
+        .path = "fixtures/compile-errors/xml-declaration-duplicate.tmpl",
+        .source = @embedFile("fixtures/compile-errors/xml-declaration-duplicate.tmpl"),
+        .compile_options = .{ .format = .xml },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 0,
+                .end = 35,
+            },
+        },
+    },
+    .{
+        .id = "DG-033",
+        .path = "fixtures/compile-errors/unicode-entity.tmpl",
+        .source = @embedFile("fixtures/compile-errors/unicode-entity.tmpl"),
+        .compile_options = .{ .format = .xml },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 6,
+                .end = 7,
+            },
+        },
+    },
+    .{
+        .id = "DG-034",
+        .path = "fixtures/compile-errors/xml-comment-eof.tmpl",
+        .source = @embedFile("fixtures/compile-errors/xml-comment-eof.tmpl"),
+        .compile_options = .{ .format = .xml },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 0,
+                .end = 6,
+            },
+        },
+    },
+    .{
+        .id = "DG-035",
+        .path = "fixtures/compile-errors/xml-cdata-eof.tmpl",
+        .source = @embedFile("fixtures/compile-errors/xml-cdata-eof.tmpl"),
+        .compile_options = .{ .format = .xml },
+        .diagnostic = .{
+            .kind = .invalid_markup,
+            .span = .{
+                .start = 0,
+                .end = 10,
+            },
+        },
+    },
+    .{
+        .id = "DG-036",
+        .path = "fixtures/compile-errors/directive-unknown.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-unknown.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .syntax,
+            .span = .{
+                .start = 0,
+                .end = 13,
+            },
+        },
+    },
+    .{
+        .id = "DG-037",
+        .path = "fixtures/compile-errors/directive-duplicate-else.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-duplicate-else.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_construct,
+            .span = .{
+                .start = 19,
+                .end = 26,
+            },
+        },
+    },
+    .{
+        .id = "DG-038",
+        .path = "fixtures/compile-errors/directive-mismatched-if.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-mismatched-if.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_construct,
+            .span = .{
+                .start = 11,
+                .end = 17,
+            },
+        },
+    },
+    .{
+        .id = "DG-039",
+        .path = "fixtures/compile-errors/directive-mismatched-for.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-mismatched-for.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_construct,
+            .span = .{
+                .start = 18,
+                .end = 23,
+            },
+        },
+    },
+    .{
+        .id = "DG-040",
+        .path = "fixtures/compile-errors/directive-if-eof.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-if-eof.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_construct,
+            .span = .{
+                .start = 0,
+                .end = 10,
+            },
+        },
+    },
+    .{
+        .id = "DG-041",
+        .path = "fixtures/compile-errors/directive-for-eof.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-for-eof.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_construct,
+            .span = .{
+                .start = 0,
+                .end = 17,
+            },
+        },
+    },
+    .{
+        .id = "DG-042",
+        .path = "fixtures/compile-errors/directive-break-outside.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-break-outside.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_construct,
+            .span = .{
+                .start = 0,
+                .end = 11,
+            },
+        },
+    },
+    .{
+        .id = "DG-043",
+        .path = "fixtures/compile-errors/directive-continue-outside.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-continue-outside.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_construct,
+            .span = .{
+                .start = 0,
+                .end = 14,
+            },
+        },
+    },
+    .{
+        .id = "DG-044",
+        .path = "fixtures/compile-errors/directive-else-outside.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-else-outside.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_construct,
+            .span = .{
+                .start = 0,
+                .end = 7,
+            },
+        },
+    },
+    .{
+        .id = "DG-045",
+        .path = "fixtures/compile-errors/directive-end-outside.tmpl",
+        .source = @embedFile("fixtures/compile-errors/directive-end-outside.tmpl"),
+        .compile_options = .{ .format = .html },
+        .diagnostic = .{
+            .kind = .invalid_construct,
+            .span = .{
+                .start = 0,
+                .end = 5,
+            },
+        },
+    },
+    .{
+        .id = "DG-070",
+        .path = "fixtures/compile-errors/attribute-empty-expression.tmpl",
+        .source = @embedFile("fixtures/compile-errors/attribute-empty-expression.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 13,
+                .end = 13,
+            },
+        },
+    },
+    .{
+        .id = "DG-071",
+        .path = "fixtures/compile-errors/empty-no-whitespace.tmpl",
+        .source = @embedFile("fixtures/compile-errors/empty-no-whitespace.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_expression,
+            .span = .{
+                .start = 2,
+                .end = 2,
+            },
+        },
+    },
 };
 
 pub const render_failure_cases = [_]fixtures.RenderFailure{
-    .{ .id = "DG-046", .path = "fixtures/render-errors/missing.tmpl", .source = @embedFile("fixtures/render-errors/missing.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .missing_variable, .span = .{ .start = 3, .end = 9 } } },
-    .{ .id = "DG-047", .path = "fixtures/render-errors/case-name.tmpl", .source = @embedFile("fixtures/render-errors/case-name.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .missing_variable, .span = .{ .start = 3, .end = 8 } } },
-    .{ .id = "DG-048", .path = "fixtures/render-errors/property.tmpl", .source = @embedFile("fixtures/render-errors/property.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 6, .end = 13 } } },
-    .{ .id = "DG-049", .path = "fixtures/render-errors/scalar-property.tmpl", .source = @embedFile("fixtures/render-errors/scalar-property.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 13 } } },
-    .{ .id = "DG-050", .path = "fixtures/render-errors/index-range.tmpl", .source = @embedFile("fixtures/render-errors/index-range.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 11 } } },
-    .{ .id = "DG-051", .path = "fixtures/render-errors/index-type.tmpl", .source = @embedFile("fixtures/render-errors/index-type.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 13 } } },
-    .{ .id = "DG-052", .path = "fixtures/render-errors/index-scalar.tmpl", .source = @embedFile("fixtures/render-errors/index-scalar.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 11 } } },
-    .{ .id = "DG-053", .path = "fixtures/render-errors/subtract.tmpl", .source = @embedFile("fixtures/render-errors/subtract.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 7, .end = 8 } } },
-    .{ .id = "DG-054", .path = "fixtures/render-errors/not.tmpl", .source = @embedFile("fixtures/render-errors/not.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 3, .end = 4 } } },
-    .{ .id = "DG-055", .path = "fixtures/render-errors/negate.tmpl", .source = @embedFile("fixtures/render-errors/negate.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 3, .end = 4 } } },
-    .{ .id = "DG-056", .path = "fixtures/render-errors/logical.tmpl", .source = @embedFile("fixtures/render-errors/logical.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 3, .end = 8 } } },
-    .{ .id = "DG-057", .path = "fixtures/render-errors/function-unknown.tmpl", .source = @embedFile("fixtures/render-errors/function-unknown.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .function_failure, .span = .{ .start = 3, .end = 17 } } },
-    .{ .id = "DG-058", .path = "fixtures/render-errors/function-case.tmpl", .source = @embedFile("fixtures/render-errors/function-case.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .function_failure, .span = .{ .start = 3, .end = 16 } } },
-    .{ .id = "DG-059", .path = "fixtures/render-errors/function-arity.tmpl", .source = @embedFile("fixtures/render-errors/function-arity.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .function_failure, .span = .{ .start = 3, .end = 11 } } },
-    .{ .id = "DG-060", .path = "fixtures/render-errors/function-type.tmpl", .source = @embedFile("fixtures/render-errors/function-type.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .function_failure, .span = .{ .start = 3, .end = 12 } } },
-    .{ .id = "DG-061", .path = "fixtures/render-errors/function-callback.tmpl", .source = @embedFile("fixtures/render-errors/function-callback.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .function_failure, .span = .{ .start = 3, .end = 14 } } },
-    .{ .id = "DG-062", .path = "fixtures/render-errors/filter-unknown.tmpl", .source = @embedFile("fixtures/render-errors/filter-unknown.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .filter_failure, .span = .{ .start = 11, .end = 18 } } },
-    .{ .id = "DG-063", .path = "fixtures/render-errors/filter-case.tmpl", .source = @embedFile("fixtures/render-errors/filter-case.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .filter_failure, .span = .{ .start = 11, .end = 16 } } },
-    .{ .id = "DG-064", .path = "fixtures/render-errors/filter-arity.tmpl", .source = @embedFile("fixtures/render-errors/filter-arity.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .filter_failure, .span = .{ .start = 11, .end = 21 } } },
-    .{ .id = "DG-065", .path = "fixtures/render-errors/filter-type.tmpl", .source = @embedFile("fixtures/render-errors/filter-type.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .filter_failure, .span = .{ .start = 7, .end = 12 } } },
-    .{ .id = "DG-066", .path = "fixtures/render-errors/filter-callback.tmpl", .source = @embedFile("fixtures/render-errors/filter-callback.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .filter_failure, .span = .{ .start = 11, .end = 15 } } },
-    .{ .id = "DG-067", .path = "fixtures/render-errors/unicode-missing.tmpl", .source = @embedFile("fixtures/render-errors/unicode-missing.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .missing_variable, .span = .{ .start = 11, .end = 17 } } },
-    .{ .id = "DG-068", .path = "fixtures/render-errors/condition-type.tmpl", .source = @embedFile("fixtures/render-errors/condition-type.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 5, .end = 10 } } },
-    .{ .id = "DG-069", .path = "fixtures/render-errors/iterable-type.tmpl", .source = @embedFile("fixtures/render-errors/iterable-type.tmpl"), .render_options = .{ .allocator = std.testing.allocator, .functions = &registrations, .filters = &registrations }, .diagnostic = .{ .kind = .non_iterable, .span = .{ .start = 11, .end = 16 } } },
-    .{ .id = "DG-72", .path = "fixtures/render-errors/index-negative.tmpl", .source = @embedFile("fixtures/render-errors/index-negative.tmpl"), .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 12 } } },
-    .{ .id = "DG-73", .path = "fixtures/render-errors/index-fractional.tmpl", .source = @embedFile("fixtures/render-errors/index-fractional.tmpl"), .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 13 } } },
-    .{ .id = "DG-74", .path = "fixtures/render-errors/index-huge.tmpl", .source = @embedFile("fixtures/render-errors/index-huge.tmpl"), .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 15 } } },
-    .{ .id = "DG-075", .path = "fixtures/render-errors/interpolate-sequence.tmpl", .source = @embedFile("fixtures/render-errors/interpolate-sequence.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 0, .end = 11 } } },
-    .{ .id = "DG-076", .path = "fixtures/render-errors/interpolate-object.tmpl", .source = @embedFile("fixtures/render-errors/interpolate-object.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 0, .end = 9 } } },
-    .{ .id = "DG-077", .path = "fixtures/render-errors/equality-cross-number-string.tmpl", .source = @embedFile("fixtures/render-errors/equality-cross-number-string.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 5, .end = 7 } } },
-    .{ .id = "DG-078", .path = "fixtures/render-errors/inequality-cross-number-string.tmpl", .source = @embedFile("fixtures/render-errors/inequality-cross-number-string.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 5, .end = 7 } } },
-    .{ .id = "DG-079", .path = "fixtures/render-errors/equality-cross-null-bool.tmpl", .source = @embedFile("fixtures/render-errors/equality-cross-null-bool.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 8, .end = 10 } } },
-    .{ .id = "DG-080", .path = "fixtures/render-errors/inequality-cross-null-bool.tmpl", .source = @embedFile("fixtures/render-errors/inequality-cross-null-bool.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 8, .end = 10 } } },
-    .{ .id = "DG-081", .path = "fixtures/render-errors/divide-zero.tmpl", .source = @embedFile("fixtures/render-errors/divide-zero.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 5, .end = 6 } } },
-    .{ .id = "DG-082", .path = "fixtures/render-errors/modulo-negative-zero.tmpl", .source = @embedFile("fixtures/render-errors/modulo-negative-zero.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 5, .end = 6 } } },
+    .{
+        .id = "DG-046",
+        .path = "fixtures/render-errors/missing.tmpl",
+        .source = @embedFile("fixtures/render-errors/missing.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .missing_variable,
+            .span = .{
+                .start = 3,
+                .end = 9,
+            },
+        },
+    },
+    .{
+        .id = "DG-047",
+        .path = "fixtures/render-errors/case-name.tmpl",
+        .source = @embedFile("fixtures/render-errors/case-name.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .missing_variable,
+            .span = .{
+                .start = 3,
+                .end = 8,
+            },
+        },
+    },
+    .{
+        .id = "DG-048",
+        .path = "fixtures/render-errors/property.tmpl",
+        .source = @embedFile("fixtures/render-errors/property.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .invalid_property_access,
+            .span = .{
+                .start = 6,
+                .end = 13,
+            },
+        },
+    },
+
+    .{
+        .id = "DG-049",
+        .path = "fixtures/render-errors/scalar-property.tmpl",
+        .source = @embedFile("fixtures/render-errors/scalar-property.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .invalid_property_access,
+            .span = .{
+                .start = 8,
+                .end = 13,
+            },
+        },
+    },
+
+    .{
+        .id = "DG-050",
+        .path = "fixtures/render-errors/index-range.tmpl",
+        .source = @embedFile("fixtures/render-errors/index-range.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .invalid_property_access,
+            .span = .{
+                .start = 8,
+                .end = 11,
+            },
+        },
+    },
+
+    .{
+        .id = "DG-051",
+        .path = "fixtures/render-errors/index-type.tmpl",
+        .source = @embedFile("fixtures/render-errors/index-type.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .invalid_property_access,
+            .span = .{
+                .start = 8,
+                .end = 13,
+            },
+        },
+    },
+
+    .{
+        .id = "DG-052",
+        .path = "fixtures/render-errors/index-scalar.tmpl",
+        .source = @embedFile("fixtures/render-errors/index-scalar.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .invalid_property_access,
+            .span = .{
+                .start = 8,
+                .end = 11,
+            },
+        },
+    },
+
+    .{
+        .id = "DG-053",
+        .path = "fixtures/render-errors/subtract.tmpl",
+        .source = @embedFile("fixtures/render-errors/subtract.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 7,
+                .end = 8,
+            },
+        },
+    },
+    .{
+        .id = "DG-054",
+        .path = "fixtures/render-errors/not.tmpl",
+        .source = @embedFile("fixtures/render-errors/not.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 3,
+                .end = 4,
+            },
+        },
+    },
+    .{
+        .id = "DG-055",
+        .path = "fixtures/render-errors/negate.tmpl",
+        .source = @embedFile("fixtures/render-errors/negate.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 3,
+                .end = 4,
+            },
+        },
+    },
+    .{
+        .id = "DG-056",
+        .path = "fixtures/render-errors/logical.tmpl",
+        .source = @embedFile("fixtures/render-errors/logical.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 3,
+                .end = 8,
+            },
+        },
+    },
+    .{
+        .id = "DG-057",
+        .path = "fixtures/render-errors/function-unknown.tmpl",
+        .source = @embedFile("fixtures/render-errors/function-unknown.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .function_failure,
+            .span = .{
+                .start = 3,
+                .end = 17,
+            },
+        },
+    },
+    .{
+        .id = "DG-058",
+        .path = "fixtures/render-errors/function-case.tmpl",
+        .source = @embedFile("fixtures/render-errors/function-case.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .function_failure,
+            .span = .{
+                .start = 3,
+                .end = 16,
+            },
+        },
+    },
+    .{
+        .id = "DG-059",
+        .path = "fixtures/render-errors/function-arity.tmpl",
+        .source = @embedFile("fixtures/render-errors/function-arity.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .function_failure,
+            .span = .{
+                .start = 3,
+                .end = 11,
+            },
+        },
+    },
+    .{
+        .id = "DG-060",
+        .path = "fixtures/render-errors/function-type.tmpl",
+        .source = @embedFile("fixtures/render-errors/function-type.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .function_failure,
+            .span = .{
+                .start = 3,
+                .end = 12,
+            },
+        },
+    },
+    .{
+        .id = "DG-061",
+        .path = "fixtures/render-errors/function-callback.tmpl",
+        .source = @embedFile("fixtures/render-errors/function-callback.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .function_failure,
+            .span = .{
+                .start = 3,
+                .end = 14,
+            },
+        },
+    },
+    .{
+        .id = "DG-062",
+        .path = "fixtures/render-errors/filter-unknown.tmpl",
+        .source = @embedFile("fixtures/render-errors/filter-unknown.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .filter_failure,
+            .span = .{
+                .start = 11,
+                .end = 18,
+            },
+        },
+    },
+    .{
+        .id = "DG-063",
+        .path = "fixtures/render-errors/filter-case.tmpl",
+        .source = @embedFile("fixtures/render-errors/filter-case.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .filter_failure,
+            .span = .{
+                .start = 11,
+                .end = 16,
+            },
+        },
+    },
+    .{
+        .id = "DG-064",
+        .path = "fixtures/render-errors/filter-arity.tmpl",
+        .source = @embedFile("fixtures/render-errors/filter-arity.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .filter_failure,
+            .span = .{
+                .start = 11,
+                .end = 21,
+            },
+        },
+    },
+    .{
+        .id = "DG-065",
+        .path = "fixtures/render-errors/filter-type.tmpl",
+        .source = @embedFile("fixtures/render-errors/filter-type.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .filter_failure,
+            .span = .{
+                .start = 7,
+                .end = 12,
+            },
+        },
+    },
+    .{
+        .id = "DG-066",
+        .path = "fixtures/render-errors/filter-callback.tmpl",
+        .source = @embedFile("fixtures/render-errors/filter-callback.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .filter_failure,
+            .span = .{
+                .start = 11,
+                .end = 15,
+            },
+        },
+    },
+    .{
+        .id = "DG-067",
+        .path = "fixtures/render-errors/unicode-missing.tmpl",
+        .source = @embedFile("fixtures/render-errors/unicode-missing.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .missing_variable,
+            .span = .{
+                .start = 11,
+                .end = 17,
+            },
+        },
+    },
+    .{
+        .id = "DG-068",
+        .path = "fixtures/render-errors/condition-type.tmpl",
+        .source = @embedFile("fixtures/render-errors/condition-type.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 5,
+                .end = 10,
+            },
+        },
+    },
+    .{
+        .id = "DG-069",
+        .path = "fixtures/render-errors/iterable-type.tmpl",
+        .source = @embedFile("fixtures/render-errors/iterable-type.tmpl"),
+        .render_options = .{
+            .allocator = std.testing.allocator,
+            .functions = &registrations,
+            .filters = &registrations,
+        },
+        .diagnostic = .{
+            .kind = .non_iterable,
+            .span = .{
+                .start = 11,
+                .end = 16,
+            },
+        },
+    },
+    .{
+        .id = "DG-72",
+        .path = "fixtures/render-errors/index-negative.tmpl",
+        .source = @embedFile("fixtures/render-errors/index-negative.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_property_access,
+            .span = .{
+                .start = 8,
+                .end = 12,
+            },
+        },
+    },
+
+    .{
+        .id = "DG-73",
+        .path = "fixtures/render-errors/index-fractional.tmpl",
+        .source = @embedFile("fixtures/render-errors/index-fractional.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_property_access,
+            .span = .{
+                .start = 8,
+                .end = 13,
+            },
+        },
+    },
+
+    .{
+        .id = "DG-74",
+        .path = "fixtures/render-errors/index-huge.tmpl",
+        .source = @embedFile("fixtures/render-errors/index-huge.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_property_access,
+            .span = .{
+                .start = 8,
+                .end = 15,
+            },
+        },
+    },
+
+    .{
+        .id = "DG-075",
+        .path = "fixtures/render-errors/interpolate-sequence.tmpl",
+        .source = @embedFile("fixtures/render-errors/interpolate-sequence.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 0,
+                .end = 11,
+            },
+        },
+    },
+    .{
+        .id = "DG-076",
+        .path = "fixtures/render-errors/interpolate-object.tmpl",
+        .source = @embedFile("fixtures/render-errors/interpolate-object.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 0,
+                .end = 9,
+            },
+        },
+    },
+    .{
+        .id = "DG-077",
+        .path = "fixtures/render-errors/equality-cross-number-string.tmpl",
+        .source = @embedFile("fixtures/render-errors/equality-cross-number-string.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 5,
+                .end = 7,
+            },
+        },
+    },
+    .{
+        .id = "DG-078",
+        .path = "fixtures/render-errors/inequality-cross-number-string.tmpl",
+        .source = @embedFile("fixtures/render-errors/inequality-cross-number-string.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 5,
+                .end = 7,
+            },
+        },
+    },
+    .{
+        .id = "DG-079",
+        .path = "fixtures/render-errors/equality-cross-null-bool.tmpl",
+        .source = @embedFile("fixtures/render-errors/equality-cross-null-bool.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 8,
+                .end = 10,
+            },
+        },
+    },
+    .{
+        .id = "DG-080",
+        .path = "fixtures/render-errors/inequality-cross-null-bool.tmpl",
+        .source = @embedFile("fixtures/render-errors/inequality-cross-null-bool.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 8,
+                .end = 10,
+            },
+        },
+    },
+    .{
+        .id = "DG-081",
+        .path = "fixtures/render-errors/divide-zero.tmpl",
+        .source = @embedFile("fixtures/render-errors/divide-zero.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 5,
+                .end = 6,
+            },
+        },
+    },
+    .{
+        .id = "DG-082",
+        .path = "fixtures/render-errors/modulo-negative-zero.tmpl",
+        .source = @embedFile("fixtures/render-errors/modulo-negative-zero.tmpl"),
+        .diagnostic = .{
+            .kind = .invalid_operand,
+            .span = .{
+                .start = 5,
+                .end = 6,
+            },
+        },
+    },
 };
 
 test "compile diagnostics identify category and exact byte span" {
@@ -106,7 +1181,11 @@ test "compile diagnostics identify category and exact byte span" {
 }
 
 test "render diagnostics identify category and exact byte span" {
-    const Context = struct { value: []const u8, obj: struct { name: []const u8 }, items: []const []const u8 };
+    const Context = struct {
+        value: []const u8,
+        obj: struct { name: []const u8 },
+        items: []const []const u8,
+    };
     const context: Context = .{ .value = "text", .obj = .{ .name = "Ada" }, .items = &.{ "a", "b" } };
     var failures: usize = 0;
     for (render_failure_cases) |case| fixtures.expectRenderFailure(case, &context) catch {

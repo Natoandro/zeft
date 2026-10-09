@@ -75,12 +75,42 @@ fn renderConcurrentOptions(state: *ConcurrentOptionsRender) void {
     state.output_len = std.Io.Writer.buffered(&writer).len;
 }
 
-fn expectFixture(source: []const u8, expected: []const u8, options: zeft.CompileOptions, context: anytype) !void {
-    try fixtures.expectSuccess(.{ .id = "focused", .path = source, .source = source, .expected = expected, .compile_options = options }, context);
+fn expectFixture(
+    source: []const u8,
+    expected: []const u8,
+    options: zeft.CompileOptions,
+    context: anytype,
+) !void {
+    try fixtures.expectSuccess(
+        .{
+            .id = "focused",
+            .path = source,
+            .source = source,
+            .expected = expected,
+            .compile_options = options,
+        },
+        context,
+    );
 }
 
-fn expectGolden(comptime id: []const u8, comptime source_path: []const u8, comptime expected_path: []const u8, options: zeft.CompileOptions, context: anytype) !void {
-    try fixtures.expectSuccess(.{ .id = id, .path = source_path, .expected_path = expected_path, .source = @embedFile(source_path), .expected = @embedFile(expected_path), .compile_options = options }, context);
+fn expectGolden(
+    comptime id: []const u8,
+    comptime source_path: []const u8,
+    comptime expected_path: []const u8,
+    options: zeft.CompileOptions,
+    context: anytype,
+) !void {
+    try fixtures.expectSuccess(
+        .{
+            .id = id,
+            .path = source_path,
+            .expected_path = expected_path,
+            .source = @embedFile(source_path),
+            .expected = @embedFile(expected_path),
+            .compile_options = options,
+        },
+        context,
+    );
 }
 
 test "enabled golden fixtures compile and render byte-for-byte" {
@@ -198,7 +228,14 @@ test "conditionals support false branches and loops handle empty sequences" {
     const Context = struct { item: []const u8, show: bool, items: []const []const u8 };
     var output: [64]u8 = undefined;
     var writer = std.Io.Writer.fixed(&output);
-    const rendered = try template.render(&writer, &Context{ .item = "root", .show = false, .items = &.{} });
+    const rendered = try template.render(
+        &writer,
+        &Context{
+            .item = "root",
+            .show = false,
+            .items = &.{},
+        },
+    );
     try std.testing.expectEqual(zeft.RenderResult.success, rendered);
     try std.testing.expectEqualStrings("root:no::root", std.Io.Writer.buffered(&writer));
 }
@@ -227,8 +264,23 @@ test "one control-flow template can render concurrently with isolated state" {
         .failure => return error.UnexpectedCompileFailure,
     };
     defer template.deinit();
-    var first = ConcurrentRender{ .template = &template, .context = .{ .show = true, .items = &.{ "A", "B" } } };
-    var second = ConcurrentRender{ .template = &template, .context = .{ .show = false, .items = &.{} } };
+    var first = ConcurrentRender{
+        .template = &template,
+        .context = .{
+            .show = true,
+            .items = &.{
+                "A",
+                "B",
+            },
+        },
+    };
+    var second = ConcurrentRender{
+        .template = &template,
+        .context = .{
+            .show = false,
+            .items = &.{},
+        },
+    };
     const first_thread = try std.Thread.spawn(.{}, renderConcurrent, .{&first});
     const second_thread = try std.Thread.spawn(.{}, renderConcurrent, .{&second});
     first_thread.join();
@@ -248,7 +300,11 @@ test "concurrent renders keep branch, loop, and callback scratch state isolated"
     };
     defer template.deinit();
     const registrations = [_]zeft.Registration{.{ .name = "suffix", .callback = registeredSuffix }};
-    const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true, .stack_trace_frames = 0, .enable_memory_limit = true });
+    const DebugAllocator = std.heap.DebugAllocator(.{
+        .thread_safe = true,
+        .stack_trace_frames = 0,
+        .enable_memory_limit = true,
+    });
     var debug_allocator: DebugAllocator = .init;
     defer _ = debug_allocator.deinit();
     const allocator = debug_allocator.allocator();
@@ -290,7 +346,13 @@ test "nested loops shadow and restore bindings; break and continue target innerm
     var nested_bytes: [32]u8 = undefined;
     var nested_writer = std.Io.Writer.fixed(&nested_bytes);
     const context = Context{ .outer = .{"O"}, .inner = .{"I"}, .values = .{ "skip", "A", "stop", "Z" } };
-    try std.testing.expectEqual(zeft.RenderResult.success, try nested.render(&nested_writer, &context));
+    try std.testing.expectEqual(
+        zeft.RenderResult.success,
+        try nested.render(
+            &nested_writer,
+            &context,
+        ),
+    );
     try std.testing.expectEqualStrings("OIO", std.Io.Writer.buffered(&nested_writer));
 
     const control_source = "{#for value in values}{#if value == \"skip\"}{% continue %}{/if}{{ value }}{#if value == \"stop\"}{% break %}{/if}{/for}";
@@ -306,7 +368,11 @@ test "nested loops shadow and restore bindings; break and continue target innerm
     try std.testing.expectEqualStrings("Astop", std.Io.Writer.buffered(&writer));
 
     const nested_control_source = "{#for outer_item in outer}{#for value in values}{#if value == \"skip\"}{% continue %}{/if}{{ outer_item }}{{ value }}{#if value == \"stop\"}{% break %}{/if}{/for}Z{/for}";
-    const nested_control_result = try zeft.compile(std.testing.allocator, nested_control_source, .{});
+    const nested_control_result = try zeft.compile(
+        std.testing.allocator,
+        nested_control_source,
+        .{},
+    );
     var nested_control = switch (nested_control_result) {
         .success => |value| value,
         .failure => return error.UnexpectedCompileFailure,
@@ -314,7 +380,13 @@ test "nested loops shadow and restore bindings; break and continue target innerm
     defer nested_control.deinit();
     var nested_control_bytes: [32]u8 = undefined;
     var nested_control_writer = std.Io.Writer.fixed(&nested_control_bytes);
-    try std.testing.expectEqual(zeft.RenderResult.success, try nested_control.render(&nested_control_writer, &context));
+    try std.testing.expectEqual(
+        zeft.RenderResult.success,
+        try nested_control.render(
+            &nested_control_writer,
+            &context,
+        ),
+    );
     try std.testing.expectEqualStrings("OAOstopZ", std.Io.Writer.buffered(&nested_control_writer));
 }
 
@@ -363,7 +435,16 @@ test "control-flow compile and runtime diagnostics identify invalid constructs" 
         .failure => |diagnostic| {
             try std.testing.expectEqual(zeft.RenderErrorKind.non_iterable, diagnostic.kind);
             const start = std.mem.indexOf(u8, source, "values").?;
-            try std.testing.expectEqual(@as(?zeft.SourceSpan, .{ .start = start, .end = start + "values".len }), diagnostic.span);
+            try std.testing.expectEqual(
+                @as(
+                    ?zeft.SourceSpan,
+                    .{
+                        .start = start,
+                        .end = start + "values".len,
+                    },
+                ),
+                diagnostic.span,
+            );
         },
     }
 }
@@ -379,13 +460,25 @@ test "conditional runtime errors point to condition expressions and renders rese
     defer condition_template.deinit();
     var condition_bytes: [32]u8 = undefined;
     var condition_writer = std.Io.Writer.fixed(&condition_bytes);
-    const condition_render = try condition_template.render(&condition_writer, &NonBooleanContext{ .condition = "true" });
+    const condition_render = try condition_template.render(
+        &condition_writer,
+        &NonBooleanContext{ .condition = "true" },
+    );
     switch (condition_render) {
         .success => return error.ExpectedDiagnostic,
         .failure => |diagnostic| {
             try std.testing.expectEqual(zeft.RenderErrorKind.invalid_operand, diagnostic.kind);
             const start = std.mem.indexOf(u8, condition_source, "condition").?;
-            try std.testing.expectEqual(@as(?zeft.SourceSpan, .{ .start = start, .end = start + "condition".len }), diagnostic.span);
+            try std.testing.expectEqual(
+                @as(
+                    ?zeft.SourceSpan,
+                    .{
+                        .start = start,
+                        .end = start + "condition".len,
+                    },
+                ),
+                diagnostic.span,
+            );
         },
     }
 
@@ -401,7 +494,13 @@ test "conditional runtime errors point to condition expressions and renders rese
     const context = Context{ .values = .{ "A", "B" } };
     for (0..2) |_| {
         var writer = std.Io.Writer.fixed(&bytes);
-        try std.testing.expectEqual(zeft.RenderResult.success, try template.render(&writer, &context));
+        try std.testing.expectEqual(
+            zeft.RenderResult.success,
+            try template.render(
+                &writer,
+                &context,
+            ),
+        );
         try std.testing.expectEqualStrings("AB", std.Io.Writer.buffered(&writer));
     }
 }
@@ -438,7 +537,16 @@ test "compile syntax failures are returned before execution" {
         },
         .failure => |diagnostic| {
             try std.testing.expectEqual(zeft.CompileErrorKind.invalid_expression, diagnostic.kind);
-            try std.testing.expectEqual(@as(?zeft.SourceSpan, .{ .start = 3, .end = source.len }), diagnostic.span);
+            try std.testing.expectEqual(
+                @as(
+                    ?zeft.SourceSpan,
+                    .{
+                        .start = 3,
+                        .end = source.len,
+                    },
+                ),
+                diagnostic.span,
+            );
         },
     }
 }
@@ -513,7 +621,11 @@ test "HTML and XML markup is serialized before runtime execution" {
         .{ .format = zeft.OutputFormat.xml, .source = "<?xml version='1.0'?><Root attr=\"a&amp;b\"><Child />text<![CDATA[x<y]]></Root>" },
     };
     inline for (cases) |case| {
-        const result = try zeft.compile(std.testing.allocator, case.source, .{ .format = case.format });
+        const result = try zeft.compile(
+            std.testing.allocator,
+            case.source,
+            .{ .format = case.format },
+        );
         var template = switch (result) {
             .success => |value| value,
             .failure => return error.UnexpectedCompileFailure,
@@ -538,7 +650,10 @@ test "invalid HTML self-closing syntax and void end tags fail during compilation
                 template.deinit();
                 return error.ExpectedDiagnostic;
             },
-            .failure => |diagnostic| try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind),
+            .failure => |diagnostic| try std.testing.expectEqual(
+                zeft.CompileErrorKind.invalid_markup,
+                diagnostic.kind,
+            ),
         }
     }
 }
@@ -616,9 +731,21 @@ test "missing properties and out-of-range literal indexes report access spans" {
         switch (rendered) {
             .success => return error.ExpectedDiagnostic,
             .failure => |diagnostic| {
-                try std.testing.expectEqual(zeft.RenderErrorKind.invalid_property_access, diagnostic.kind);
+                try std.testing.expectEqual(
+                    zeft.RenderErrorKind.invalid_property_access,
+                    diagnostic.kind,
+                );
                 const start = std.mem.indexOf(u8, case.source, case.selector).?;
-                try std.testing.expectEqual(@as(?zeft.SourceSpan, .{ .start = start, .end = start + case.selector.len }), diagnostic.span);
+                try std.testing.expectEqual(
+                    @as(
+                        ?zeft.SourceSpan,
+                        .{
+                            .start = start,
+                            .end = start + case.selector.len,
+                        },
+                    ),
+                    diagnostic.span,
+                );
             },
         }
     }
@@ -656,7 +783,12 @@ test "missing roots and local selectors report their own expression spans" {
         selector: []const u8,
     }{
         .{ .source = "before {{ absent }}", .context = .{ .items = &.{} }, .kind = .missing_variable, .selector = "absent" },
-        .{ .source = "{#for item in items}{{ item.absent }}{/for}", .context = .{ .items = &.{.{ .name = "x" }} }, .kind = .invalid_property_access, .selector = ".absent" },
+        .{
+            .source = "{#for item in items}{{ item.absent }}{/for}",
+            .context = .{ .items = &.{.{ .name = "x" }} },
+            .kind = .invalid_property_access,
+            .selector = ".absent",
+        },
     };
     for (cases) |case| {
         const result = try zeft.compile(std.testing.allocator, case.source, .{});
@@ -673,7 +805,16 @@ test "missing roots and local selectors report their own expression spans" {
             .failure => |diagnostic| {
                 try std.testing.expectEqual(case.kind, diagnostic.kind);
                 const start = std.mem.indexOf(u8, case.source, case.selector).?;
-                try std.testing.expectEqual(@as(?zeft.SourceSpan, .{ .start = start, .end = start + case.selector.len }), diagnostic.span);
+                try std.testing.expectEqual(
+                    @as(
+                        ?zeft.SourceSpan,
+                        .{
+                            .start = start,
+                            .end = start + case.selector.len,
+                        },
+                    ),
+                    diagnostic.span,
+                );
             },
         }
     }
@@ -707,7 +848,11 @@ test "logical operators short circuit missing property access" {
     try std.testing.expectEqualStrings("false|true", std.Io.Writer.buffered(&writer));
 }
 
-fn registeredSuffix(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []const zeft.Value) anyerror!zeft.Value {
+fn registeredSuffix(
+    allocator: std.mem.Allocator,
+    _: ?*const anyopaque,
+    args: []const zeft.Value,
+) anyerror!zeft.Value {
     if (args.len != 1 and args.len != 2) return error.InvalidArguments;
     const value = switch (args[0]) {
         .string => |string| string,
@@ -721,7 +866,11 @@ fn registeredSuffix(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []
     return .{ .string = joined };
 }
 
-fn failingCallable(_: std.mem.Allocator, _: ?*const anyopaque, _: []const zeft.Value) anyerror!zeft.Value {
+fn failingCallable(
+    _: std.mem.Allocator,
+    _: ?*const anyopaque,
+    _: []const zeft.Value,
+) anyerror!zeft.Value {
     return error.DeliberateFailure;
 }
 
@@ -791,7 +940,14 @@ test "callable failures and invalid operands retain originating source spans" {
                 try std.testing.expectEqual(case.kind, diagnostic.kind);
                 const expected = if (std.mem.indexOf(u8, case.source, "fail") != null) blk: {
                     const start = std.mem.indexOf(u8, case.source, "fail").?;
-                    break :blk zeft.SourceSpan{ .start = start, .end = if (std.mem.indexOf(u8, case.source, "fail()") != null) start + 6 else start + 4 };
+                    break :blk zeft.SourceSpan{
+                        .start = start,
+                        .end = if (std.mem.indexOf(
+                            u8,
+                            case.source,
+                            "fail()",
+                        ) != null) start + 6 else start + 4,
+                    };
                 } else blk: {
                     const start = std.mem.indexOf(u8, case.source, "-").?;
                     break :blk zeft.SourceSpan{ .start = start, .end = start + 1 };
@@ -803,7 +959,11 @@ test "callable failures and invalid operands retain originating source spans" {
 }
 
 test "render scratch allocations are released after callback output" {
-    const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true, .stack_trace_frames = 0, .enable_memory_limit = true });
+    const DebugAllocator = std.heap.DebugAllocator(.{
+        .thread_safe = true,
+        .stack_trace_frames = 0,
+        .enable_memory_limit = true,
+    });
     var debug_allocator: DebugAllocator = .init;
     defer _ = debug_allocator.deinit();
     const allocator = debug_allocator.allocator();
@@ -828,10 +988,17 @@ test "render scratch allocations are released after callback output" {
 
     var short_output: [2]u8 = undefined;
     var short_writer = std.Io.Writer.fixed(&short_output);
-    try std.testing.expectError(error.WriteFailed, template.renderWithOptions(&short_writer, .{ .value = "temporary" }, .{
-        .allocator = allocator,
-        .filters = &registrations,
-    }));
+    try std.testing.expectError(
+        error.WriteFailed,
+        template.renderWithOptions(
+            &short_writer,
+            .{ .value = "temporary" },
+            .{
+                .allocator = allocator,
+                .filters = &registrations,
+            },
+        ),
+    );
     try std.testing.expectEqual(before_render, debug_allocator.total_requested_bytes);
 
     const diagnostic_result = try zeft.compile(std.testing.allocator, "{{ value | suffix }}{{ absent }}", .{});
@@ -842,10 +1009,14 @@ test "render scratch allocations are released after callback output" {
     defer diagnostic_template.deinit();
     var diagnostic_output: [32]u8 = undefined;
     var diagnostic_writer = std.Io.Writer.fixed(&diagnostic_output);
-    const diagnostic = try diagnostic_template.renderWithOptions(&diagnostic_writer, .{ .value = "temporary" }, .{
-        .allocator = allocator,
-        .filters = &registrations,
-    });
+    const diagnostic = try diagnostic_template.renderWithOptions(
+        &diagnostic_writer,
+        .{ .value = "temporary" },
+        .{
+            .allocator = allocator,
+            .filters = &registrations,
+        },
+    );
     try std.testing.expect(diagnostic == .failure);
     try std.testing.expectEqual(zeft.RenderErrorKind.missing_variable, diagnostic.failure.kind);
     try std.testing.expectEqual(before_render, debug_allocator.total_requested_bytes);

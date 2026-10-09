@@ -10,7 +10,12 @@ const invalid = @embedFile("fixtures/includes/invalid.tmpl");
 
 pub const harness_ids = [_][]const u8{ "CA-001", "CA-002", "CA-003", "CA-004", "CA-005", "CA-006", "CA-007" };
 
-fn load(cache: *zeft.TemplateCache, identity: []const u8, source: []const u8, options: zeft.CompileOptions) !zeft.TemplateLease {
+fn load(
+    cache: *zeft.TemplateCache,
+    identity: []const u8,
+    source: []const u8,
+    options: zeft.CompileOptions,
+) !zeft.TemplateLease {
     return switch (try cache.getOrCompile(identity, source, options)) {
         .success => |lease| lease,
         .failure => error.UnexpectedCompileFailure,
@@ -21,12 +26,29 @@ fn expectLease(lease: *const zeft.TemplateLease, expected: []const u8) !void {
     const buffer = try allocator.alloc(u8, expected.len + 256);
     defer allocator.free(buffer);
     var writer = std.Io.Writer.fixed(buffer);
-    try std.testing.expectEqual(zeft.RenderResult.success, try lease.renderWithOptions(&writer, context, .{ .allocator = allocator }));
+    try std.testing.expectEqual(
+        zeft.RenderResult.success,
+        try lease.renderWithOptions(
+            &writer,
+            context,
+            .{ .allocator = allocator },
+        ),
+    );
     try std.testing.expectEqualStrings(expected, writer.buffered());
 }
 
-fn render(cache: *zeft.TemplateCache, identity: []const u8, writer: *std.Io.Writer) !zeft.RenderResult {
-    return cache.renderWithOptions(allocator, identity, writer, context, .{ .allocator = allocator });
+fn render(
+    cache: *zeft.TemplateCache,
+    identity: []const u8,
+    writer: *std.Io.Writer,
+) !zeft.RenderResult {
+    return cache.renderWithOptions(
+        allocator,
+        identity,
+        writer,
+        context,
+        .{ .allocator = allocator },
+    );
 }
 
 test "CA-001 cache hits distinct identities and source versions" {
@@ -52,8 +74,23 @@ test "CA-002 cache options preserve independent retained outputs" {
     var cache = zeft.TemplateCache.init(allocator);
     defer cache.deinit();
     const source = @embedFile("fixtures/includes/options.tmpl");
-    const options = [_]zeft.CompileOptions{ .{}, .{ .whitespace = .compact }, .{ .whitespace = .pretty }, .{ .whitespace = .pretty, .indentation = "\t" }, .{ .format = .xml } };
-    const outputs = [_][]const u8{ @embedFile("fixtures/includes/options-preserve.out"), @embedFile("fixtures/includes/options-compact.out"), @embedFile("fixtures/includes/options-pretty.out"), @embedFile("fixtures/includes/options-tab.out"), @embedFile("fixtures/includes/options-preserve.out") };
+    const options = [_]zeft.CompileOptions{
+        .{},
+        .{ .whitespace = .compact },
+        .{ .whitespace = .pretty },
+        .{
+            .whitespace = .pretty,
+            .indentation = "\t",
+        },
+        .{ .format = .xml },
+    };
+    const outputs = [_][]const u8{
+        @embedFile("fixtures/includes/options-preserve.out"),
+        @embedFile("fixtures/includes/options-compact.out"),
+        @embedFile("fixtures/includes/options-pretty.out"),
+        @embedFile("fixtures/includes/options-tab.out"),
+        @embedFile("fixtures/includes/options-preserve.out"),
+    };
     var leases: [options.len]zeft.TemplateLease = undefined;
     var initialized: usize = 0;
     defer for (leases[0..initialized]) |*lease| lease.deinit();
@@ -103,7 +140,16 @@ test "CA-004 failed parent and child reloads preserve valid versions" {
                 lease.deinit();
                 return error.ExpectedCompileFailure;
             },
-            .failure => |diagnostic| try std.testing.expectEqualDeep(zeft.CompileDiagnostic{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 6 } }, diagnostic),
+            .failure => |diagnostic| try std.testing.expectEqualDeep(
+                zeft.CompileDiagnostic{
+                    .kind = .invalid_markup,
+                    .span = .{
+                        .start = 0,
+                        .end = 6,
+                    },
+                },
+                diagnostic,
+            ),
         }
     }
     try expectLease(&parent, @embedFile("fixtures/includes/root.out"));
@@ -119,12 +165,33 @@ test "CA-005 missing dependencies and initial child failure retain diagnostic id
     defer cache.deinit();
     var buffer: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
-    try std.testing.expectEqualDeep(zeft.RenderResult{ .failure = .{ .kind = .missing_template, .include_identity = "unknown" } }, try render(&cache, "unknown", &writer));
+    try std.testing.expectEqualDeep(
+        zeft.RenderResult{ .failure = .{
+            .kind = .missing_template,
+            .include_identity = "unknown",
+        } },
+        try render(
+            &cache,
+            "unknown",
+            &writer,
+        ),
+    );
     var parent = try load(&cache, "parent", @embedFile("fixtures/includes/missing.tmpl"), .{});
     var parent_alive = true;
     defer if (parent_alive) parent.deinit();
     const missing = try render(&cache, "parent", &writer);
-    try std.testing.expectEqualDeep(zeft.RenderResult{ .failure = .{ .kind = .missing_include, .span = .{ .start = 0, .end = 22 }, .include_identity = "absent", .include_parent_identity = "parent" } }, missing);
+    try std.testing.expectEqualDeep(
+        zeft.RenderResult{ .failure = .{
+            .kind = .missing_include,
+            .span = .{
+                .start = 0,
+                .end = 22,
+            },
+            .include_identity = "absent",
+            .include_parent_identity = "parent",
+        } },
+        missing,
+    );
     switch (try cache.getOrCompile("absent", invalid, .{})) {
         .success => |value| {
             var lease = value;
@@ -134,7 +201,25 @@ test "CA-005 missing dependencies and initial child failure retain diagnostic id
         .failure => {},
     }
     const failed = try render(&cache, "parent", &writer);
-    try std.testing.expectEqualDeep(zeft.RenderResult{ .failure = .{ .kind = .include_compile_failure, .span = .{ .start = 0, .end = 22 }, .include_identity = "absent", .include_parent_identity = "parent", .include_compile_diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 6 } } } }, failed);
+    try std.testing.expectEqualDeep(
+        zeft.RenderResult{ .failure = .{
+            .kind = .include_compile_failure,
+            .span = .{
+                .start = 0,
+                .end = 22,
+            },
+            .include_identity = "absent",
+            .include_parent_identity = "parent",
+            .include_compile_diagnostic = .{
+                .kind = .invalid_markup,
+                .span = .{
+                    .start = 0,
+                    .end = 6,
+                },
+            },
+        } },
+        failed,
+    );
     parent.deinit();
     parent_alive = false;
     cache.evict("parent");
@@ -159,7 +244,22 @@ test "CA-006 recursive includes report the offending dependency edge" {
     defer b.deinit();
     var buffer: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
-    try std.testing.expectEqualDeep(zeft.RenderResult{ .failure = .{ .kind = .include_cycle, .span = .{ .start = 1, .end = 18 }, .include_identity = "a", .include_parent_identity = "b" } }, try render(&cache, "a", &writer));
+    try std.testing.expectEqualDeep(
+        zeft.RenderResult{ .failure = .{
+            .kind = .include_cycle,
+            .span = .{
+                .start = 1,
+                .end = 18,
+            },
+            .include_identity = "a",
+            .include_parent_identity = "b",
+        } },
+        try render(
+            &cache,
+            "a",
+            &writer,
+        ),
+    );
 }
 
 test "CA-007 eviction keeps retained roots valid and resolves current children" {

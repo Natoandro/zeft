@@ -42,7 +42,12 @@ const CacheMutex = struct {
     held: std.atomic.Value(bool) = .init(false),
 
     fn lock(self: *CacheMutex) void {
-        while (self.held.cmpxchgWeak(false, true, .acquire, .monotonic) != null) std.atomic.spinLoopHint();
+        while (self.held.cmpxchgWeak(
+            false,
+            true,
+            .acquire,
+            .monotonic,
+        ) != null) std.atomic.spinLoopHint();
     }
 
     fn unlock(self: *CacheMutex) void {
@@ -77,7 +82,8 @@ pub const CompiledTemplate = struct {
             program.instructions.len * @sizeOf(ir.Instruction) +
             program.expressions.len * @sizeOf(ir.ExpressionProgram) +
             data.options.indentation.len;
-        for (program.expressions) |expression| size += expression.instructions.len * @sizeOf(ir.ExpressionInstruction);
+        for (program.expressions) |expression| size += expression.instructions.len *
+            @sizeOf(ir.ExpressionInstruction);
         var payload_index: usize = 0;
         while (payloadAt(program, payload_index)) |payload| : (payload_index += 1) {
             var first = true;
@@ -102,7 +108,17 @@ pub const CompiledTemplate = struct {
         context: anytype,
     ) anyerror!RenderResult {
         const compiled = self.finalized();
-        return @call(.never_inline, renderContext, .{ compiled.program, writer, context, compiled.options.format, RenderOptions{} });
+        return @call(
+            .never_inline,
+            renderContext,
+            .{
+                compiled.program,
+                writer,
+                context,
+                compiled.options.format,
+                RenderOptions{},
+            },
+        );
     }
 
     /// Render with caller supplied filters, functions, and scratch allocator.
@@ -114,12 +130,33 @@ pub const CompiledTemplate = struct {
         options: RenderOptions,
     ) anyerror!RenderResult {
         const compiled = self.finalized();
-        return @call(.never_inline, renderContext, .{ compiled.program, writer, context, compiled.options.format, options });
+        return @call(
+            .never_inline,
+            renderContext,
+            .{
+                compiled.program,
+                writer,
+                context,
+                compiled.options.format,
+                options,
+            },
+        );
     }
 
-    fn renderRuntime(self: *const CompiledTemplate, writer: *std.Io.Writer, context: []const ContextEntry, options: RenderOptions) anyerror!RenderResult {
+    fn renderRuntime(
+        self: *const CompiledTemplate,
+        writer: *std.Io.Writer,
+        context: []const ContextEntry,
+        options: RenderOptions,
+    ) anyerror!RenderResult {
         const compiled = self.finalized();
-        return runtime.renderWithOptions(compiled.program, writer, context, compiled.options.format, options);
+        return runtime.renderWithOptions(
+            compiled.program,
+            writer,
+            context,
+            compiled.options.format,
+            options,
+        );
     }
 };
 
@@ -143,11 +180,20 @@ pub const TemplateLease = struct {
         self.* = undefined;
     }
 
-    pub fn render(self: *const TemplateLease, writer: *std.Io.Writer, context: anytype) anyerror!RenderResult {
+    pub fn render(
+        self: *const TemplateLease,
+        writer: *std.Io.Writer,
+        context: anytype,
+    ) anyerror!RenderResult {
         return self.cache.renderLease(self, writer, context, .{});
     }
 
-    pub fn renderWithOptions(self: *const TemplateLease, writer: *std.Io.Writer, context: anytype, options: RenderOptions) anyerror!RenderResult {
+    pub fn renderWithOptions(
+        self: *const TemplateLease,
+        writer: *std.Io.Writer,
+        context: anytype,
+        options: RenderOptions,
+    ) anyerror!RenderResult {
         return self.cache.renderLease(self, writer, context, options);
     }
 };
@@ -165,19 +211,34 @@ pub const TemplateCache = struct {
     mutex: CacheMutex = .{},
     entries: std.ArrayList(*CacheEntry) = .empty,
     all_entries: std.ArrayList(*CacheEntry) = .empty,
-    failures: std.ArrayList(struct { identity: []const u8, diagnostic: CompileDiagnostic }) = .empty,
+    failures: std.ArrayList(struct {
+        identity: []const u8,
+        diagnostic: CompileDiagnostic,
+    }) = .empty,
 
     pub fn init(allocator: std.mem.Allocator) TemplateCache {
-        return .{ .allocator = allocator, .diagnostic_storage = std.heap.ArenaAllocator.init(allocator) };
+        return .{
+            .allocator = allocator,
+            .diagnostic_storage = std.heap.ArenaAllocator.init(allocator),
+        };
     }
 
     /// Compile or reload an identity. On a failed reload, its last valid entry remains available.
-    pub fn getOrCompile(self: *TemplateCache, identity: []const u8, source: []const u8, options: CompileOptions) std.mem.Allocator.Error!CacheCompileResult {
+    pub fn getOrCompile(
+        self: *TemplateCache,
+        identity: []const u8,
+        source: []const u8,
+        options: CompileOptions,
+    ) std.mem.Allocator.Error!CacheCompileResult {
         self.mutex.lock();
         defer self.mutex.unlock();
         const fingerprint = cacheFingerprint(identity, source, options);
         for (self.entries.items) |entry| {
-            if (!entry.retired and std.mem.eql(u8, entry.identity, identity) and entry.fingerprint == fingerprint and
+            if (!entry.retired and std.mem.eql(
+                u8,
+                entry.identity,
+                identity,
+            ) and entry.fingerprint == fingerprint and
                 std.mem.eql(u8, entry.source, source) and optionsEqual(entry.options, options))
             {
                 entry.references += 1;
@@ -232,21 +293,50 @@ pub const TemplateCache = struct {
     }
 
     /// Render an identity and resolve every include from the current cache entry.
-    pub fn render(self: *TemplateCache, allocator: std.mem.Allocator, identity: []const u8, writer: *std.Io.Writer, context: anytype) anyerror!RenderResult {
+    pub fn render(
+        self: *TemplateCache,
+        allocator: std.mem.Allocator,
+        identity: []const u8,
+        writer: *std.Io.Writer,
+        context: anytype,
+    ) anyerror!RenderResult {
         return self.renderWithOptions(allocator, identity, writer, context, .{});
     }
 
-    pub fn renderWithOptions(self: *TemplateCache, allocator: std.mem.Allocator, identity: []const u8, writer: *std.Io.Writer, context: anytype, options: RenderOptions) anyerror!RenderResult {
-        var root = self.acquire(identity) orelse return .{ .failure = .{ .kind = .missing_template, .include_identity = identity } };
+    pub fn renderWithOptions(
+        self: *TemplateCache,
+        allocator: std.mem.Allocator,
+        identity: []const u8,
+        writer: *std.Io.Writer,
+        context: anytype,
+        options: RenderOptions,
+    ) anyerror!RenderResult {
+        var root = self.acquire(identity) orelse return .{ .failure = .{
+            .kind = .missing_template,
+            .include_identity = identity,
+        } };
         defer root.deinit();
         return self.renderLeaseWithAllocator(allocator, &root, writer, context, options);
     }
 
-    fn renderLease(self: *TemplateCache, lease: *const TemplateLease, writer: *std.Io.Writer, context: anytype, options: RenderOptions) anyerror!RenderResult {
+    fn renderLease(
+        self: *TemplateCache,
+        lease: *const TemplateLease,
+        writer: *std.Io.Writer,
+        context: anytype,
+        options: RenderOptions,
+    ) anyerror!RenderResult {
         return self.renderLeaseWithAllocator(options.allocator, lease, writer, context, options);
     }
 
-    fn renderLeaseWithAllocator(self: *TemplateCache, allocator: std.mem.Allocator, lease: *const TemplateLease, writer: *std.Io.Writer, context: anytype, options: RenderOptions) anyerror!RenderResult {
+    fn renderLeaseWithAllocator(
+        self: *TemplateCache,
+        allocator: std.mem.Allocator,
+        lease: *const TemplateLease,
+        writer: *std.Io.Writer,
+        context: anytype,
+        options: RenderOptions,
+    ) anyerror!RenderResult {
         var frame = CacheRenderFrame{ .cache = self, .allocator = allocator };
         defer frame.dependencies.deinit(allocator);
         try frame.dependencies.append(allocator, lease.entry.identity);
@@ -277,16 +367,26 @@ pub const TemplateCache = struct {
         self.* = undefined;
     }
 
-    fn persistIncludeDiagnostic(self: *TemplateCache, result: RenderResult) std.mem.Allocator.Error!RenderResult {
-        if (result != .failure or (result.failure.include_identity == null and result.failure.include_parent_identity == null)) return result;
+    fn persistIncludeDiagnostic(
+        self: *TemplateCache,
+        result: RenderResult,
+    ) std.mem.Allocator.Error!RenderResult {
+        if (result != .failure or (result.failure.include_identity == null and
+            result.failure.include_parent_identity == null)) return result;
         self.mutex.lock();
         defer self.mutex.unlock();
         var diagnostic = result.failure;
         if (diagnostic.include_identity) |identity| {
-            diagnostic.include_identity = try self.diagnostic_storage.allocator().dupe(u8, identity);
+            diagnostic.include_identity = try self.diagnostic_storage.allocator().dupe(
+                u8,
+                identity,
+            );
         }
         if (diagnostic.include_parent_identity) |identity| {
-            diagnostic.include_parent_identity = try self.diagnostic_storage.allocator().dupe(u8, identity);
+            diagnostic.include_parent_identity = try self.diagnostic_storage.allocator().dupe(
+                u8,
+                identity,
+            );
         }
         return .{ .failure = diagnostic };
     }
@@ -294,7 +394,11 @@ pub const TemplateCache = struct {
     fn acquire(self: *TemplateCache, identity: []const u8) ?TemplateLease {
         self.mutex.lock();
         defer self.mutex.unlock();
-        for (self.entries.items) |entry| if (!entry.retired and std.mem.eql(u8, entry.identity, identity)) {
+        for (self.entries.items) |entry| if (!entry.retired and std.mem.eql(
+            u8,
+            entry.identity,
+            identity,
+        )) {
             entry.references += 1;
             return .{ .cache = self, .entry = entry };
         };
@@ -326,7 +430,11 @@ pub const TemplateCache = struct {
     fn failureFor(self: *TemplateCache, identity: []const u8) ?CompileDiagnostic {
         self.mutex.lock();
         defer self.mutex.unlock();
-        for (self.failures.items) |failure| if (std.mem.eql(u8, failure.identity, identity)) return failure.diagnostic;
+        for (self.failures.items) |failure| if (std.mem.eql(
+            u8,
+            failure.identity,
+            identity,
+        )) return failure.diagnostic;
         return null;
     }
 
@@ -343,12 +451,19 @@ pub const TemplateCache = struct {
         self.allocator.destroy(entry);
     }
 
-    fn recordFailure(self: *TemplateCache, identity: []const u8, diagnostic: CompileDiagnostic) std.mem.Allocator.Error!void {
+    fn recordFailure(
+        self: *TemplateCache,
+        identity: []const u8,
+        diagnostic: CompileDiagnostic,
+    ) std.mem.Allocator.Error!void {
         const identity_copy = try self.allocator.dupe(u8, identity);
         errdefer self.allocator.free(identity_copy);
         try self.failures.ensureUnusedCapacity(self.allocator, 1);
         self.clearFailure(identity);
-        self.failures.appendAssumeCapacity(.{ .identity = identity_copy, .diagnostic = diagnostic });
+        self.failures.appendAssumeCapacity(.{
+            .identity = identity_copy,
+            .diagnostic = diagnostic,
+        });
     }
 
     fn clearFailure(self: *TemplateCache, identity: []const u8) void {
@@ -364,11 +479,24 @@ pub const TemplateCache = struct {
 
 pub const CacheCompileResult = union(enum) { success: TemplateLease, failure: CompileDiagnostic };
 
-fn resolveCachedInclude(raw: *anyopaque, identity: []const u8, writer: *std.Io.Writer, context: []const ContextEntry, format: OutputFormat, options: RenderOptions, span: SourceSpan) anyerror!RenderResult {
+fn resolveCachedInclude(
+    raw: *anyopaque,
+    identity: []const u8,
+    writer: *std.Io.Writer,
+    context: []const ContextEntry,
+    format: OutputFormat,
+    options: RenderOptions,
+    span: SourceSpan,
+) anyerror!RenderResult {
     const frame: *CacheRenderFrame = @ptrCast(@alignCast(raw));
     const parent_identity = frame.dependencies.items[frame.dependencies.items.len - 1];
     for (frame.dependencies.items) |active| if (std.mem.eql(u8, active, identity)) {
-        return .{ .failure = .{ .kind = .include_cycle, .span = span, .include_identity = identity, .include_parent_identity = parent_identity } };
+        return .{ .failure = .{
+            .kind = .include_cycle,
+            .span = span,
+            .include_identity = identity,
+            .include_parent_identity = parent_identity,
+        } };
     };
     var child = frame.cache.acquire(identity) orelse {
         const compile_diagnostic = frame.cache.failureFor(identity);
@@ -398,10 +526,20 @@ fn cacheFingerprint(identity: []const u8, source: []const u8, options: CompileOp
 }
 
 fn optionsEqual(left: CompileOptions, right: CompileOptions) bool {
-    return left.format == right.format and left.whitespace == right.whitespace and std.mem.eql(u8, left.indentation, right.indentation);
+    return left.format == right.format and left.whitespace == right.whitespace and std.mem.eql(
+        u8,
+        left.indentation,
+        right.indentation,
+    );
 }
 
-fn renderContext(program: ir.Program, writer: *std.Io.Writer, context: anytype, format: OutputFormat, options: RenderOptions) anyerror!RenderResult {
+fn renderContext(
+    program: ir.Program,
+    writer: *std.Io.Writer,
+    context: anytype,
+    format: OutputFormat,
+    options: RenderOptions,
+) anyerror!RenderResult {
     const ContextType = @TypeOf(context);
     const type_info = @typeInfo(ContextType);
     const context_is_pointer = type_info == .pointer and type_info.pointer.size == .one and
@@ -416,7 +554,13 @@ fn renderContext(program: ir.Program, writer: *std.Io.Writer, context: anytype, 
             .name = field.name,
             .value = if (comptime runtime.isString(field.type)) blk: {
                 if (comptime field.is_comptime) {
-                    const value = comptime if (context_is_pointer) @field(context.*, field.name) else @field(context, field.name);
+                    const value = comptime if (context_is_pointer) @field(
+                        context.*,
+                        field.name,
+                    ) else @field(
+                        context,
+                        field.name,
+                    );
                     const Static = struct {
                         const stored = value;
                     };
@@ -495,13 +639,37 @@ fn finalize(
     for (program.expressions, 0..) |expression, index| {
         const instructions = try persistent.dupe(ir.ExpressionInstruction, expression.instructions);
         for (instructions) |*instruction| switch (instruction.data) {
-            .get_property => |name| instruction.data = .{ .get_property = try internBytes(persistent, &interned, name) },
+            .get_property => |name| instruction.data = .{ .get_property = try internBytes(
+                persistent,
+                &interned,
+                name,
+            ) },
             .push_literal => |literal| switch (literal) {
-                .string => |value| instruction.data = .{ .push_literal = .{ .string = try internBytes(persistent, &interned, value) } },
+                .string => |value| instruction.data = .{ .push_literal = .{
+                    .string = try internBytes(
+                        persistent,
+                        &interned,
+                        value,
+                    ),
+                } },
                 else => {},
             },
-            .call_function => |call| instruction.data = .{ .call_function = .{ .name = try internBytes(persistent, &interned, call.name), .argument_count = call.argument_count } },
-            .call_filter => |call| instruction.data = .{ .call_filter = .{ .name = try internBytes(persistent, &interned, call.name), .argument_count = call.argument_count } },
+            .call_function => |call| instruction.data = .{ .call_function = .{
+                .name = try internBytes(
+                    persistent,
+                    &interned,
+                    call.name,
+                ),
+                .argument_count = call.argument_count,
+            } },
+            .call_filter => |call| instruction.data = .{ .call_filter = .{
+                .name = try internBytes(
+                    persistent,
+                    &interned,
+                    call.name,
+                ),
+                .argument_count = call.argument_count,
+            } },
             else => {},
         };
         expressions[index] = .{ .instructions = instructions };
@@ -556,7 +724,11 @@ fn payloadAt(program: ir.Program, index: usize) ?[]const u8 {
     return null;
 }
 
-fn internBytes(allocator: std.mem.Allocator, values: *std.ArrayList([]const u8), value: []const u8) std.mem.Allocator.Error![]const u8 {
+fn internBytes(
+    allocator: std.mem.Allocator,
+    values: *std.ArrayList([]const u8),
+    value: []const u8,
+) std.mem.Allocator.Error![]const u8 {
     for (values.items) |existing| if (std.mem.eql(u8, existing, value)) return existing;
     const owned = try allocator.dupe(u8, value);
     try values.append(allocator, owned);
@@ -564,7 +736,10 @@ fn internBytes(allocator: std.mem.Allocator, values: *std.ArrayList([]const u8),
 }
 
 fn indexOfBytes(values: []const []const u8, value: []const u8) usize {
-    for (values, 0..) |existing, index| if (existing.ptr == value.ptr and existing.len == value.len) return index;
+    for (
+        values,
+        0..,
+    ) |existing, index| if (existing.ptr == value.ptr and existing.len == value.len) return index;
     unreachable;
 }
 
@@ -620,7 +795,16 @@ test "compile returns syntax diagnostics before rendering" {
         .success => |*template| template.deinit(),
         .failure => |diagnostic| {
             try std.testing.expectEqual(CompileErrorKind.invalid_expression, diagnostic.kind);
-            try std.testing.expectEqual(@as(?SourceSpan, .{ .start = 3, .end = 12 }), diagnostic.span);
+            try std.testing.expectEqual(
+                @as(
+                    ?SourceSpan,
+                    .{
+                        .start = 3,
+                        .end = 12,
+                    },
+                ),
+                diagnostic.span,
+            );
         },
     }
 }
@@ -667,7 +851,16 @@ test "render reports missing identifiers with their source span" {
         .success => return error.ExpectedDiagnostic,
         .failure => |diagnostic| {
             try std.testing.expectEqual(RenderErrorKind.missing_variable, diagnostic.kind);
-            try std.testing.expectEqual(@as(?SourceSpan, .{ .start = 3, .end = 7 }), diagnostic.span);
+            try std.testing.expectEqual(
+                @as(
+                    ?SourceSpan,
+                    .{
+                        .start = 3,
+                        .end = 7,
+                    },
+                ),
+                diagnostic.span,
+            );
         },
     }
 }
@@ -700,7 +893,11 @@ test "writer errors propagate unchanged for static and dynamic writes" {
 }
 
 test "compile temporary storage is released and finalized storage lasts until deinit" {
-    const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true, .stack_trace_frames = 0, .enable_memory_limit = true });
+    const DebugAllocator = std.heap.DebugAllocator(.{
+        .thread_safe = true,
+        .stack_trace_frames = 0,
+        .enable_memory_limit = true,
+    });
     var debug_allocator: DebugAllocator = .init;
     defer _ = debug_allocator.deinit();
     const allocator = debug_allocator.allocator();
@@ -719,9 +916,15 @@ test "compile temporary storage is released and finalized storage lasts until de
         .success => |value| value,
         .failure => return error.UnexpectedCompileFailure,
     };
-    try std.testing.expectEqual(first_template_bytes, debug_allocator.total_requested_bytes - baseline_bytes - first_template_bytes);
+    try std.testing.expectEqual(
+        first_template_bytes,
+        debug_allocator.total_requested_bytes - baseline_bytes - first_template_bytes,
+    );
     second_template.deinit();
-    try std.testing.expectEqual(baseline_bytes + first_template_bytes, debug_allocator.total_requested_bytes);
+    try std.testing.expectEqual(
+        baseline_bytes + first_template_bytes,
+        debug_allocator.total_requested_bytes,
+    );
 
     var output: [32]u8 = undefined;
     var writer = std.Io.Writer.fixed(&output);

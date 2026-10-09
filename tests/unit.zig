@@ -33,8 +33,20 @@ test "lexer preserves backslashes and tracks interpolation spans" {
     try std.testing.expectEqual(@as(usize, 2), tokens.len);
     try std.testing.expectEqualStrings("a\\path", tokens[0].data.text);
     try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 0, .end = 6 }), tokens[0].span);
-    try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 6, .end = source.len }), tokens[1].span);
-    try std.testing.expectEqualStrings("name", source[tokens[1].data.expression.start..tokens[1].data.expression.end]);
+    try std.testing.expectEqual(
+        @as(
+            zeft.SourceSpan,
+            .{
+                .start = 6,
+                .end = source.len,
+            },
+        ),
+        tokens[1].span,
+    );
+    try std.testing.expectEqualStrings(
+        "name",
+        source[tokens[1].data.expression.start..tokens[1].data.expression.end],
+    );
 }
 
 test "parser builds nested elements with text and interpolation spans" {
@@ -49,12 +61,22 @@ test "parser builds nested elements with text and interpolation spans" {
 
     try std.testing.expectEqual(@as(usize, 1), document.nodes.len);
     const paragraph = document.nodes[0];
-    try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 0, .end = source.len }), paragraph.span);
+    try std.testing.expectEqual(
+        @as(
+            zeft.SourceSpan,
+            .{
+                .start = 0,
+                .end = source.len,
+            },
+        ),
+        paragraph.span,
+    );
     const p = paragraph.data.element;
     try std.testing.expectEqualStrings("p", p.name);
     try std.testing.expectEqual(@as(usize, 4), p.children.len);
     try std.testing.expectEqualStrings("Hello, ", p.children[0].data.text);
-    try std.testing.expectEqualStrings("name", source[p.children[1].data.expression.source_span.start..p.children[1].data.expression.source_span.end]);
+    const expression_span = p.children[1].data.expression.source_span;
+    try std.testing.expectEqualStrings("name", source[expression_span.start..expression_span.end]);
     try std.testing.expectEqualStrings("!", p.children[2].data.text);
     try std.testing.expectEqualStrings("b", p.children[3].data.element.name);
     try std.testing.expectEqual(
@@ -85,7 +107,10 @@ test "parser preserves nested mixed markup, quoted attributes, and exact source 
         .start = std.mem.indexOf(u8, source, "id='").?,
         .end = std.mem.indexOf(u8, source, "id='root'").? + "id='root'".len,
     }, main_element.attributes[0].span);
-    try std.testing.expectEqual(parser.QuoteStyle.single, main_element.attributes[0].value.?.quote_style);
+    try std.testing.expectEqual(
+        parser.QuoteStyle.single,
+        main_element.attributes[0].value.?.quote_style,
+    );
 
     const child = main_element.children[0];
     const child_element = child.data.element;
@@ -95,7 +120,10 @@ test "parser preserves nested mixed markup, quoted attributes, and exact source 
     const value = child_element.attributes[0].value.?;
     try std.testing.expectEqual(parser.QuoteStyle.double, value.quote_style);
     try std.testing.expectEqualStrings("before ", value.segments[0].data.text);
-    try std.testing.expectEqualStrings("name", source[value.segments[1].data.expression.start..value.segments[1].data.expression.end]);
+    try std.testing.expectEqualStrings(
+        "name",
+        source[value.segments[1].data.expression.start..value.segments[1].data.expression.end],
+    );
     try std.testing.expectEqualStrings(" after", value.segments[2].data.text);
     try std.testing.expectEqualStrings("left", child_element.children[0].data.text);
     try std.testing.expectEqualStrings("Inner", child_element.children[1].data.element.name);
@@ -126,7 +154,8 @@ test "parser represents boolean and quoted attributes with source spans" {
     const double_quoted = element.attributes[2].value.?;
     try std.testing.expectEqual(parser.QuoteStyle.double, double_quoted.quote_style);
     try std.testing.expectEqual(@as(usize, 1), double_quoted.segments.len);
-    try std.testing.expectEqualStrings("value", source[double_quoted.segments[0].data.expression.start..double_quoted.segments[0].data.expression.end]);
+    const expression_span = double_quoted.segments[0].data.expression;
+    try std.testing.expectEqualStrings("value", source[expression_span.start..expression_span.end]);
     try std.testing.expectEqualStrings("<button disabled data-kind='primary' title=\"{{ value }}\">", element.opening_tag);
     try std.testing.expect(element.attributes[0].span.isValid(source.len));
     try std.testing.expect(double_quoted.span.isValid(source.len));
@@ -185,7 +214,16 @@ test "parser represents comments and the HTML doctype as static markup" {
     const comment = document.nodes[1];
     try std.testing.expectEqual(parser.StaticMarkup.Kind.comment, comment.data.static_markup.kind);
     try std.testing.expectEqualStrings("<!-- {{ literal }} -->", comment.data.static_markup.serialized);
-    try std.testing.expectEqual(@as(zeft.SourceSpan, .{ .start = 18, .end = source.len }), comment.span);
+    try std.testing.expectEqual(
+        @as(
+            zeft.SourceSpan,
+            .{
+                .start = 18,
+                .end = source.len,
+            },
+        ),
+        comment.span,
+    );
 }
 
 test "parser rejects unsupported declarations and unterminated comments" {
@@ -203,7 +241,10 @@ test "parser rejects unsupported declarations and unterminated comments" {
         const result = try parser.parse(allocator, source);
         switch (result) {
             .success => return error.ExpectedDiagnostic,
-            .failure => |diagnostic| try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind),
+            .failure => |diagnostic| try std.testing.expectEqual(
+                zeft.CompileErrorKind.invalid_markup,
+                diagnostic.kind,
+            ),
         }
     }
 }
@@ -219,7 +260,10 @@ test "XML parsing preserves declarations and CDATA and applies XML element rules
     };
 
     try std.testing.expectEqual(@as(usize, 2), document.nodes.len);
-    try std.testing.expectEqual(parser.StaticMarkup.Kind.xml_declaration, document.nodes[0].data.static_markup.kind);
+    try std.testing.expectEqual(
+        parser.StaticMarkup.Kind.xml_declaration,
+        document.nodes[0].data.static_markup.kind,
+    );
     try std.testing.expectEqualStrings("<?xml version=\"1.0\" encoding='UTF-8' standalone=\"yes\"?>", document.nodes[0].data.static_markup.serialized);
     const root = document.nodes[1].data.element;
     try std.testing.expectEqualStrings("Root", root.name);
@@ -229,7 +273,10 @@ test "XML parsing preserves declarations and CDATA and applies XML element rules
     const child = root.children[0].data.element;
     try std.testing.expectEqualStrings("Child", child.name);
     try std.testing.expect(child.self_closing);
-    try std.testing.expectEqual(parser.StaticMarkup.Kind.cdata, root.children[2].data.static_markup.kind);
+    try std.testing.expectEqual(
+        parser.StaticMarkup.Kind.cdata,
+        root.children[2].data.static_markup.kind,
+    );
     try std.testing.expectEqualStrings("<![CDATA[ {{ literal }} & < ]]>", root.children[2].data.static_markup.serialized);
 }
 
@@ -259,7 +306,10 @@ test "XML names are case-sensitive and XML attributes require quoted values" {
         const result = try parser.parseWithFormat(allocator, source, .xml);
         switch (result) {
             .success => return error.ExpectedDiagnostic,
-            .failure => |diagnostic| try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind),
+            .failure => |diagnostic| try std.testing.expectEqual(
+                zeft.CompileErrorKind.invalid_markup,
+                diagnostic.kind,
+            ),
         }
     }
 }
@@ -284,7 +334,10 @@ test "parser rejects self-closing non-void elements and void end tags" {
         const result = try parser.parse(allocator, source);
         switch (result) {
             .success => return error.ExpectedDiagnostic,
-            .failure => |diagnostic| try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind),
+            .failure => |diagnostic| try std.testing.expectEqual(
+                zeft.CompileErrorKind.invalid_markup,
+                diagnostic.kind,
+            ),
         }
     }
 }
@@ -301,9 +354,15 @@ test "attribute values preserve static and interpolated segments in source order
     const segments = document.nodes[0].data.element.attributes[0].value.?.segments;
     try std.testing.expectEqual(@as(usize, 5), segments.len);
     try std.testing.expectEqualStrings("before ", segments[0].data.text);
-    try std.testing.expectEqualStrings("first", source[segments[1].data.expression.start..segments[1].data.expression.end]);
+    try std.testing.expectEqualStrings(
+        "first",
+        source[segments[1].data.expression.start..segments[1].data.expression.end],
+    );
     try std.testing.expectEqualStrings(" middle ", segments[2].data.text);
-    try std.testing.expectEqualStrings("second", source[segments[3].data.expression.start..segments[3].data.expression.end]);
+    try std.testing.expectEqualStrings(
+        "second",
+        source[segments[3].data.expression.start..segments[3].data.expression.end],
+    );
     try std.testing.expectEqualStrings(" after", segments[4].data.text);
 }
 
@@ -313,7 +372,10 @@ test "parser rejects unquoted attribute values" {
     const result = try parser.parse(arena.allocator(), "<input type=text></input>");
     switch (result) {
         .success => return error.ExpectedDiagnostic,
-        .failure => |diagnostic| try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind),
+        .failure => |diagnostic| try std.testing.expectEqual(
+            zeft.CompileErrorKind.invalid_markup,
+            diagnostic.kind,
+        ),
     }
 }
 
@@ -339,7 +401,16 @@ test "parser rejects malformed delimiters and unbalanced elements with spans" {
         .success => return error.ExpectedDiagnostic,
         .failure => |diagnostic| {
             try std.testing.expectEqual(zeft.CompileErrorKind.invalid_expression, diagnostic.kind);
-            try std.testing.expectEqual(@as(?zeft.SourceSpan, .{ .start = 0, .end = 7 }), diagnostic.span);
+            try std.testing.expectEqual(
+                @as(
+                    ?zeft.SourceSpan,
+                    .{
+                        .start = 0,
+                        .end = 7,
+                    },
+                ),
+                diagnostic.span,
+            );
         },
     }
 
@@ -348,7 +419,16 @@ test "parser rejects malformed delimiters and unbalanced elements with spans" {
         .success => return error.ExpectedDiagnostic,
         .failure => |diagnostic| {
             try std.testing.expectEqual(zeft.CompileErrorKind.invalid_markup, diagnostic.kind);
-            try std.testing.expectEqual(@as(?zeft.SourceSpan, .{ .start = 6, .end = 10 }), diagnostic.span);
+            try std.testing.expectEqual(
+                @as(
+                    ?zeft.SourceSpan,
+                    .{
+                        .start = 6,
+                        .end = 10,
+                    },
+                ),
+                diagnostic.span,
+            );
         },
     }
 }
@@ -434,7 +514,14 @@ test "template cache reuses entries and keys source and compile options" {
         .failure => return error.UnexpectedCompileFailure,
     };
     defer changed_format.deinit();
-    var changed_indentation = switch (try cache.getOrCompile("view", "<p>B</p>", .{ .whitespace = .pretty, .indentation = "...." })) {
+    var changed_indentation = switch (try cache.getOrCompile(
+        "view",
+        "<p>B</p>",
+        .{
+            .whitespace = .pretty,
+            .indentation = "....",
+        },
+    )) {
         .success => |lease| lease,
         .failure => return error.UnexpectedCompileFailure,
     };
@@ -457,7 +544,15 @@ test "failed cache reload preserves the previous valid template" {
     }
     var bytes: [16]u8 = undefined;
     var writer = std.Io.Writer.fixed(&bytes);
-    try std.testing.expectEqual(zeft.RenderResult.success, try cache.render(std.testing.allocator, "view", &writer, .{}));
+    try std.testing.expectEqual(
+        zeft.RenderResult.success,
+        try cache.render(
+            std.testing.allocator,
+            "view",
+            &writer,
+            .{},
+        ),
+    );
     try std.testing.expectEqualStrings("ready", std.Io.Writer.buffered(&writer));
 }
 
@@ -505,7 +600,15 @@ test "cache renders independently compiled includes and reports include errors" 
     defer child.deinit();
     var bytes: [32]u8 = undefined;
     var writer = std.Io.Writer.fixed(&bytes);
-    try std.testing.expectEqual(zeft.RenderResult.success, try cache.render(std.testing.allocator, "root", &writer, .{}));
+    try std.testing.expectEqual(
+        zeft.RenderResult.success,
+        try cache.render(
+            std.testing.allocator,
+            "root",
+            &writer,
+            .{},
+        ),
+    );
     try std.testing.expectEqualStrings("AoneZ", std.Io.Writer.buffered(&writer));
     var replacement = switch (try cache.getOrCompile("child", "two", .{})) {
         .success => |lease| lease,
@@ -513,7 +616,15 @@ test "cache renders independently compiled includes and reports include errors" 
     };
     defer replacement.deinit();
     writer = std.Io.Writer.fixed(&bytes);
-    try std.testing.expectEqual(zeft.RenderResult.success, try cache.render(std.testing.allocator, "root", &writer, .{}));
+    try std.testing.expectEqual(
+        zeft.RenderResult.success,
+        try cache.render(
+            std.testing.allocator,
+            "root",
+            &writer,
+            .{},
+        ),
+    );
     try std.testing.expectEqualStrings("AtwoZ", std.Io.Writer.buffered(&writer));
     writer = std.Io.Writer.fixed(&bytes);
     const missing = try cache.render(std.testing.allocator, "absent", &writer, .{});
@@ -571,7 +682,10 @@ test "missing and invalid included templates identify the dependency edge" {
     try std.testing.expectEqualStrings("bad-child", invalid.failure.include_identity.?);
     try std.testing.expectEqualStrings("invalid-parent", invalid.failure.include_parent_identity.?);
     try std.testing.expectEqual(@as(usize, 0), invalid.failure.span.?.start);
-    try std.testing.expectEqual(zeft.CompileErrorKind.invalid_expression, invalid.failure.include_compile_diagnostic.?.kind);
+    try std.testing.expectEqual(
+        zeft.CompileErrorKind.invalid_expression,
+        invalid.failure.include_compile_diagnostic.?.kind,
+    );
     try std.testing.expect(invalid.failure.include_compile_diagnostic.?.span != null);
 }
 
@@ -601,9 +715,21 @@ test "template cache supports concurrent lookup and rendering" {
         .failure => return error.UnexpectedCompileFailure,
     };
     defer initial.deinit();
-    var workers = [_]CacheWorker{ .{ .cache = &cache }, .{ .cache = &cache }, .{ .cache = &cache }, .{ .cache = &cache } };
+    var workers = [_]CacheWorker{
+        .{ .cache = &cache },
+        .{ .cache = &cache },
+        .{ .cache = &cache },
+        .{ .cache = &cache },
+    };
     var threads: [workers.len]std.Thread = undefined;
-    for (&workers, 0..) |*worker, index| threads[index] = try std.Thread.spawn(.{}, cacheWorker, .{worker});
+    for (
+        &workers,
+        0..,
+    ) |*worker, index| threads[index] = try std.Thread.spawn(
+        .{},
+        cacheWorker,
+        .{worker},
+    );
     for (threads) |thread| thread.join();
     for (workers) |worker| try std.testing.expect(!worker.failed);
 }
@@ -632,7 +758,11 @@ test "replacement keeps a template alive during an active render" {
 }
 
 test "cache get-or-compile cleans partial allocations on allocation failure" {
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, exerciseCacheAllocations, .{});
+    try std.testing.checkAllAllocationFailures(
+        std.testing.allocator,
+        exerciseCacheAllocations,
+        .{},
+    );
 }
 
 fn exerciseCacheAllocations(allocator: std.mem.Allocator) !void {
@@ -667,7 +797,11 @@ fn cacheWorker(worker: *CacheWorker) void {
             template.deinit();
             return;
         };
-        if (result != .success or !std.mem.eql(u8, std.Io.Writer.buffered(&writer), "cached")) worker.failed = true;
+        if (result != .success or !std.mem.eql(
+            u8,
+            std.Io.Writer.buffered(&writer),
+            "cached",
+        )) worker.failed = true;
         template.deinit();
         if (worker.failed) return;
     }
@@ -688,9 +822,22 @@ const ActiveCacheRender = struct {
 
 fn renderWhileHeld(render: *ActiveCacheRender) void {
     var writer = std.Io.Writer.fixed(&render.output);
-    const functions = [_]zeft.Registration{.{ .name = "hold", .callback = holdRenderCallback, .user_data = render.state }};
-    const options: zeft.RenderOptions = .{ .allocator = std.heap.page_allocator, .functions = &functions };
-    const result = render.cache.renderWithOptions(std.heap.page_allocator, "active", &writer, .{}, options) catch {
+    const functions = [_]zeft.Registration{.{
+        .name = "hold",
+        .callback = holdRenderCallback,
+        .user_data = render.state,
+    }};
+    const options: zeft.RenderOptions = .{
+        .allocator = std.heap.page_allocator,
+        .functions = &functions,
+    };
+    const result = render.cache.renderWithOptions(
+        std.heap.page_allocator,
+        "active",
+        &writer,
+        .{},
+        options,
+    ) catch {
         render.failed = true;
         return;
     };
@@ -701,7 +848,11 @@ fn renderWhileHeld(render: *ActiveCacheRender) void {
     render.output_len = std.Io.Writer.buffered(&writer).len;
 }
 
-fn holdRenderCallback(_: std.mem.Allocator, raw: ?*const anyopaque, _: []const zeft.Value) anyerror!zeft.Value {
+fn holdRenderCallback(
+    _: std.mem.Allocator,
+    raw: ?*const anyopaque,
+    _: []const zeft.Value,
+) anyerror!zeft.Value {
     const state: *ActiveRenderState = @ptrCast(@alignCast(@constCast(raw.?)));
     state.entered.store(true, .release);
     while (!state.proceed.load(.acquire)) std.atomic.spinLoopHint();

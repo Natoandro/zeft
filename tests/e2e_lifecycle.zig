@@ -13,7 +13,11 @@ pub const harness_ids = [_][]const u8{
     "LC-009/byte-array-context-storage",
 };
 
-const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true, .stack_trace_frames = 0, .enable_memory_limit = true });
+const DebugAllocator = std.heap.DebugAllocator(.{
+    .thread_safe = true,
+    .stack_trace_frames = 0,
+    .enable_memory_limit = true,
+});
 const ValueContext = struct { value: []const u8 = "value" };
 const copy_registration = [_]zeft.Registration{.{ .name = "copy", .callback = copyValue }};
 
@@ -33,7 +37,13 @@ test "LC-009 byte arrays retain context storage for pointer value and nested con
     defer nested.deinit();
     const nested_context = struct { record: Bytes }{ .record = context };
     writer = .fixed(&buffer);
-    try std.testing.expectEqual(zeft.RenderResult.success, try nested.render(&writer, &nested_context));
+    try std.testing.expectEqual(
+        zeft.RenderResult.success,
+        try nested.render(
+            &writer,
+            &nested_context,
+        ),
+    );
     try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/array.out"), writer.buffered());
 }
 
@@ -51,12 +61,20 @@ fn load(cache: *zeft.TemplateCache, identity: []const u8, source: []const u8) !z
     };
 }
 
-fn copyValue(allocator: std.mem.Allocator, _: ?*const anyopaque, args: []const zeft.Value) anyerror!zeft.Value {
+fn copyValue(
+    allocator: std.mem.Allocator,
+    _: ?*const anyopaque,
+    args: []const zeft.Value,
+) anyerror!zeft.Value {
     if (args.len != 1 or args[0] != .string) return error.BadArguments;
     return .{ .string = try allocator.dupe(u8, args[0].string) };
 }
 
-fn allocateThenFail(allocator: std.mem.Allocator, _: ?*const anyopaque, _: []const zeft.Value) anyerror!zeft.Value {
+fn allocateThenFail(
+    allocator: std.mem.Allocator,
+    _: ?*const anyopaque,
+    _: []const zeft.Value,
+) anyerror!zeft.Value {
     _ = try allocator.dupe(u8, "callback temporary bytes");
     return error.CallbackRejected;
 }
@@ -70,7 +88,14 @@ test "LC-001 compiled source and indentation survive buffer release" {
         defer allocator.free(source);
         const indentation = try allocator.dupe(u8, "\t");
         defer allocator.free(indentation);
-        const result = switch (try zeft.compile(allocator, source, .{ .whitespace = .pretty, .indentation = indentation })) {
+        const result = switch (try zeft.compile(
+            allocator,
+            source,
+            .{
+                .whitespace = .pretty,
+                .indentation = indentation,
+            },
+        )) {
             .success => |value| value,
             .failure => return error.UnexpectedCompileFailure,
         };
@@ -85,7 +110,13 @@ test "LC-001 compiled source and indentation survive buffer release" {
     try std.testing.expect(owned_bytes > 0);
     var buffer: [128]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
-    try std.testing.expectEqual(zeft.RenderResult.success, try template.render(&writer, ValueContext{ .value = "<owned>" }));
+    try std.testing.expectEqual(
+        zeft.RenderResult.success,
+        try template.render(
+            &writer,
+            ValueContext{ .value = "<owned>" },
+        ),
+    );
     try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/ownership.out"), writer.buffered());
     try std.testing.expectEqual(owned_bytes, tracked.total_requested_bytes);
     template.deinit();
@@ -108,7 +139,17 @@ test "LC-003 dynamic writer error releases callback scratch" {
     defer template.deinit();
     var buffer: [1]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
-    try std.testing.expectError(error.WriteFailed, template.renderWithOptions(&writer, ValueContext{ .value = "temporary&" }, .{ .allocator = tracked.allocator(), .filters = &copy_registration }));
+    try std.testing.expectError(
+        error.WriteFailed,
+        template.renderWithOptions(
+            &writer,
+            ValueContext{ .value = "temporary&" },
+            .{
+                .allocator = tracked.allocator(),
+                .filters = &copy_registration,
+            },
+        ),
+    );
     try std.testing.expectEqual(@as(usize, 0), tracked.total_requested_bytes);
 }
 
@@ -124,7 +165,19 @@ test "LC-004 include writer error releases render state and child lease" {
     const baseline = tracked.total_requested_bytes;
     var buffer: [1]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
-    try std.testing.expectError(error.WriteFailed, cache.renderWithOptions(tracked.allocator(), "parent", &writer, ValueContext{}, .{ .allocator = tracked.allocator(), .filters = &copy_registration }));
+    try std.testing.expectError(
+        error.WriteFailed,
+        cache.renderWithOptions(
+            tracked.allocator(),
+            "parent",
+            &writer,
+            ValueContext{},
+            .{
+                .allocator = tracked.allocator(),
+                .filters = &copy_registration,
+            },
+        ),
+    );
     try std.testing.expectEqual(baseline, tracked.total_requested_bytes);
     // With no application-held child lease, eviction can reclaim its storage.
     cache.evict("child");
@@ -139,9 +192,25 @@ test "LC-005 callback failure releases allocations made before error" {
     const registration = [_]zeft.Registration{.{ .name = "fail", .callback = allocateThenFail }};
     var buffer: [64]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
-    const rendered = try template.renderWithOptions(&writer, ValueContext{}, .{ .allocator = tracked.allocator(), .filters = &registration });
+    const rendered = try template.renderWithOptions(
+        &writer,
+        ValueContext{},
+        .{
+            .allocator = tracked.allocator(),
+            .filters = &registration,
+        },
+    );
     try std.testing.expect(rendered == .failure);
-    try std.testing.expectEqualDeep(zeft.RenderDiagnostic{ .kind = .filter_failure, .span = .{ .start = 11, .end = 15 } }, rendered.failure);
+    try std.testing.expectEqualDeep(
+        zeft.RenderDiagnostic{
+            .kind = .filter_failure,
+            .span = .{
+                .start = 11,
+                .end = 15,
+            },
+        },
+        rendered.failure,
+    );
     try std.testing.expectEqual(@as(usize, 0), tracked.total_requested_bytes);
 }
 
@@ -152,9 +221,25 @@ test "LC-006 later template diagnostic releases successful callback scratch" {
     defer template.deinit();
     var buffer: [64]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
-    const rendered = try template.renderWithOptions(&writer, ValueContext{}, .{ .allocator = tracked.allocator(), .filters = &copy_registration });
+    const rendered = try template.renderWithOptions(
+        &writer,
+        ValueContext{},
+        .{
+            .allocator = tracked.allocator(),
+            .filters = &copy_registration,
+        },
+    );
     try std.testing.expect(rendered == .failure);
-    try std.testing.expectEqualDeep(zeft.RenderDiagnostic{ .kind = .missing_variable, .span = .{ .start = 21, .end = 27 } }, rendered.failure);
+    try std.testing.expectEqualDeep(
+        zeft.RenderDiagnostic{
+            .kind = .missing_variable,
+            .span = .{
+                .start = 21,
+                .end = 27,
+            },
+        },
+        rendered.failure,
+    );
     try std.testing.expectEqual(@as(usize, 0), tracked.total_requested_bytes);
 }
 
@@ -164,7 +249,11 @@ const Gate = struct {
     done: std.atomic.Value(bool) = .init(false),
 };
 
-fn holdValue(allocator: std.mem.Allocator, raw: ?*const anyopaque, args: []const zeft.Value) anyerror!zeft.Value {
+fn holdValue(
+    allocator: std.mem.Allocator,
+    raw: ?*const anyopaque,
+    args: []const zeft.Value,
+) anyerror!zeft.Value {
     const result = try copyValue(allocator, null, args);
     const gate: *Gate = @ptrCast(@alignCast(@constCast(raw.?)));
     gate.entered.store(true, .release);
@@ -191,8 +280,19 @@ const CompiledWorker = struct {
 fn renderCompiled(worker: *CompiledWorker) void {
     defer worker.gate.done.store(true, .release);
     var writer = std.Io.Writer.fixed(&worker.bytes);
-    const registrations = [_]zeft.Registration{.{ .name = "hold", .callback = holdValue, .user_data = worker.gate }};
-    const rendered = worker.template.renderWithOptions(&writer, &worker.context, .{ .allocator = worker.allocator, .functions = &registrations }) catch {
+    const registrations = [_]zeft.Registration{.{
+        .name = "hold",
+        .callback = holdValue,
+        .user_data = worker.gate,
+    }};
+    const rendered = worker.template.renderWithOptions(
+        &writer,
+        &worker.context,
+        .{
+            .allocator = worker.allocator,
+            .functions = &registrations,
+        },
+    ) catch {
         worker.failed = true;
         return;
     };
@@ -207,8 +307,29 @@ test "LC-007 synchronized overlapping renders isolate branch loop and scratch st
     defer template.deinit();
     var first_gate = Gate{};
     var second_gate = Gate{};
-    var first = CompiledWorker{ .template = &template, .gate = &first_gate, .context = .{ .show = true, .items = &.{ "A", "B" }, .fallback = "unused" }, .allocator = tracked.allocator() };
-    var second = CompiledWorker{ .template = &template, .gate = &second_gate, .context = .{ .show = false, .items = &.{"unused"}, .fallback = "other" }, .allocator = tracked.allocator() };
+    var first = CompiledWorker{
+        .template = &template,
+        .gate = &first_gate,
+        .context = .{
+            .show = true,
+            .items = &.{
+                "A",
+                "B",
+            },
+            .fallback = "unused",
+        },
+        .allocator = tracked.allocator(),
+    };
+    var second = CompiledWorker{
+        .template = &template,
+        .gate = &second_gate,
+        .context = .{
+            .show = false,
+            .items = &.{"unused"},
+            .fallback = "other",
+        },
+        .allocator = tracked.allocator(),
+    };
     const first_thread = try std.Thread.spawn(.{}, renderCompiled, .{&first});
     defer {
         first_gate.proceed.store(true, .release);
@@ -249,8 +370,21 @@ const CacheWorker = struct {
 fn renderCache(worker: *CacheWorker) void {
     defer worker.gate.done.store(true, .release);
     var writer = std.Io.Writer.fixed(&worker.bytes);
-    const registrations = [_]zeft.Registration{.{ .name = "hold", .callback = holdValue, .user_data = worker.gate }};
-    const rendered = worker.cache.renderWithOptions(std.heap.page_allocator, "parent", &writer, ValueContext{}, .{ .allocator = std.heap.page_allocator, .functions = &registrations }) catch {
+    const registrations = [_]zeft.Registration{.{
+        .name = "hold",
+        .callback = holdValue,
+        .user_data = worker.gate,
+    }};
+    const rendered = worker.cache.renderWithOptions(
+        std.heap.page_allocator,
+        "parent",
+        &writer,
+        ValueContext{},
+        .{
+            .allocator = std.heap.page_allocator,
+            .functions = &registrations,
+        },
+    ) catch {
         worker.failed = true;
         return;
     };
@@ -280,7 +414,13 @@ test "LC-008 active included child survives eviction and reload" {
     defer replacement.deinit();
     var bytes: [64]u8 = undefined;
     var writer = std.Io.Writer.fixed(&bytes);
-    try std.testing.expectEqual(zeft.RenderResult.success, try parent.render(&writer, ValueContext{}));
+    try std.testing.expectEqual(
+        zeft.RenderResult.success,
+        try parent.render(
+            &writer,
+            ValueContext{},
+        ),
+    );
     try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/new-child.out"), writer.buffered());
     try std.testing.expect(!gate.done.load(.acquire));
     gate.proceed.store(true, .release);

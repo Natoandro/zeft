@@ -5,7 +5,23 @@ const analysis = @import("zeft_analysis");
 
 pub const StringId = u32;
 pub const ExpressionId = u32;
-pub const Operator = enum { not, negate, or_, and_, equal, not_equal, less, less_equal, greater, greater_equal, add, subtract, multiply, divide, modulo };
+pub const Operator = enum {
+    not,
+    negate,
+    or_,
+    and_,
+    equal,
+    not_equal,
+    less,
+    less_equal,
+    greater,
+    greater_equal,
+    add,
+    subtract,
+    multiply,
+    divide,
+    modulo,
+};
 
 pub const EscapeContext = enum {
     text,

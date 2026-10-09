@@ -7,7 +7,15 @@ const CountingAllocator = struct {
     requested_bytes: usize = 0,
 
     fn allocator(self: *CountingAllocator) std.mem.Allocator {
-        return .{ .ptr = self, .vtable = &.{ .alloc = alloc, .resize = resize, .remap = remap, .free = free } };
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .alloc = alloc,
+                .resize = resize,
+                .remap = remap,
+                .free = free,
+            },
+        };
     }
     fn alloc(ptr: *anyopaque, n: usize, alignment: std.mem.Alignment, ra: usize) ?[*]u8 {
         const self: *CountingAllocator = @ptrCast(@alignCast(ptr));
@@ -16,13 +24,25 @@ const CountingAllocator = struct {
         self.requested_bytes += n;
         return result;
     }
-    fn resize(ptr: *anyopaque, memory: []u8, alignment: std.mem.Alignment, n: usize, ra: usize) bool {
+    fn resize(
+        ptr: *anyopaque,
+        memory: []u8,
+        alignment: std.mem.Alignment,
+        n: usize,
+        ra: usize,
+    ) bool {
         const self: *CountingAllocator = @ptrCast(@alignCast(ptr));
         const resized = self.child.rawResize(memory, alignment, n, ra);
         if (resized and n > memory.len) self.requested_bytes += n - memory.len;
         return resized;
     }
-    fn remap(ptr: *anyopaque, memory: []u8, alignment: std.mem.Alignment, n: usize, ra: usize) ?[*]u8 {
+    fn remap(
+        ptr: *anyopaque,
+        memory: []u8,
+        alignment: std.mem.Alignment,
+        n: usize,
+        ra: usize,
+    ) ?[*]u8 {
         const self: *CountingAllocator = @ptrCast(@alignCast(ptr));
         const remapped = self.child.rawRemap(memory, alignment, n, ra) orelse return null;
         if (n > memory.len) self.requested_bytes += n - memory.len;
@@ -42,7 +62,11 @@ const Sink = struct {
     fn init() Sink {
         return .{ .writer = .{ .vtable = &vtable, .buffer = &.{} } };
     }
-    fn drain(writer: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+    fn drain(
+        writer: *std.Io.Writer,
+        data: []const []const u8,
+        splat: usize,
+    ) std.Io.Writer.Error!usize {
         const self: *Sink = @fieldParentPtr("writer", writer);
         self.calls += 1;
         var n: usize = 0;
@@ -95,7 +119,11 @@ fn runCase(case: Case) !void {
     started = nowNs();
     for (0..1000) |_| {
         sink = Sink.init();
-        const result = try template.renderWithOptions(&sink.writer, &context, .{ .allocator = allocator });
+        const result = try template.renderWithOptions(
+            &sink.writer,
+            &context,
+            .{ .allocator = allocator },
+        );
         if (result != .success) return error.BenchmarkRenderFailed;
     }
     const render_ns = (nowNs() - started) / 1000;

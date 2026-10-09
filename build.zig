@@ -118,7 +118,16 @@ pub fn build(b: *std.Build) void {
     });
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
-    const compiler_test_modules = [_]*std.Build.Module{ core, parser, expression, analysis, lower, optimize_module, runtime, zeft };
+    const compiler_test_modules = [_]*std.Build.Module{
+        core,
+        parser,
+        expression,
+        analysis,
+        lower,
+        optimize_module,
+        runtime,
+        zeft,
+    };
     var compiler_test_runs: [compiler_test_modules.len]*std.Build.Step.Run = undefined;
     for (compiler_test_modules, 0..) |module, index| {
         const module_tests = b.addTest(.{ .root_module = module });

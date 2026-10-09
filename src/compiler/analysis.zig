@@ -93,7 +93,11 @@ const Analyzer = struct {
         }
     }
 
-    fn addExpression(self: *Analyzer, span: zeft.SourceSpan, output_context: OutputContext) std.mem.Allocator.Error!void {
+    fn addExpression(
+        self: *Analyzer,
+        span: zeft.SourceSpan,
+        output_context: OutputContext,
+    ) std.mem.Allocator.Error!void {
         const parsed = try expression.parse(self.allocator, self.source, span);
         const parsed_expression = switch (parsed) {
             .success => |value| value,
@@ -103,7 +107,10 @@ const Analyzer = struct {
             },
         };
         try self.collectSymbols(&parsed_expression);
-        const symbol_id = if (firstIdentifier(&parsed_expression)) |name| if (self.isLocal(name)) 0 else self.getSymbolId(name) else 0;
+        const symbol_id = if (firstIdentifier(&parsed_expression)) |name|
+            if (self.isLocal(name)) 0 else self.getSymbolId(name)
+        else
+            0;
         try self.expressions.append(self.allocator, .{
             .expression = parsed_expression,
             .symbol_id = symbol_id,
@@ -111,7 +118,10 @@ const Analyzer = struct {
         });
     }
 
-    fn collectSymbols(self: *Analyzer, expr: *const expression.Expression) std.mem.Allocator.Error!void {
+    fn collectSymbols(
+        self: *Analyzer,
+        expr: *const expression.Expression,
+    ) std.mem.Allocator.Error!void {
         switch (expr.data) {
             .identifier => |name| {
                 if (!self.isLocal(name)) _ = try self.getOrAddSymbol(name);
@@ -229,7 +239,10 @@ test "analyzes XML expressions with text and attribute contexts" {
     switch (result) {
         .failure => return error.UnexpectedAnalysisFailure,
         .success => |analyzed| {
-            try std.testing.expectEqual(OutputContext.attribute, analyzed.expressions[0].output_context);
+            try std.testing.expectEqual(
+                OutputContext.attribute,
+                analyzed.expressions[0].output_context,
+            );
             try std.testing.expectEqual(OutputContext.text, analyzed.expressions[1].output_context);
         },
     }
