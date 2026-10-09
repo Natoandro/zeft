@@ -61,7 +61,7 @@ const Analyzer = struct {
     fn visit(self: *Analyzer, nodes: []const parser.Node) std.mem.Allocator.Error!void {
         for (nodes) |node| {
             switch (node.data) {
-                .text, .static_markup, .break_, .continue_ => {},
+                .text, .static_markup, .break_, .continue_, .include => {},
                 .conditional => |conditional| {
                     try self.addExpression(conditional.condition, .text);
                     try self.visit(conditional.then_nodes);

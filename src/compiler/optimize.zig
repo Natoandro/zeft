@@ -12,6 +12,9 @@ pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Alloc
     const old_to_new = try allocator.alloc(u32, program.instructions.len + 1);
     defer allocator.free(old_to_new);
     const targeted = try allocator.alloc(bool, program.instructions.len + 1);
+    const old_string_to_new = try allocator.alloc(?ir.StringId, program.strings.len);
+    @memset(old_string_to_new, null);
+    defer allocator.free(old_string_to_new);
     defer allocator.free(targeted);
     @memset(targeted, false);
     for (program.instructions) |instruction| switch (instruction.data) {
@@ -55,6 +58,20 @@ pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Alloc
                     previous_string_owned = false;
                 }
             },
+            .include => |include| {
+                std.debug.assert(include.identity < program.strings.len);
+                const mapped = old_string_to_new[include.identity] orelse blk: {
+                    const id = std.math.cast(ir.StringId, strings.items.len) orelse unreachable;
+                    try strings.append(allocator, program.strings[include.identity]);
+                    old_string_to_new[include.identity] = id;
+                    break :blk id;
+                };
+                old_to_new[old_index] = @intCast(instructions.items.len);
+                var rewritten = instruction;
+                rewritten.data.include.identity = mapped;
+                try instructions.append(allocator, rewritten);
+                previous_string_owned = false;
+            },
             else => {
                 old_to_new[old_index] = @intCast(instructions.items.len);
                 try instructions.append(allocator, instruction);
@@ -77,9 +94,10 @@ pub fn optimize(allocator: std.mem.Allocator, program: ir.Program) std.mem.Alloc
         else => {},
     };
 
-    // Check that all static-write references remain valid after rewriting.
+    // Check that all references into the rewritten string table remain valid.
     for (instructions.items) |instruction| switch (instruction.data) {
         .write_static => |id| std.debug.assert(id < strings.items.len),
+        .include => |include| std.debug.assert(include.identity < strings.items.len),
         else => {},
     };
 

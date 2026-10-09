@@ -61,6 +61,13 @@ a loop and MUST target the innermost active loop.
 Unknown directive names MUST use the `syntax` diagnostic category. Invalid
 block nesting and loop control outside a loop MUST use `invalid_construct`.
 
+The include form MUST be `{% include "path" %}`. The quoted path MUST be
+non-interpolated, MUST NOT contain a double quote, and MUST NOT use escape
+sequences. Its interior bytes MUST be retained exactly as the child template
+identity. `compile()` MUST lower it without cache lookup, filesystem access,
+or child compilation. The include instruction MUST retain the directive's
+source span for runtime diagnostics.
+
 Conditions MUST evaluate to booleans. A `for` iterable MUST evaluate to a
 sequence; a non-sequence is a runtime `non_iterable` error at the loop
 expression span. Empty sequences execute no body. A loop creates one lexical

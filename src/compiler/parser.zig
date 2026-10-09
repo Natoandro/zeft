@@ -25,6 +25,7 @@ pub const Directive = union(enum) {
     endfor,
     break_,
     continue_,
+    include: []const u8,
     unknown,
 };
 
@@ -55,6 +56,7 @@ pub const Node = struct {
         loop: Loop,
         break_,
         continue_,
+        include: []const u8,
     };
 };
 
@@ -253,6 +255,13 @@ const Lexer = struct {
             directive = .break_;
         } else if (std.mem.eql(u8, bytes, "continue")) {
             directive = .continue_;
+        } else if (std.mem.startsWith(u8, bytes, "include ")) {
+            const path = trimSpan(self.source, content.start + "include ".len, content.end);
+            if (path.end - path.start >= 2 and self.source[path.start] == '"' and self.source[path.end - 1] == '"' and
+                std.mem.indexOfScalar(u8, self.source[path.start + 1 .. path.end - 1], '"') == null)
+            {
+                directive = .{ .include = self.source[path.start + 1 .. path.end - 1] };
+            }
         } else if (std.mem.startsWith(u8, bytes, "for ")) {
             const rest_start = content.start + 4;
             const in_index = std.mem.indexOf(u8, self.source[rest_start..content.end], " in ");
@@ -696,6 +705,7 @@ const Parser = struct {
                         }
                         try nodes.append(self.allocator, .{ .span = token.span, .data = .continue_ });
                     },
+                    .include => |path| try nodes.append(self.allocator, .{ .span = token.span, .data = .{ .include = path } }),
                     .unknown => {
                         self.failure = .{ .kind = .syntax, .span = token.span };
                         break;

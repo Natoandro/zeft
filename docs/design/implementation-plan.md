@@ -207,21 +207,21 @@ reuse, and well-defined allocation lifetimes.
 **Outcome:** applications can reuse compiled templates and reload changed
 sources without putting filesystem or cache behavior inside `compile()`.
 
-- [ ] **ZEP-060** Define `TemplateCache` ownership, identity, get-or-compile,
+- [x] **ZEP-060** Define `TemplateCache` ownership, identity, get-or-compile,
   and deinitialization APIs.
-- [ ] **ZEP-061** Include source content, compile options, and compiler/IR
+- [x] **ZEP-061** Include source content, compile options, and compiler/IR
   version in cache identity.
-- [ ] **ZEP-062** Implement development reload detection and replace a cached
-  entry only after changed source compiles successfully.
-- [ ] **ZEP-063** Add template include syntax and lower includes to calls with
+- [x] **ZEP-062** Implement explicit reload through get-or-compile and replace
+  a cached entry only after changed source compiles successfully.
+- [x] **ZEP-063** Add template include syntax and lower includes to calls with
   stable child-template identities.
-- [ ] **ZEP-064** Resolve the current independently compiled child through the
+- [x] **ZEP-064** Resolve the current independently compiled child through the
   cache for each render.
-- [ ] **ZEP-065** Keep cached entries alive while active renders reference
+- [x] **ZEP-065** Keep cached entries alive while active renders reference
   them, including during replacement and eviction.
-- [ ] **ZEP-066** Specify and implement include-cycle behavior, and report
+- [x] **ZEP-066** Specify and implement include-cycle behavior, and report
   missing includes and child compile failures with dependency context.
-- [ ] **ZEP-067** Add tests for cache hits, option-sensitive identities,
+- [x] **ZEP-067** Add tests for cache hits, option-sensitive identities,
   changed source, failed reload preservation, changed child templates, and
   concurrent access.
 

@@ -55,6 +55,7 @@ pub const Instruction = struct {
         loop_next: struct { body_target: u32, exit_target: u32 },
         loop_break: u32,
         loop_continue: u32,
+        include: struct { identity: StringId },
         end,
     };
 };

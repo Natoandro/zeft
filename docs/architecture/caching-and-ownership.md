@@ -6,28 +6,28 @@ compiled data is owned.
 ## Compilation and cache boundary
 
 `compile()` MUST remain deterministic and independent of caches, filesystems,
-and global state. Caching MUST be provided by an explicit, application-owned
-`TemplateCache` layer.
+and global state. Caching MUST be provided by an explicit, application-owned,
+thread-safe `TemplateCache`.
 
-The cache MUST provide a get-or-compile operation for a caller-supplied
-template identity and source. A cache hit MUST return a valid compiled
-template for that source and those compile options. A cache miss MUST compile
-the source, store the resulting compiled template, and return it.
+The cache MUST provide a get-or-compile operation for caller-supplied stable
+identity bytes, source bytes, and compile options. It MUST NOT read files or
+resolve identities. Callers load sources and explicitly submit changed source
+to the cache. A hit MUST return a retained lease to the matching immutable
+compiled template. A miss MUST compile, store, and return a lease.
 
-The cache identity MUST account for source content, all compile options that
-affect output or semantics, and the compiler/IR version. Equivalent source
-with different format, whitespace, syntax configuration, or compiler version
-MUST NOT accidentally share an incompatible compiled result.
+Cache matching MUST account for exact identity bytes, source bytes, all compile
+options that affect output or semantics, and the compiler/IR version. In the
+current API, compile options are output format, whitespace policy, and
+indentation bytes. A hash MAY accelerate matching, but equality MUST be
+confirmed against all identity inputs.
 
 ## Source change detection
 
-Development-mode reload MUST be a cache behavior. It MUST detect when the
-source for an entry has changed, compile the changed source, and replace the
-cached entry only after compilation succeeds. A failed reload MUST NOT replace
-the last valid compiled entry.
-
-The cache MUST use an authoritative source identity that cannot silently
-reuse stale output.
+Reload is explicit: when the caller submits changed source for an identity,
+the cache MUST compile it and replace the current entry only after compilation
+succeeds. A failed reload MUST leave the last valid entry available. The failed
+compile result MUST still be returned to the caller. Eviction removes the
+current lookup entry; outstanding leases remain valid.
 
 ## Includes
 
@@ -37,10 +37,26 @@ independently from their parents. Changing an included template MUST make the
 next render observe the newly compiled child without requiring the parent
 template's static content to be recompiled.
 
-An include instruction MUST carry the child's stable template identity and
-MUST resolve the current compiled child through the cache for each render.
-Missing or invalid included templates MUST produce a runtime error; they MUST
-NOT silently render stale or partial content.
+The syntax MUST be `{% include "path" %}`. Bytes inside the quotes are the
+child's exact stable identity; the compiler MUST NOT interpret them as a file
+path. The instruction MUST retain those bytes and the directive source span.
+`compile()` MUST compile the parent without looking up the child.
+
+Cache-backed rendering MUST resolve the current child entry on each include
+execution. Callers MUST populate or reload children with get-or-compile before
+rendering. A lease render pins that lease's root version while resolving
+children from the current cache. A cache render pins the current root version.
+Missing children, children whose initial compilation failed, and include
+cycles MUST return runtime diagnostics with the relevant include identity and
+the including template identity and directive span. An initial child compile failure MUST also
+retain the child's compile category and source span. A failed reload MUST
+preserve the last valid entry, which remains renderable.
+
+Lookup, compilation publication, replacement, eviction, and reference
+accounting MUST be synchronized. Compilation MAY be serialized within a cache.
+Rendering MUST occur without holding the cache lock. A render MUST hold a lease
+for every template it executes. Replaced or evicted templates MUST be
+destroyed only after all leases to them are released.
 
 ## Ownership and lifetime
 
@@ -54,9 +70,12 @@ or equivalent lifetime and MUST be released after finalization. Persistent
 Render IR, expression IR, strings, symbols, and retained debug metadata MUST
 not refer to released temporary memory.
 
-A cache MUST own its entries. Callers MUST NOT deinitialize a template while a
-cache or active render still relies on that template. An entry MUST remain
-alive until every active render using it has completed.
+The cache MUST own its entries. A `TemplateLease` MUST be released exactly
+once. The cache MUST outlive all its leases and renders; deinitialization MUST
+assert that no active or retired entry still has a lease. The cache allocator
+MUST remain valid through cache deinitialization. Include identity strings in
+diagnostics returned from cache-backed rendering MUST remain valid until cache
+deinitialization, including after replacement or eviction.
 
 ## Comptime compilation
 

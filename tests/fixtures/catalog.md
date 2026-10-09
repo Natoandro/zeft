@@ -109,19 +109,18 @@ element-only document formatting whitespace is removed.
 
 | ID | Status | Scenario | Expected result |
 | --- | --- | --- | --- |
-| K-001 | Pending API | Same identity/source/options requested twice | Second request hits the explicit cache and returns equivalent compiled behavior. |
-| K-002 | Pending API | Same source with different format or whitespace options | Entries do not alias when output-affecting options differ. |
-| K-003 | Pending API | Same identity with changed source | Successful reload replaces the entry and next render sees new output. |
-| K-004 | Pending API | Changed source fails compilation | Last valid cached template remains available. |
-| K-005 | Pending syntax/API | Parent includes child, then child changes | Next parent render resolves the independently compiled current child without recompiling parent static content. |
-| K-006 | Pending syntax/API | Missing/invalid child and include cycle | Return explicit errors with dependency context; never use stale or partial output. |
-| K-007 | Pending API | Evict/replace while render is active | Active render keeps its compiled entry alive until completion. |
+| K-001 | Enabled | Same identity/source/options requested twice | Second request hits the explicit cache and returns equivalent compiled behavior. |
+| K-002 | Enabled | Same source with different format or whitespace options | Entries do not alias when output-affecting options differ. |
+| K-003 | Enabled | Same identity with changed source | Successful reload replaces the entry and next render sees new output. |
+| K-004 | Enabled | Changed source fails compilation | Last valid cached template remains available. |
+| K-005 | Enabled | Parent includes child, then child changes | Next parent render resolves the independently compiled current child without recompiling parent static content. |
+| K-006 | Enabled | Missing/invalid child and include cycle | Return explicit errors with dependency context; never substitute stale child content. |
+| K-007 | Enabled | Evict/replace while render is active | Active render keeps its compiled entry alive until completion. |
+| K-008 | Enabled | Concurrent cache lookup and rendering | Cache publication and reference accounting remain safe across concurrent callers. |
 | O-001 | Internal unit test | Adjacent static writes, constants, empty operations, dead branches | Optimizations preserve output and source diagnostics; validate branch destinations. |
 | O-002 | Internal unit test | Repeated identifiers/strings and compiled metadata | Interning preserves stable symbol/string behavior. |
 | B-001 | Benchmark fixture | Representative small, large, dynamic, and control-flow templates | Record compile/render time, allocations, write calls, and compiled size. |
 | T-001 | Pending comptime | Same supported fixture compiled at runtime and comptime | Produce equivalent logical program and identical rendered bytes. |
 | T-002 | Pending comptime | Diagnostics for shared invalid fixtures | Runtime/comptime entry points report equivalent categories and spans where supported. |
 
-Cache, include, and comptime source/API details are not specified yet. Keep
-these rows as behavioral acceptance cases until their implementation-plan
-items define those interfaces.
+Comptime cases remain pending until their API is defined.

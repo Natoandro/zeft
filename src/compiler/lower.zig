@@ -68,6 +68,10 @@ const Lowerer = struct {
                 .static_markup => |markup| try self.writeStatic(markup.serialized, node.span),
                 .break_ => try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .loop_break = 0 } }),
                 .continue_ => try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .loop_continue = 0 } }),
+                .include => |path| {
+                    const identity = try self.addString(path);
+                    try self.instructions.append(self.allocator, .{ .span = node.span, .data = .{ .include = .{ .identity = identity } } });
+                },
                 .conditional => |conditional| {
                     const condition_id = try self.compileExpression(conditional.condition);
                     const branch_index = self.instructions.items.len;
@@ -210,6 +214,12 @@ const Lowerer = struct {
             .span = span,
             .data = .{ .write_static = id },
         });
+    }
+
+    fn addString(self: *Lowerer, bytes: []const u8) std.mem.Allocator.Error!ir.StringId {
+        const id = std.math.cast(ir.StringId, self.strings.items.len) orelse unreachable;
+        try self.strings.append(self.allocator, bytes);
+        return id;
     }
 
     fn writeOpeningTag(self: *Lowerer, element: parser.Element, source_start: usize) std.mem.Allocator.Error!void {
@@ -367,7 +377,7 @@ fn isElementOnly(nodes: []const parser.Node) bool {
         .element => {},
         .loop => |loop| if (!isElementOnly(loop.children)) return false,
         .conditional => |conditional| if (!isElementOnly(conditional.then_nodes) or !isElementOnly(conditional.else_nodes)) return false,
-        .break_, .continue_ => {},
+        .break_, .continue_, .include => {},
         .text => |text| if (!isWhitespaceOnly(text)) return false,
         else => return false,
     };

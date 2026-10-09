@@ -36,6 +36,8 @@ pub const RenderOptions = struct {
     allocator: std.mem.Allocator = std.heap.page_allocator,
     filters: []const Registration = &.{},
     functions: []const Registration = &.{},
+    include_context: ?*anyopaque = null,
+    include_resolver: ?*const fn (*anyopaque, []const u8, *std.Io.Writer, []const ContextEntry, core.OutputFormat, RenderOptions, core.SourceSpan) anyerror!RenderResult = null,
 };
 pub const RenderResult = union(enum) {
     success,
@@ -219,6 +221,23 @@ pub fn renderWithOptions(
                 pc = target - 1;
             },
             .loop_continue => |target| pc = target - 1,
+            .include => |include| {
+                const identity = program.strings[include.identity];
+                const resolver = options.include_resolver orelse return .{ .failure = .{
+                    .kind = .missing_include,
+                    .span = instruction.span,
+                    .include_identity = identity,
+                } };
+                const resolver_context = options.include_context orelse return .{ .failure = .{
+                    .kind = .missing_include,
+                    .span = instruction.span,
+                    .include_identity = identity,
+                } };
+                switch (try resolver(resolver_context, identity, writer, context, format, options, instruction.span)) {
+                    .success => {},
+                    .failure => |diagnostic| return .{ .failure = diagnostic },
+                }
+            },
             .end => return .success,
         }
     }

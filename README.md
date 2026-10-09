@@ -61,6 +61,31 @@ not deinitialized during a render. Each call must have its own writer and
 should use immutable context and callback data, or synchronize any shared
 mutable data itself.
 
+`TemplateCache` is an explicit, thread-safe cache. The caller supplies the
+identity bytes, source bytes, and compile options; Zeft does not read files.
+Submit updated source with `getOrCompile` to reload. A compile failure leaves
+the last valid entry available. A returned `TemplateLease` must be deinitialized
+exactly once and before its cache. Lease rendering pins that root version.
+
+Includes use `{% include "path" %}`. The bytes inside the quotes are the exact
+child identity. Populate children independently with `getOrCompile`; cache
+rendering resolves the current child on each include. Missing children,
+initial child compile failures, and cycles return runtime diagnostics with the
+child identity and parent include span. Replaced or evicted templates remain
+alive while a lease or render uses them. Include identity strings in returned
+diagnostics remain valid until the cache is deinitialized.
+
+~~~zig
+var cache = zeft.TemplateCache.init(allocator);
+defer cache.deinit();
+var page = switch (try cache.getOrCompile("page", source, .{})) {
+    .success => |lease| lease,
+    .failure => return error.TemplateCompileFailed,
+};
+defer page.deinit();
+const rendered = try page.render(&writer, .{ .name = "Ada" });
+~~~
+
 ## Requirements
 
 - Zig 0.16.0

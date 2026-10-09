@@ -37,6 +37,10 @@ pub const RenderErrorKind = enum {
     filter_failure,
     function_failure,
     writer_failure,
+    missing_template,
+    missing_include,
+    include_cycle,
+    include_compile_failure,
 };
 
 pub const CompileDiagnostic = struct {
@@ -47,6 +51,12 @@ pub const CompileDiagnostic = struct {
 pub const RenderDiagnostic = struct {
     kind: RenderErrorKind,
     span: ?SourceSpan = null,
+    /// Stable include identity associated with dependency errors.
+    include_identity: ?[]const u8 = null,
+    /// Identity of the template containing the failed include directive.
+    include_parent_identity: ?[]const u8 = null,
+    /// Original child compile diagnostic, when the child has no valid entry.
+    include_compile_diagnostic: ?CompileDiagnostic = null,
 };
 
 test "source spans are half-open and bounded by source length" {

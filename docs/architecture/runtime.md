@@ -42,6 +42,7 @@ LOOP_BEGIN         expression_id, binding_id, exit_target
 LOOP_NEXT          body_target, exit_target
 LOOP_BREAK         exit_target
 LOOP_CONTINUE      next_target
+INCLUDE            template_identity
 END
 ```
 
@@ -136,6 +137,13 @@ the default behavior.
 
 Errors MUST preserve their category and MUST include source information when
 the compiled template retains it. Writer errors MUST propagate to the caller.
+An unresolved top-level cache identity MUST return `missing_template`. An
+unresolved include MUST return `missing_include`; a child whose initial
+compilation failed MUST return `include_compile_failure`; and a recursive
+include MUST return `include_cycle`. Each include diagnostic MUST identify the
+child identity, parent identity, and include directive span. An
+`include_compile_failure` diagnostic MUST also retain the child's compile
+category and source span.
 
 ## Allocation and concurrency
 

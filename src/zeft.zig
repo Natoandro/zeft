@@ -38,6 +38,18 @@ const FinalizedTemplate = struct {
     options: CompileOptions,
 };
 
+const CacheMutex = struct {
+    held: std.atomic.Value(bool) = .init(false),
+
+    fn lock(self: *CacheMutex) void {
+        while (self.held.cmpxchgWeak(false, true, .acquire, .monotonic) != null) std.atomic.spinLoopHint();
+    }
+
+    fn unlock(self: *CacheMutex) void {
+        self.held.store(false, .release);
+    }
+};
+
 /// Owns the finalized storage for one compiled template.
 pub const CompiledTemplate = struct {
     impl: *anyopaque,
@@ -78,7 +90,290 @@ pub const CompiledTemplate = struct {
         const compiled = self.finalized();
         return @call(.never_inline, renderContext, .{ compiled.program, writer, context, compiled.options.format, options });
     }
+
+    fn renderRuntime(self: *const CompiledTemplate, writer: *std.Io.Writer, context: []const ContextEntry, options: RenderOptions) anyerror!RenderResult {
+        const compiled = self.finalized();
+        return runtime.renderWithOptions(compiled.program, writer, context, compiled.options.format, options);
+    }
 };
+
+const CacheEntry = struct {
+    identity: []const u8,
+    source: []const u8,
+    options: CompileOptions,
+    fingerprint: u64,
+    template: CompiledTemplate,
+    references: usize = 0,
+    retired: bool = false,
+};
+
+/// A retained immutable compiled template. Release each lease exactly once.
+pub const TemplateLease = struct {
+    cache: *TemplateCache,
+    entry: *CacheEntry,
+
+    pub fn deinit(self: *TemplateLease) void {
+        self.cache.release(self.entry);
+        self.* = undefined;
+    }
+
+    pub fn render(self: *const TemplateLease, writer: *std.Io.Writer, context: anytype) anyerror!RenderResult {
+        return self.cache.renderLease(self, writer, context, .{});
+    }
+
+    pub fn renderWithOptions(self: *const TemplateLease, writer: *std.Io.Writer, context: anytype, options: RenderOptions) anyerror!RenderResult {
+        return self.cache.renderLease(self, writer, context, options);
+    }
+};
+
+const CacheRenderFrame = struct {
+    cache: *TemplateCache,
+    allocator: std.mem.Allocator,
+    dependencies: std.ArrayList([]const u8) = .empty,
+};
+
+/// Thread-safe cache for immutable compiled templates and independently loaded includes.
+pub const TemplateCache = struct {
+    allocator: std.mem.Allocator,
+    diagnostic_storage: std.heap.ArenaAllocator,
+    mutex: CacheMutex = .{},
+    entries: std.ArrayList(*CacheEntry) = .empty,
+    all_entries: std.ArrayList(*CacheEntry) = .empty,
+    failures: std.ArrayList(struct { identity: []const u8, diagnostic: CompileDiagnostic }) = .empty,
+
+    pub fn init(allocator: std.mem.Allocator) TemplateCache {
+        return .{ .allocator = allocator, .diagnostic_storage = std.heap.ArenaAllocator.init(allocator) };
+    }
+
+    /// Compile or reload an identity. On a failed reload, its last valid entry remains available.
+    pub fn getOrCompile(self: *TemplateCache, identity: []const u8, source: []const u8, options: CompileOptions) std.mem.Allocator.Error!CacheCompileResult {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const fingerprint = cacheFingerprint(identity, source, options);
+        for (self.entries.items) |entry| {
+            if (!entry.retired and std.mem.eql(u8, entry.identity, identity) and entry.fingerprint == fingerprint and
+                std.mem.eql(u8, entry.source, source) and optionsEqual(entry.options, options))
+            {
+                entry.references += 1;
+                return .{ .success = .{ .cache = self, .entry = entry } };
+            }
+        }
+        const compiled = try compile(self.allocator, source, options);
+        switch (compiled) {
+            .failure => |diagnostic| {
+                try self.recordFailure(identity, diagnostic);
+                return .{ .failure = diagnostic };
+            },
+            .success => |template| {
+                var owned_template = template;
+                errdefer owned_template.deinit();
+                const identity_copy = try self.allocator.dupe(u8, identity);
+                errdefer self.allocator.free(identity_copy);
+                const source_copy = try self.allocator.dupe(u8, source);
+                errdefer self.allocator.free(source_copy);
+                const indentation_copy = try self.allocator.dupe(u8, options.indentation);
+                errdefer self.allocator.free(indentation_copy);
+                const new_entry = try self.allocator.create(CacheEntry);
+                errdefer self.allocator.destroy(new_entry);
+                new_entry.* = .{
+                    .identity = identity_copy,
+                    .source = source_copy,
+                    .options = options,
+                    .fingerprint = fingerprint,
+                    .template = owned_template,
+                    .references = 1,
+                };
+                new_entry.options.indentation = indentation_copy;
+                // Reserve every list slot before retiring the current version.
+                // If either allocation fails, the previous entry stays current.
+                try self.all_entries.ensureUnusedCapacity(self.allocator, 1);
+                try self.entries.ensureUnusedCapacity(self.allocator, 1);
+                self.all_entries.appendAssumeCapacity(new_entry);
+                self.retireIdentity(identity);
+                self.entries.appendAssumeCapacity(new_entry);
+                owned_template = undefined;
+                self.clearFailure(identity);
+                return .{ .success = .{ .cache = self, .entry = new_entry } };
+            },
+        }
+    }
+
+    /// Remove the current version for an identity. Existing leases remain valid.
+    pub fn evict(self: *TemplateCache, identity: []const u8) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        self.retireIdentity(identity);
+    }
+
+    /// Render an identity and resolve every include from the current cache entry.
+    pub fn render(self: *TemplateCache, allocator: std.mem.Allocator, identity: []const u8, writer: *std.Io.Writer, context: anytype) anyerror!RenderResult {
+        return self.renderWithOptions(allocator, identity, writer, context, .{});
+    }
+
+    pub fn renderWithOptions(self: *TemplateCache, allocator: std.mem.Allocator, identity: []const u8, writer: *std.Io.Writer, context: anytype, options: RenderOptions) anyerror!RenderResult {
+        var root = self.acquire(identity) orelse return .{ .failure = .{ .kind = .missing_template, .include_identity = identity } };
+        defer root.deinit();
+        return self.renderLeaseWithAllocator(allocator, &root, writer, context, options);
+    }
+
+    fn renderLease(self: *TemplateCache, lease: *const TemplateLease, writer: *std.Io.Writer, context: anytype, options: RenderOptions) anyerror!RenderResult {
+        return self.renderLeaseWithAllocator(options.allocator, lease, writer, context, options);
+    }
+
+    fn renderLeaseWithAllocator(self: *TemplateCache, allocator: std.mem.Allocator, lease: *const TemplateLease, writer: *std.Io.Writer, context: anytype, options: RenderOptions) anyerror!RenderResult {
+        var frame = CacheRenderFrame{ .cache = self, .allocator = allocator };
+        defer frame.dependencies.deinit(allocator);
+        try frame.dependencies.append(allocator, lease.entry.identity);
+        var configured = options;
+        configured.include_context = &frame;
+        configured.include_resolver = resolveCachedInclude;
+        const result = try lease.entry.template.renderWithOptions(writer, context, configured);
+        return self.persistIncludeDiagnostic(result);
+    }
+
+    pub fn deinit(self: *TemplateCache) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        for (self.all_entries.items) |entry| {
+            std.debug.assert(entry.references == 0);
+            var template = entry.template;
+            template.deinit();
+            self.allocator.free(entry.identity);
+            self.allocator.free(entry.source);
+            self.allocator.free(@constCast(entry.options.indentation));
+            self.allocator.destroy(entry);
+        }
+        for (self.failures.items) |failure| self.allocator.free(failure.identity);
+        self.entries.deinit(self.allocator);
+        self.all_entries.deinit(self.allocator);
+        self.failures.deinit(self.allocator);
+        self.diagnostic_storage.deinit();
+        self.* = undefined;
+    }
+
+    fn persistIncludeDiagnostic(self: *TemplateCache, result: RenderResult) std.mem.Allocator.Error!RenderResult {
+        if (result != .failure or (result.failure.include_identity == null and result.failure.include_parent_identity == null)) return result;
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        var diagnostic = result.failure;
+        if (diagnostic.include_identity) |identity| {
+            diagnostic.include_identity = try self.diagnostic_storage.allocator().dupe(u8, identity);
+        }
+        if (diagnostic.include_parent_identity) |identity| {
+            diagnostic.include_parent_identity = try self.diagnostic_storage.allocator().dupe(u8, identity);
+        }
+        return .{ .failure = diagnostic };
+    }
+
+    fn acquire(self: *TemplateCache, identity: []const u8) ?TemplateLease {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        for (self.entries.items) |entry| if (!entry.retired and std.mem.eql(u8, entry.identity, identity)) {
+            entry.references += 1;
+            return .{ .cache = self, .entry = entry };
+        };
+        return null;
+    }
+
+    fn release(self: *TemplateCache, entry: *CacheEntry) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        std.debug.assert(entry.references > 0);
+        entry.references -= 1;
+        if (entry.retired and entry.references == 0) self.destroyEntry(entry);
+    }
+
+    fn retireIdentity(self: *TemplateCache, identity: []const u8) void {
+        var index: usize = 0;
+        while (index < self.entries.items.len) {
+            const entry = self.entries.items[index];
+            if (entry.retired or !std.mem.eql(u8, entry.identity, identity)) {
+                index += 1;
+                continue;
+            }
+            _ = self.entries.orderedRemove(index);
+            entry.retired = true;
+            if (entry.references == 0) self.destroyEntry(entry);
+        }
+    }
+
+    fn failureFor(self: *TemplateCache, identity: []const u8) ?CompileDiagnostic {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        for (self.failures.items) |failure| if (std.mem.eql(u8, failure.identity, identity)) return failure.diagnostic;
+        return null;
+    }
+
+    fn destroyEntry(self: *TemplateCache, entry: *CacheEntry) void {
+        for (self.all_entries.items, 0..) |candidate, index| if (candidate == entry) {
+            _ = self.all_entries.orderedRemove(index);
+            break;
+        };
+        var template = entry.template;
+        template.deinit();
+        self.allocator.free(entry.identity);
+        self.allocator.free(entry.source);
+        self.allocator.free(@constCast(entry.options.indentation));
+        self.allocator.destroy(entry);
+    }
+
+    fn recordFailure(self: *TemplateCache, identity: []const u8, diagnostic: CompileDiagnostic) std.mem.Allocator.Error!void {
+        const identity_copy = try self.allocator.dupe(u8, identity);
+        errdefer self.allocator.free(identity_copy);
+        try self.failures.ensureUnusedCapacity(self.allocator, 1);
+        self.clearFailure(identity);
+        self.failures.appendAssumeCapacity(.{ .identity = identity_copy, .diagnostic = diagnostic });
+    }
+
+    fn clearFailure(self: *TemplateCache, identity: []const u8) void {
+        var index: usize = 0;
+        while (index < self.failures.items.len) {
+            if (std.mem.eql(u8, self.failures.items[index].identity, identity)) {
+                self.allocator.free(self.failures.items[index].identity);
+                _ = self.failures.orderedRemove(index);
+            } else index += 1;
+        }
+    }
+};
+
+pub const CacheCompileResult = union(enum) { success: TemplateLease, failure: CompileDiagnostic };
+
+fn resolveCachedInclude(raw: *anyopaque, identity: []const u8, writer: *std.Io.Writer, context: []const ContextEntry, format: OutputFormat, options: RenderOptions, span: SourceSpan) anyerror!RenderResult {
+    const frame: *CacheRenderFrame = @ptrCast(@alignCast(raw));
+    const parent_identity = frame.dependencies.items[frame.dependencies.items.len - 1];
+    for (frame.dependencies.items) |active| if (std.mem.eql(u8, active, identity)) {
+        return .{ .failure = .{ .kind = .include_cycle, .span = span, .include_identity = identity, .include_parent_identity = parent_identity } };
+    };
+    var child = frame.cache.acquire(identity) orelse {
+        const compile_diagnostic = frame.cache.failureFor(identity);
+        return .{ .failure = .{
+            .kind = if (compile_diagnostic != null) .include_compile_failure else .missing_include,
+            .span = span,
+            .include_identity = identity,
+            .include_parent_identity = parent_identity,
+            .include_compile_diagnostic = compile_diagnostic,
+        } };
+    };
+    defer child.deinit();
+    try frame.dependencies.append(frame.allocator, child.entry.identity);
+    defer _ = frame.dependencies.pop();
+    _ = format;
+    return child.entry.template.renderRuntime(writer, context, options);
+}
+
+fn cacheFingerprint(identity: []const u8, source: []const u8, options: CompileOptions) u64 {
+    var hasher = std.hash.Wyhash.init(0x5a454654);
+    hasher.update("zeft-compiler-ir-1");
+    hasher.update(identity);
+    hasher.update(source);
+    hasher.update(&.{ @intFromEnum(options.format), @intFromEnum(options.whitespace) });
+    hasher.update(options.indentation);
+    return hasher.final();
+}
+
+fn optionsEqual(left: CompileOptions, right: CompileOptions) bool {
+    return left.format == right.format and left.whitespace == right.whitespace and std.mem.eql(u8, left.indentation, right.indentation);
+}
 
 fn renderContext(program: ir.Program, writer: *std.Io.Writer, context: anytype, format: OutputFormat, options: RenderOptions) anyerror!RenderResult {
     const ContextType = @TypeOf(context);
