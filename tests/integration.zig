@@ -19,6 +19,14 @@ test "diagnostic fixture suite" {
     _ = @import("e2e_diagnostics.zig");
 }
 
+test "cache and include fixture suite" {
+    _ = @import("e2e_cache.zig");
+}
+
+test "lifecycle and concurrency fixture suite" {
+    _ = @import("e2e_lifecycle.zig");
+}
+
 const SharedControlContext = struct { show: bool, items: []const []const u8 };
 const ConcurrentRender = struct {
     template: *const zeft.CompiledTemplate,

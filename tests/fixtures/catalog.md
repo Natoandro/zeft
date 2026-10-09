@@ -6,7 +6,8 @@ case. See [README.md](README.md) for status definitions and fixture layout.
 
 The coverage audit below maps every stable ID to its current executable owner
 and the remaining public-API coverage work. Multiple rows may share a fixture;
-one row is not necessarily one execution. Internal IR, symbol numbering, and
+one row is not necessarily one execution. The original audit below is a baseline;
+the verified batch mapping records subsequent coverage. Internal IR, symbol numbering, and
 allocation assertions remain in focused tests.
 
 ## Verified expansion batches
@@ -27,6 +28,10 @@ allocation assertions remain in focused tests.
   selectors, invalid markup/directives, and exact error categories/spans.
   Regressions fixed computed indexes, missing call terminators, folded logical
   jump destinations, and empty interpolation spans.
+
+- **ZEP-081/082:** `tests/e2e_cache.zig` has seven named cache/include scenarios;
+  `tests/e2e_lifecycle.zig` has eight lifecycle/concurrency scenarios. Covers
+  K-001–K-008, R-004–R-008, and F-011 with deterministic concurrent overlap.
 
 ## Markup and serialization
 
@@ -61,7 +66,8 @@ allocation assertions remain in focused tests.
 | E-009 | Fixture | Function/filter syntax table: no args, multiple args, nested calls, filter arguments and pipelines | Parse zero or more arguments; execute left-to-right pipelines; report callable arity/type errors at call sites. |
 | E-010 | Fixture | Expression output matrix for HTML/XML text/attributes | Test `&`, `<`, `>`, `"`, and `'` for each output context and format. |
 | E-011 | Fixture | Root names repeated and in different case | Repeated case-sensitive roots reuse symbols; distinct names resolve independently and missing roots fail by default. |
-| E-012 | Fixture | Dynamic values across null, bool, number, string, sequence, and object adapters | Verify supported value rendering, property lookup, indexing, and invalid operation categories. |
+| E-012 | Fixture | Supported native bool/string/array/slice/struct adapters; numeric/null literals and callback values | Verify supported value operations, property lookup, indexing, and invalid operation categories. Native numeric/optional fields remain unsupported. |
+| E-013 | Pending | Direct null/sequence/object interpolation, cross-type equality, division/modulo by zero | User requested a separate language decision before fixtures define these behaviors. |
 
 ## Compile diagnostics
 
@@ -244,6 +250,6 @@ Numbers and null values are covered through specified literal and callback
 operations. Native adapters currently support booleans, byte strings, structs,
 arrays, and slices; numeric and optional fields are not accepted by the adapter.
 Direct null/collection interpolation, cross-type equality, and division/modulo
-by zero remain outside the new expectations until their language semantics are
+by zero remain outside the new expectations by user decision until their language semantics are
 settled in the conversation and architecture. This does not disable specified
 boolean, string, sequence lookup, numeric expression, or callable coverage.

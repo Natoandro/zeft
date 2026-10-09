@@ -1,0 +1,3 @@
+# Fixtures are exact byte inputs and goldens, including intentional CRLF.
+tests/fixtures/**/*.tmpl -text
+tests/fixtures/**/*.out -text

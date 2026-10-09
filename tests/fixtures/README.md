@@ -70,3 +70,8 @@ executions across formats, policies, and dynamic contexts.
 
 `tests/e2e_expressions.zig` registers 57 successful expression executions.
 `tests/e2e_diagnostics.zig` registers 74 exact compile/render failures.
+
+`tests/e2e_cache.zig` runs seven cache/include scenarios, and
+`tests/e2e_lifecycle.zig` runs eight lifecycle/concurrency scenarios with
+synchronized overlap. `.gitattributes` disables line-ending conversion for
+fixture sources and outputs, preserving diagnostic offsets and golden bytes.

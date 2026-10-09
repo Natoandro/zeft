@@ -247,7 +247,9 @@ already established by tests.
 **Outcome:** a large, traceable suite exercises the public compile/render and
 cache APIs against the specified architecture, covering successful output and
 failures. Compiler-internal assertions remain in unit tests. Comptime cases
-T-001 and T-002 remain pending until their public API is defined.
+T-001 and T-002 remain pending until their public API is defined. Unspecified
+value semantics remain pending by user decision; record them in the catalog
+without adding normative expectations.
 
 ### Coverage and fixture structure
 
@@ -331,14 +333,14 @@ reviewed independently of the renderer's actual output.
   representative cases to verify byte offsets. Verification: exact category
   and half-open span; compile failures never proceed to rendering. Assert
   partial output only where the architecture defines that behavior.
-- [ ] **ZEP-081** Add fixture-backed cache/include scenarios (K-001–K-008).
+- [x] **ZEP-081** Add fixture-backed cache/include scenarios (K-001–K-008).
   Cover hits, distinct identities, all output-affecting options including
   indentation, reload success/failure, nested/repeated includes, changed child
   output without parent recompilation, missing roots/children, initial child
   compile failure, cycles, and retained leases across replacement/eviction.
   Verification: output plus dependency identities, directive spans, child
   diagnostics, and specified lease/version behavior through public APIs.
-- [ ] **ZEP-082** Complete dedicated lifecycle and concurrency integration
+- [x] **ZEP-082** Complete dedicated lifecycle and concurrency integration
   harnesses (R-004–R-008, F-011, K-007–K-008). Reuse representative fixture
   inputs for writer failures in static/dynamic/include output, freed source
   and option buffers, scratch cleanup on success and failures, and overlapping
