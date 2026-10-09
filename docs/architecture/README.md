@@ -1,8 +1,9 @@
 # Zeft architecture
 
-This directory defines the normative architecture of Zeft, a runtime-first Zig
-template engine with optional comptime compilation. Requirements using
-**MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
+This directory defines the normative architecture of Zeft, a Zig markup
+template engine with runtime compilation and optional comptime compilation.
+Requirements using **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are
+normative.
 
 Zeft MUST compile each template source into an immutable `CompiledTemplate`.
 Rendering MUST execute that compiled representation against a context and a

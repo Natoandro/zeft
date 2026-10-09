@@ -15,7 +15,7 @@ against application data.
 
 See the [architecture](docs/architecture/README.md) for the language and API
 contracts, and the [implementation plan](docs/design/implementation-plan.md)
-for completed and planned work.
+for future work.
 
 ## Example
 
