@@ -355,6 +355,11 @@ reviewed independently of the renderer's actual output.
   Verification: run `zig fmt` on changed Zig files, `zig build`, and
   `zig build test`; also run the suite in ReleaseSafe to check behavior with
   optimization enabled. Check each task only after its verification passes.
+- [x] **ZEP-084** Allow filter syntax to invoke a function when no filter of
+  that name is registered, passing the piped value first and explicit pipe
+  arguments afterward. Preserve filter-over-function resolution precedence.
+  Verify built-in and registered pipelines, argument order, chaining, user data,
+  and same-name function/filter resolution.
 
 For each batch, format changed Zig files and run `zig build` and
 `zig build test` before marking coverage enabled. If a fixture exposes a

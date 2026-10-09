@@ -403,8 +403,14 @@ fn evaluateExpression(
                 const count: usize = call.argument_count;
                 if (count > depth or count == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
                 const args = stack[depth - count .. depth];
-                const filter = findRegistration(options.filters, call.name) orelse findBuiltinFilter(call.name);
-                const result = if (filter) |registered|
+                // Filter registrations keep precedence. In the absence of a
+                // filter, the same pipe syntax can invoke a function with the
+                // piped value occupying its first argument.
+                const callable = findRegistration(options.filters, call.name) orelse
+                    findBuiltinFilter(call.name) orelse
+                    findRegistration(options.functions, call.name) orelse
+                    findBuiltinFunction(call.name);
+                const result = if (callable) |registered|
                     registered.callback(allocator, registered.user_data, args) catch return .{ .failure = .{ .kind = .filter_failure, .span = instruction.span } }
                 else
                     return .{ .failure = .{ .kind = .filter_failure, .span = instruction.span } };

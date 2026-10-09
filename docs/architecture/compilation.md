@@ -206,9 +206,14 @@ supported for grouping.
 Named function calls MUST use `name(argument, ...)` syntax and MUST be
 available as expression values. Filters MUST use `value | name` syntax and
 MAY take arguments as `value | name(argument, ...)`; filter pipelines MUST
-associate left-to-right and bind more tightly than logical OR. Calls and
-filters MUST accept zero or more expression arguments syntactically; arity and
-value constraints are checked by the invoked callable at render time.
+associate left-to-right and bind more tightly than logical OR. A filter
+expression MUST first resolve a registered or built-in filter. If none exists,
+it MUST resolve a registered or built-in function of the same name, passing the
+piped value as its first argument followed by any explicit filter arguments.
+When a name is registered as both a filter and a function, pipe syntax MUST
+select the filter; direct `name(...)` syntax MUST select the function.
+Calls and filters MUST accept zero or more expression arguments syntactically;
+arity and value constraints are checked by the invoked callable at render time.
 Identifiers followed by `(` are function calls, while bare identifiers remain
 root-context lookups.
 
@@ -219,15 +224,18 @@ the evaluated argument values, and MUST return a `Value` or an error. The
 render scratch allocator MUST remain valid only for that render; callback
 results that reference it MUST be consumed before rendering returns. A
 callback error or unknown callable MUST produce the corresponding filter or
-function runtime error at the call site's source span. Caller registrations
-with the same name as a built-in MUST take precedence for that render.
+function runtime error at the call site's source span. A function invoked
+through pipe syntax MUST report a filter runtime error; direct function-call
+syntax MUST report a function runtime error. Caller registrations with the same
+name as a built-in of the same kind MUST take precedence for that render.
 
 The initial built-ins MUST include the `length(value)` function for strings
 and sequences and the `default` filter, which returns its second argument when
-the input is null or an empty string. The `upper`, `lower`, and `trim` filters
-MUST accept one string; case conversion is ASCII-only and trim removes ASCII
-space, tab, carriage return, and line feed from both ends. Invalid arity or
-value types MUST be reported as filter/function failures.
+the input is null or an empty string. The `length` function MUST also be
+callable as a filter, for example `value | length`. The `upper`, `lower`, and
+`trim` filters MUST accept one string; case conversion is ASCII-only and trim
+removes ASCII space, tab, carriage return, and line feed from both ends.
+Invalid arity or value types MUST be reported as filter/function failures.
 
 Unary `!` and `-` MUST associate right-to-left. Binary operators MUST associate
 left-to-right. Their precedence, from lowest to highest, MUST be:

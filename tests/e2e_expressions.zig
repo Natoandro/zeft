@@ -61,6 +61,8 @@ pub const success_cases = [_]fixtures.Success{
     .{ .id = "EX-055", .path = "fixtures/expressions/unary-selectors.tmpl", .expected_path = "fixtures/expressions/unary-selectors.out", .source = @embedFile("fixtures/expressions/unary-selectors.tmpl"), .expected = @embedFile("fixtures/expressions/unary-selectors.out"), .render_options = render_options },
     .{ .id = "EX-056", .path = "fixtures/expressions/short-circuit-folded-branch.tmpl", .expected_path = "fixtures/expressions/short-circuit-folded-branch.out", .source = @embedFile("fixtures/expressions/short-circuit-folded-branch.tmpl"), .expected = @embedFile("fixtures/expressions/short-circuit-folded-branch.out"), .render_options = render_options },
     .{ .id = "EX-057", .path = "fixtures/expressions/short-circuit-nested-branches.tmpl", .expected_path = "fixtures/expressions/short-circuit-nested-branches.out", .source = @embedFile("fixtures/expressions/short-circuit-nested-branches.tmpl"), .expected = @embedFile("fixtures/expressions/short-circuit-nested-branches.out"), .render_options = render_options },
+    .{ .id = "EX-058", .path = "fixtures/expressions/function-pipeline.tmpl", .expected_path = "fixtures/expressions/function-pipeline.out", .source = @embedFile("fixtures/expressions/function-pipeline.tmpl"), .expected = @embedFile("fixtures/expressions/function-pipeline.out"), .render_options = render_options },
+    .{ .id = "EX-059", .path = "fixtures/expressions/callable-name-collision.tmpl", .expected_path = "fixtures/expressions/callable-name-collision.out", .source = @embedFile("fixtures/expressions/callable-name-collision.tmpl"), .expected = @embedFile("fixtures/expressions/callable-name-collision.out"), .render_options = render_options },
 };
 const Person = struct { name: []const u8, label: []const u8 = "", active: bool = false };
 const Context = struct {
@@ -119,6 +121,12 @@ fn overrideLength(_: std.mem.Allocator, _: ?*const anyopaque, args: []const zeft
     if (args.len != 1) return error.InvalidArguments;
     return .{ .number = 99 };
 }
+fn functionChoice(_: std.mem.Allocator, _: ?*const anyopaque, _: []const zeft.Value) anyerror!zeft.Value {
+    return .{ .string = "function" };
+}
+fn filterChoice(_: std.mem.Allocator, _: ?*const anyopaque, _: []const zeft.Value) anyerror!zeft.Value {
+    return .{ .string = "filter" };
+}
 
 const functions = [_]zeft.Registration{
     .{ .name = "number", .callback = number },
@@ -126,6 +134,7 @@ const functions = [_]zeft.Registration{
     .{ .name = "join", .callback = join },
     .{ .name = "configured", .callback = configured, .user_data = &user_data },
     .{ .name = "fail", .callback = fail },
+    .{ .name = "choose", .callback = functionChoice },
 };
 fn negate(_: std.mem.Allocator, _: ?*const anyopaque, args: []const zeft.Value) anyerror!zeft.Value {
     if (args.len != 1 or args[0] != .boolean) return error.InvalidArguments;
@@ -137,6 +146,7 @@ const filters = [_]zeft.Registration{
     .{ .name = "append", .callback = append },
     .{ .name = "configured", .callback = configured, .user_data = &user_data },
     .{ .name = "fail", .callback = fail },
+    .{ .name = "choose", .callback = filterChoice },
 };
 const override_functions = functions ++ [_]zeft.Registration{.{ .name = "length", .callback = overrideLength }};
 const override_filters = filters ++ [_]zeft.Registration{.{ .name = "upper", .callback = append }};

@@ -22,7 +22,7 @@ allocation assertions remain in focused tests.
   one compiled-template reuse/recovery harness, and 38 whitespace goldens.
   Covers F-001–F-010 and W-001–W-007; synchronized reuse is in ZEP-082.
 
-- **ZEP-077/080:** `tests/e2e_expressions.zig` registers EX-001–EX-057;
+- **ZEP-077/080/084:** `tests/e2e_expressions.zig` registers EX-001–EX-059;
   `tests/e2e_diagnostics.zig` registers DG-001–DG-074 (47 compile failures,
   27 runtime failures). Covers expression grammar, callbacks, operators,
   selectors, invalid markup/directives, and exact error categories/spans.
@@ -63,7 +63,7 @@ allocation assertions remain in focused tests.
 | E-006 | Fixture | Registered callable cases | Render-local registrations, built-in override, scratch allocation, callback failures, and source spans. |
 | E-007 | Fixture | Expression table for every binary operator and precedence boundary | Verify `||`, `&&`, equality, comparisons, additive, and multiplicative precedence; all binary operators associate left-to-right. |
 | E-008 | Fixture | Expression table for numeric syntax and string escapes | Accept specified decimal/exponent forms and six escapes; reject unknown escapes, unescaped line breaks, and malformed numbers. `null`, `true`, and `false` are reserved case-sensitively; other case spellings remain identifiers. |
-| E-009 | Fixture | Function/filter syntax table: no args, multiple args, nested calls, filter arguments and pipelines | Parse zero or more arguments; execute left-to-right pipelines; report callable arity/type errors at call sites. |
+| E-009 | Fixture | Function/filter syntax table: no args, multiple args, nested calls, filter arguments and pipelines | Parse zero or more arguments; execute left-to-right pipelines, including registered and built-in functions with the piped value first; filters take precedence over same-name functions in pipe syntax; report callable arity/type errors at call sites. |
 | E-010 | Fixture | Expression output matrix for HTML/XML text/attributes | Test `&`, `<`, `>`, `"`, and `'` for each output context and format. |
 | E-011 | Fixture | Root names repeated and in different case | Repeated case-sensitive roots reuse symbols; distinct names resolve independently and missing roots fail by default. |
 | E-012 | Fixture | Supported native bool/string/array/slice/struct adapters; numeric/null literals and callback values | Verify supported value operations, property lookup, indexing, and invalid operation categories. Native numeric/optional fields remain unsupported. |
@@ -256,8 +256,8 @@ boolean, string, sequence lookup, numeric expression, or callable coverage.
 
 ## Final inventory audit (ZEP-083)
 
-The registered suite has 290 named executions across 260 template sources
-and 192 output files. `tests/check_fixture_inventory.py` validates reachable
+The registered suite has 292 named executions across 262 template sources
+and 194 output files. `tests/check_fixture_inventory.py` validates reachable
 modules, unique IDs, descriptor paths, missing files, and orphan files. All
 registered cases run in the integration test binary; Debug and ReleaseSafe
 checks pass. LC-009 and EX-029 retain fixed byte-array storage through root
