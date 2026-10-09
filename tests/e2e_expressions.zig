@@ -63,6 +63,7 @@ pub const success_cases = [_]fixtures.Success{
     .{ .id = "EX-057", .path = "fixtures/expressions/short-circuit-nested-branches.tmpl", .expected_path = "fixtures/expressions/short-circuit-nested-branches.out", .source = @embedFile("fixtures/expressions/short-circuit-nested-branches.tmpl"), .expected = @embedFile("fixtures/expressions/short-circuit-nested-branches.out"), .render_options = render_options },
     .{ .id = "EX-058", .path = "fixtures/expressions/function-pipeline.tmpl", .expected_path = "fixtures/expressions/function-pipeline.out", .source = @embedFile("fixtures/expressions/function-pipeline.tmpl"), .expected = @embedFile("fixtures/expressions/function-pipeline.out"), .render_options = render_options },
     .{ .id = "EX-059", .path = "fixtures/expressions/callable-name-collision.tmpl", .expected_path = "fixtures/expressions/callable-name-collision.out", .source = @embedFile("fixtures/expressions/callable-name-collision.tmpl"), .expected = @embedFile("fixtures/expressions/callable-name-collision.out"), .render_options = render_options },
+    .{ .id = "EX-060", .path = "fixtures/expressions/null-interpolation.tmpl", .expected_path = "fixtures/expressions/null-interpolation.out", .source = @embedFile("fixtures/expressions/null-interpolation.tmpl"), .expected = @embedFile("fixtures/expressions/null-interpolation.out"), .render_options = render_options },
 };
 const Person = struct { name: []const u8, label: []const u8 = "", active: bool = false };
 const Context = struct {

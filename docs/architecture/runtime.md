@@ -115,6 +115,12 @@ It MUST NOT infer context by scanning already-rendered output. Raw output MUST
 be an explicit template operation; it MUST NOT be the default for ordinary
 interpolated values.
 
+For ordinary interpolation, null MUST emit no bytes. Applications SHOULD use
+the `default` filter to provide output for nullable values. Interpolating a
+sequence or object directly MUST return `invalid_operand` at the expression's
+source span; templates MUST iterate sequences or select object properties to
+produce output.
+
 HTML text and XML text escaping MUST replace `&`, `<`, and `>` with `&amp;`,
 `&lt;`, and `&gt;`, respectively. HTML attribute escaping MUST additionally
 replace `"` with `&quot;` and `'` with `&#39;`. XML attribute escaping MUST

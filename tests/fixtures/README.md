@@ -68,8 +68,8 @@ fixtures have `.tmpl` inputs and category/span expectations in Zig descriptors.
 compiled-template harness. `tests/e2e_whitespace.zig` supplies 38 exact output
 executions across formats, policies, and dynamic contexts.
 
-`tests/e2e_expressions.zig` registers 57 successful expression executions.
-`tests/e2e_diagnostics.zig` registers 74 exact compile/render failures.
+`tests/e2e_expressions.zig` registers 60 successful expression executions.
+`tests/e2e_diagnostics.zig` registers 76 exact compile/render failures.
 
 `tests/e2e_cache.zig` runs seven cache/include scenarios, and
 `tests/e2e_lifecycle.zig` runs nine lifecycle/concurrency scenarios with
@@ -83,12 +83,13 @@ modules, unique execution IDs, descriptor paths, missing files, and orphan
 inputs/outputs. This is a static inventory check; `zig build test` verifies
 behavior. Run `zig build test -Doptimize=ReleaseSafe` for optimized behavior.
 
-Current inventory: **290 named registrations**, **260 `.tmpl` files**, and
-**192 `.out` files**. There are 176 named successful goldens, 68 compile-error
-registrations, 29 render-error registrations, and 17 scenario harnesses. A
+Current inventory: **295 named registrations**, **265 `.tmpl` files**, and
+**195 `.out` files**. There are 177 named successful goldens, 68 compile-error
+registrations, 31 render-error registrations, and 17 scenario harnesses. A
 harness may execute several compile/render operations. The counts describe
 registrations rather than Zig test blocks or individual assertions.
 
-E-013 and the two comptime cases remain pending. Numeric and optional native
-fields remain unsupported by the current adapter; numeric/null expression
-values are exercised through literals and callables.
+Cross-type equality and division/modulo by zero in E-013 remain pending, as do
+the two comptime cases. Numeric and optional native fields remain unsupported
+by the current adapter; numeric/null expression values are exercised through
+literals and callables.

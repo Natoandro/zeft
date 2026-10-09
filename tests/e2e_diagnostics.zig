@@ -87,6 +87,8 @@ pub const render_failure_cases = [_]fixtures.RenderFailure{
     .{ .id = "DG-72", .path = "fixtures/render-errors/index-negative.tmpl", .source = @embedFile("fixtures/render-errors/index-negative.tmpl"), .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 12 } } },
     .{ .id = "DG-73", .path = "fixtures/render-errors/index-fractional.tmpl", .source = @embedFile("fixtures/render-errors/index-fractional.tmpl"), .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 13 } } },
     .{ .id = "DG-74", .path = "fixtures/render-errors/index-huge.tmpl", .source = @embedFile("fixtures/render-errors/index-huge.tmpl"), .diagnostic = .{ .kind = .invalid_property_access, .span = .{ .start = 8, .end = 15 } } },
+    .{ .id = "DG-075", .path = "fixtures/render-errors/interpolate-sequence.tmpl", .source = @embedFile("fixtures/render-errors/interpolate-sequence.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 0, .end = 11 } } },
+    .{ .id = "DG-076", .path = "fixtures/render-errors/interpolate-object.tmpl", .source = @embedFile("fixtures/render-errors/interpolate-object.tmpl"), .diagnostic = .{ .kind = .invalid_operand, .span = .{ .start = 0, .end = 9 } } },
 };
 
 test "compile diagnostics identify category and exact byte span" {

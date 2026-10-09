@@ -22,9 +22,9 @@ allocation assertions remain in focused tests.
   one compiled-template reuse/recovery harness, and 38 whitespace goldens.
   Covers F-001–F-010 and W-001–W-007; synchronized reuse is in ZEP-082.
 
-- **ZEP-077/080/084:** `tests/e2e_expressions.zig` registers EX-001–EX-059;
-  `tests/e2e_diagnostics.zig` registers DG-001–DG-074 (47 compile failures,
-  27 runtime failures). Covers expression grammar, callbacks, operators,
+- **ZEP-077/080/084/085:** `tests/e2e_expressions.zig` registers EX-001–EX-060;
+  `tests/e2e_diagnostics.zig` registers DG-001–DG-076 (47 compile failures,
+  29 runtime failures). Covers expression grammar, callbacks, operators,
   selectors, invalid markup/directives, and exact error categories/spans.
   Regressions fixed computed indexes, missing call terminators, folded logical
   jump destinations, and empty interpolation spans.
@@ -67,7 +67,7 @@ allocation assertions remain in focused tests.
 | E-010 | Fixture | Expression output matrix for HTML/XML text/attributes | Test `&`, `<`, `>`, `"`, and `'` for each output context and format. |
 | E-011 | Fixture | Root names repeated and in different case | Repeated case-sensitive roots reuse symbols; distinct names resolve independently and missing roots fail by default. |
 | E-012 | Fixture | Supported native bool/string/array/slice/struct adapters; numeric/null literals and callback values | Verify supported value operations, property lookup, indexing, and invalid operation categories. Native numeric/optional fields remain unsupported. |
-| E-013 | Pending | Direct null/sequence/object interpolation, cross-type equality, division/modulo by zero | User requested a separate language decision before fixtures define these behaviors. |
+| E-013 | Fixture | Direct null/sequence/object interpolation, cross-type equality, division/modulo by zero | Null emits no bytes; sequences and objects return `invalid_operand`. Cross-type equality and division/modulo by zero remain pending language decisions. |
 
 ## Compile diagnostics
 
@@ -249,20 +249,19 @@ and passes verification. Future syntax/API cases stay pending.
 Numbers and null values are covered through specified literal and callback
 operations. Native adapters currently support booleans, byte strings, structs,
 arrays, and slices; numeric and optional fields are not accepted by the adapter.
-Direct null/collection interpolation, cross-type equality, and division/modulo
-by zero remain outside the new expectations by user decision until their language semantics are
-settled in the conversation and architecture. This does not disable specified
-boolean, string, sequence lookup, numeric expression, or callable coverage.
+Cross-type equality and division/modulo by zero remain pending separate
+language decisions. Direct null interpolation and direct sequence/object
+interpolation are specified and covered by EX-060 and DG-075–DG-076.
 
 ## Final inventory audit (ZEP-083)
 
-The registered suite has 292 named executions across 262 template sources
-and 194 output files. `tests/check_fixture_inventory.py` validates reachable
+The registered suite has 295 named executions across 265 template sources
+and 195 output files. `tests/check_fixture_inventory.py` validates reachable
 modules, unique IDs, descriptor paths, missing files, and orphan files. All
 registered cases run in the integration test binary; Debug and ReleaseSafe
 checks pass. LC-009 and EX-029 retain fixed byte-array storage through root
 pointer/value and nested context adapters. The baseline audit above is retained
 for traceability; verified expansion batches identify the current suite owners.
 
-E-013 is pending by explicit user decision. T-001/T-002 remain pending until
+Parts of E-013 remain pending by explicit user decision. T-001/T-002 remain pending until
 the comptime API exists. No fixture invents expectations for these cases.

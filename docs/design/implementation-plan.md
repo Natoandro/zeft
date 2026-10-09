@@ -248,8 +248,8 @@ already established by tests.
 cache APIs against the specified architecture, covering successful output and
 failures. Compiler-internal assertions remain in unit tests. Comptime cases
 T-001 and T-002 remain pending until their public API is defined. Unspecified
-value semantics remain pending by user decision; record them in the catalog
-without adding normative expectations.
+value semantics remain pending by user decision; record only those unresolved
+behaviors in the catalog without adding normative expectations.
 
 ### Coverage and fixture structure
 
@@ -360,6 +360,10 @@ reviewed independently of the renderer's actual output.
   arguments afterward. Preserve filter-over-function resolution precedence.
   Verify built-in and registered pipelines, argument order, chaining, user data,
   and same-name function/filter resolution.
+- [x] **ZEP-085** Specify and cover direct interpolation of null and collection
+  values. Null emits no bytes; sequences and objects fail with `invalid_operand`
+  at the interpolation span. Include a golden using `default` for null.
+  Verification: exact output and runtime categories/spans through public APIs.
 
 For each batch, format changed Zig files and run `zig build` and
 `zig build test` before marking coverage enabled. If a fixture exposes a
@@ -383,8 +387,9 @@ use `--cache-dir /tmp/zeft-local-cache --global-cache-dir /tmp/zeft-zig-cache`
 for Zig commands because the repository filesystem has limited free space.
 ReleaseSafe exposed a byte-array string adapter lifetime defect; a storage
 borrowing fix and pointer/value/nested context regression cover it. Fixture
-line endings are preserved as exact bytes in Git. Comptime API cases and
-E-013 value semantics remain explicitly pending.
+line endings are preserved as exact bytes in Git. Comptime API cases remain
+pending. Cross-type equality and division/modulo by zero remain unresolved
+parts of E-013.
 
 ## Completion policy
 
