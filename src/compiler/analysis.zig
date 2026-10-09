@@ -116,7 +116,10 @@ const Analyzer = struct {
                 if (!self.isLocal(name)) _ = try self.getOrAddSymbol(name);
             },
             .property => |access| try self.collectSymbols(access.base),
-            .index => |access| try self.collectSymbols(access.base),
+            .index => |access| {
+                try self.collectSymbols(access.base);
+                try self.collectSymbols(access.value);
+            },
             .unary => |unary| try self.collectSymbols(unary.operand),
             .call => |call| for (call.args) |arg| try self.collectSymbols(arg),
             .filter => |filter| {

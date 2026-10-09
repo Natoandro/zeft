@@ -239,8 +239,21 @@ fn foldExpressions(allocator: std.mem.Allocator, programs: []ir.ExpressionProgra
     const result = try allocator.alloc(ir.ExpressionProgram, programs.len);
     for (programs, 0..) |program, expression_index| {
         var output: std.ArrayList(ir.ExpressionInstruction) = .empty;
-        for (program.instructions) |instruction| {
-            if (instruction.data == .unary and output.items.len > 0 and output.items[output.items.len - 1].data == .push_literal) {
+        const mapping = try allocator.alloc(u32, program.instructions.len + 1);
+        defer allocator.free(mapping);
+        const targets = try allocator.alloc(bool, program.instructions.len + 1);
+        defer allocator.free(targets);
+        @memset(targets, false);
+        for (program.instructions) |instruction| switch (instruction.data) {
+            .jump, .jump_if_false, .jump_if_true => |target| targets[target] = true,
+            else => {},
+        };
+        var block_start: usize = 0;
+        for (program.instructions, 0..) |instruction, pc| {
+            // Folding must not combine values from different jump paths.
+            if (targets[pc]) block_start = output.items.len;
+            mapping[pc] = @intCast(output.items.len);
+            if (instruction.data == .unary and output.items.len > block_start and output.items[output.items.len - 1].data == .push_literal) {
                 const previous = output.items[output.items.len - 1];
                 if (foldUnary(instruction.data.unary, previous.data.push_literal)) |literal| {
                     output.items[output.items.len - 1] = .{
@@ -250,7 +263,7 @@ fn foldExpressions(allocator: std.mem.Allocator, programs: []ir.ExpressionProgra
                     continue;
                 }
             }
-            if (instruction.data == .binary and output.items.len >= 2 and
+            if (instruction.data == .binary and output.items.len >= block_start + 2 and
                 output.items[output.items.len - 1].data == .push_literal and
                 output.items[output.items.len - 2].data == .push_literal)
             {
@@ -267,6 +280,13 @@ fn foldExpressions(allocator: std.mem.Allocator, programs: []ir.ExpressionProgra
             }
             try output.append(allocator, instruction);
         }
+        mapping[program.instructions.len] = @intCast(output.items.len);
+        for (output.items) |*instruction| switch (instruction.data) {
+            .jump => |target| instruction.data.jump = mapping[target],
+            .jump_if_false => |target| instruction.data.jump_if_false = mapping[target],
+            .jump_if_true => |target| instruction.data.jump_if_true = mapping[target],
+            else => {},
+        };
         result[expression_index] = .{ .instructions = try output.toOwnedSlice(allocator) };
     }
     return result;

@@ -22,6 +22,7 @@ pub const ExpressionInstruction = struct {
         push_literal: Literal,
         get_property: []const u8,
         get_index: usize,
+        get_index_dynamic,
         unary: Operator,
         binary: Operator,
         jump_if_false: u32,

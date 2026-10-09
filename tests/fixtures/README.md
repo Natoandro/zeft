@@ -67,3 +67,6 @@ fixtures have `.tmpl` inputs and category/span expectations in Zig descriptors.
 `tests/e2e_control_flow.zig` supplies 19 named executions, including a reusable
 compiled-template harness. `tests/e2e_whitespace.zig` supplies 38 exact output
 executions across formats, policies, and dynamic contexts.
+
+`tests/e2e_expressions.zig` registers 57 successful expression executions.
+`tests/e2e_diagnostics.zig` registers 74 exact compile/render failures.

@@ -326,6 +326,27 @@ fn evaluateExpression(
                 };
                 stack[depth - 1] = next orelse return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
             },
+            .get_index_dynamic => {
+                if (depth < 2) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
+                const selector = stack[depth - 1];
+                const current = stack[depth - 2];
+                const index: usize = switch (selector) {
+                    .number => |value| blk: {
+                        // The rounded floating limit is exclusive, avoiding an
+                        // out-of-range float-to-integer conversion at usize max.
+                        if (!std.math.isFinite(value) or value < 0 or @trunc(value) != value or value >= @as(f64, @floatFromInt(std.math.maxInt(usize))))
+                            return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
+                        break :blk @intFromFloat(value);
+                    },
+                    else => return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } },
+                };
+                const next: ?Value = switch (current) {
+                    .sequence => |sequence| if (index < sequence.len) sequence.get_index(sequence.pointer, index) else null,
+                    else => null,
+                };
+                depth -= 1;
+                stack[depth - 1] = next orelse return .{ .failure = .{ .kind = .invalid_property_access, .span = instruction.span } };
+            },
             .unary => |op| {
                 if (depth == 0) return .{ .failure = .{ .kind = .invalid_operand, .span = instruction.span } };
                 stack[depth - 1] = switch (op) {

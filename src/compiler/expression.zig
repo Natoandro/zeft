@@ -12,7 +12,7 @@ pub const Expression = struct {
         literal: Literal,
         identifier: []const u8,
         property: struct { base: *Expression, name: []const u8, selector_span: zeft.SourceSpan },
-        index: struct { base: *Expression, value: usize, selector_span: zeft.SourceSpan },
+        index: struct { base: *Expression, value: *Expression, selector_span: zeft.SourceSpan },
         call: struct { name: []const u8, args: []*Expression, call_span: zeft.SourceSpan },
         filter: struct { input: *Expression, name: []const u8, args: []*Expression, call_span: zeft.SourceSpan },
         unary: struct { op: Operator, operand: *Expression, operator_span: zeft.SourceSpan },
@@ -60,7 +60,7 @@ const Parser = struct {
                 self.offset += 1;
                 while (self.offset < self.end and isContinue(self.source[self.offset])) : (self.offset += 1) {}
                 const name = self.source[name_start..self.offset];
-                const args = try self.parseArguments();
+                const args = (try self.parseArguments()) orelse return null;
                 const call_span = zeft.SourceSpan{ .start = name_start, .end = self.offset };
                 lhs = try self.make(.{ .start = lhs.span.start, .end = self.offset }, .{ .filter = .{ .input = lhs, .name = name, .args = args, .call_span = call_span } });
                 continue;
@@ -140,7 +140,7 @@ const Parser = struct {
             while (self.offset < self.end and isContinue(self.source[self.offset])) : (self.offset += 1) {}
             const name = self.source[begin..self.offset];
             if (std.mem.eql(u8, name, "null")) value = try self.make(.{ .start = begin, .end = self.offset }, .{ .literal = .null }) else if (std.mem.eql(u8, name, "true") or std.mem.eql(u8, name, "false")) value = try self.make(.{ .start = begin, .end = self.offset }, .{ .literal = .{ .boolean = name[0] == 't' } }) else if (self.offset < self.end and self.source[self.offset] == '(') {
-                const args = try self.parseArguments();
+                const args = (try self.parseArguments()) orelse return null;
                 value = try self.make(.{ .start = begin, .end = self.offset }, .{ .call = .{ .name = name, .args = args, .call_span = .{ .start = begin, .end = self.offset } } });
             } else value = try self.make(.{ .start = begin, .end = self.offset }, .{ .identifier = name });
         } else return null;
@@ -156,33 +156,28 @@ const Parser = struct {
                 while (self.offset < self.end and isContinue(self.source[self.offset])) : (self.offset += 1) {}
                 value = try self.make(.{ .start = value.span.start, .end = self.offset }, .{ .property = .{ .base = value, .name = self.source[prop..self.offset], .selector_span = .{ .start = access_start, .end = self.offset } } });
             } else if (self.source[self.offset] == '[') {
+                const selector_start = self.offset;
                 self.offset += 1;
-                self.skipSpace();
-                const digits = self.offset;
-                var idx: usize = 0;
-                while (self.offset < self.end and std.ascii.isDigit(self.source[self.offset])) : (self.offset += 1) {
-                    idx = std.math.add(usize, std.math.mul(usize, idx, 10) catch return null, self.source[self.offset] - '0') catch return null;
-                }
-                if (digits == self.offset) return null;
+                const idx = (try self.parseBinary(1)) orelse return null;
                 self.skipSpace();
                 if (self.offset >= self.end or self.source[self.offset] != ']') return null;
                 self.offset += 1;
-                value = try self.make(.{ .start = value.span.start, .end = self.offset }, .{ .index = .{ .base = value, .value = idx, .selector_span = .{ .start = digits - 1, .end = self.offset } } });
+                value = try self.make(.{ .start = value.span.start, .end = self.offset }, .{ .index = .{ .base = value, .value = idx, .selector_span = .{ .start = selector_start, .end = self.offset } } });
             } else break;
         }
         return value;
     }
-    fn parseArguments(self: *Parser) std.mem.Allocator.Error![]*Expression {
-        if (self.offset >= self.end or self.source[self.offset] != '(') return self.allocator.alloc(*Expression, 0);
+    fn parseArguments(self: *Parser) std.mem.Allocator.Error!?[]*Expression {
+        if (self.offset >= self.end or self.source[self.offset] != '(') return try self.allocator.alloc(*Expression, 0);
         self.offset += 1;
         self.skipSpace();
         var args: std.ArrayList(*Expression) = .empty;
         if (self.offset < self.end and self.source[self.offset] == ')') {
             self.offset += 1;
-            return args.toOwnedSlice(self.allocator);
+            return try args.toOwnedSlice(self.allocator);
         }
         while (true) {
-            const arg = (try self.parseBinary(1)) orelse return args.toOwnedSlice(self.allocator);
+            const arg = (try self.parseBinary(1)) orelse return null;
             try args.append(self.allocator, arg);
             self.skipSpace();
             if (self.offset < self.end and self.source[self.offset] == ',') {
@@ -190,9 +185,9 @@ const Parser = struct {
                 self.skipSpace();
                 continue;
             }
-            if (self.offset >= self.end or self.source[self.offset] != ')') return args.toOwnedSlice(self.allocator);
+            if (self.offset >= self.end or self.source[self.offset] != ')') return null;
             self.offset += 1;
-            return args.toOwnedSlice(self.allocator);
+            return try args.toOwnedSlice(self.allocator);
         }
     }
     const Binary = struct { op: Operator = .add, precedence: u8, length: usize, is_filter: bool = false };
@@ -240,7 +235,7 @@ test "expression parser handles literals, precedence, grouping and accesses" {
     try std.testing.expect(result == .success);
 }
 test "expression parser rejects malformed literals and operators" {
-    for ([_][]const u8{ "1e", "'bad\\q'", "a +", "(a", "items[-1]", "a === b" }) |source| {
+    for ([_][]const u8{ "1e", "'bad\\q'", "a +", "(a", "items[1 +]", "a === b" }) |source| {
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         defer arena.deinit();
         const parsed = try parse(arena.allocator(), source, .{ .start = 0, .end = source.len });

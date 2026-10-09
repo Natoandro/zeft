@@ -21,6 +21,13 @@ allocation assertions remain in focused tests.
   one compiled-template reuse/recovery harness, and 38 whitespace goldens.
   Covers F-001–F-010 and W-001–W-007; synchronized reuse is in ZEP-082.
 
+- **ZEP-077/080:** `tests/e2e_expressions.zig` registers EX-001–EX-057;
+  `tests/e2e_diagnostics.zig` registers DG-001–DG-074 (47 compile failures,
+  27 runtime failures). Covers expression grammar, callbacks, operators,
+  selectors, invalid markup/directives, and exact error categories/spans.
+  Regressions fixed computed indexes, missing call terminators, folded logical
+  jump destinations, and empty interpolation spans.
+
 ## Markup and serialization
 
 | ID | Status | Fixture or scenario | Expected result |
@@ -45,26 +52,26 @@ allocation assertions remain in focused tests.
 | --- | --- | --- | --- |
 | E-001 | Fixture | `html/dynamic.tmpl` | HTML text and attribute contexts escape the same value according to their distinct rules. |
 | E-002 | Fixture | `html/expressions.tmpl` | Nested property/index access, precedence, short-circuiting, filters, and escaping compose in one render. |
-| E-003 | Focused | `tests/integration.zig` expression cases | Integer arithmetic, grouping, boolean literal, string newline escape, unary not, precedence, and logical short-circuit behavior. |
-| E-004 | Focused | `tests/integration.zig` access cases | Struct fields, arrays/slices, property chains, zero-based indexes, missing properties, and out-of-range indexes. |
-| E-005 | Focused | Built-in callable case | `length` for strings/sequences; `upper`, `lower`, `trim`, and `default` behavior. |
-| E-006 | Focused | Registered callable cases | Render-local registrations, built-in override, scratch allocation, callback failures, and source spans. |
-| E-007 | Focused | Expression table for every binary operator and precedence boundary | Verify `||`, `&&`, equality, comparisons, additive, and multiplicative precedence; all binary operators associate left-to-right. |
-| E-008 | Focused | Expression table for numeric syntax and string escapes | Accept specified decimal/exponent forms and six escapes; reject unknown escapes, unescaped line breaks, and malformed numbers. `null`, `true`, and `false` are reserved case-sensitively; other case spellings remain identifiers. |
-| E-009 | Focused | Function/filter syntax table: no args, multiple args, nested calls, filter arguments and pipelines | Parse zero or more arguments; execute left-to-right pipelines; report callable arity/type errors at call sites. |
+| E-003 | Fixture | `tests/integration.zig` expression cases | Integer arithmetic, grouping, boolean literal, string newline escape, unary not, precedence, and logical short-circuit behavior. |
+| E-004 | Fixture | `tests/integration.zig` access cases | Struct fields, arrays/slices, property chains, zero-based indexes, missing properties, and out-of-range indexes. |
+| E-005 | Fixture | Built-in callable case | `length` for strings/sequences; `upper`, `lower`, `trim`, and `default` behavior. |
+| E-006 | Fixture | Registered callable cases | Render-local registrations, built-in override, scratch allocation, callback failures, and source spans. |
+| E-007 | Fixture | Expression table for every binary operator and precedence boundary | Verify `||`, `&&`, equality, comparisons, additive, and multiplicative precedence; all binary operators associate left-to-right. |
+| E-008 | Fixture | Expression table for numeric syntax and string escapes | Accept specified decimal/exponent forms and six escapes; reject unknown escapes, unescaped line breaks, and malformed numbers. `null`, `true`, and `false` are reserved case-sensitively; other case spellings remain identifiers. |
+| E-009 | Fixture | Function/filter syntax table: no args, multiple args, nested calls, filter arguments and pipelines | Parse zero or more arguments; execute left-to-right pipelines; report callable arity/type errors at call sites. |
 | E-010 | Fixture | Expression output matrix for HTML/XML text/attributes | Test `&`, `<`, `>`, `"`, and `'` for each output context and format. |
-| E-011 | Focused | Root names repeated and in different case | Repeated case-sensitive roots reuse symbols; distinct names resolve independently and missing roots fail by default. |
-| E-012 | Focused | Dynamic values across null, bool, number, string, sequence, and object adapters | Verify supported value rendering, property lookup, indexing, and invalid operation categories. |
+| E-011 | Fixture | Root names repeated and in different case | Repeated case-sensitive roots reuse symbols; distinct names resolve independently and missing roots fail by default. |
+| E-012 | Fixture | Dynamic values across null, bool, number, string, sequence, and object adapters | Verify supported value rendering, property lookup, indexing, and invalid operation categories. |
 
 ## Compile diagnostics
 
 | ID | Status | Fixture or scenario | Expected result |
 | --- | --- | --- | --- |
-| C-001 | Focused | `tests/integration.zig` and parser unit cases | Unterminated interpolation and malformed HTML/XML return categorized diagnostics before render. |
-| C-002 | Focused | Parser unit cases | Mismatched/unmatched end tags point to the full end tag; malformed tags point from `<` through `>` or EOF; unclosed elements point to the opening tag. |
-| C-003 | Focused | Invalid-expression table for each literal, selector, operator, call, and delimiter rule | Return invalid-expression/syntax category and half-open source span for the invalid token. |
-| C-004 | Focused | Invalid-markup table for HTML declarations, XML declarations/entities/comments/CDATA, and attributes | Return invalid-markup category and prescribed markup token span. |
-| C-005 | Focused | Control-flow integration diagnostics | Unknown directive and invalid nesting return categorized diagnostics at source spans. |
+| C-001 | Fixture | `tests/integration.zig` and parser unit cases | Unterminated interpolation and malformed HTML/XML return categorized diagnostics before render. |
+| C-002 | Fixture | Parser unit cases | Mismatched/unmatched end tags point to the full end tag; malformed tags point from `<` through `>` or EOF; unclosed elements point to the opening tag. |
+| C-003 | Fixture | Invalid-expression table for each literal, selector, operator, call, and delimiter rule | Return invalid-expression/syntax category and half-open source span for the invalid token. |
+| C-004 | Fixture | Invalid-markup table for HTML declarations, XML declarations/entities/comments/CDATA, and attributes | Return invalid-markup category and prescribed markup token span. |
+| C-005 | Fixture | Control-flow integration diagnostics | Unknown directive and invalid nesting return categorized diagnostics at source spans. |
 
 ## Control flow and scopes
 
@@ -106,9 +113,9 @@ element-only document formatting whitespace is removed.
 
 | ID | Status | Scenario | Expected result |
 | --- | --- | --- | --- |
-| R-001 | Focused | Invalid property/index access, invalid operand, and local selector spans | Return the correct runtime category and originating selector/operator span. |
-| R-002 | Focused | Unknown/failing filters and functions | Return filter/function failure at the call site. |
-| R-003 | Focused | Missing root variable | Return `missing_variable` by default at the identifier span; source before the expression does not shift the reported span. |
+| R-001 | Fixture | Invalid property/index access, invalid operand, and local selector spans | Return the correct runtime category and originating selector/operator span. |
+| R-002 | Fixture | Unknown/failing filters and functions | Return filter/function failure at the call site. |
+| R-003 | Fixture | Missing root variable | Return `missing_variable` by default at the identifier span; source before the expression does not shift the reported span. |
 | R-004 | Focused | Writer that fails during static and dynamic writes | Propagate the original Zig writer error without converting it to a template diagnostic. |
 | R-005 | Focused | Compile with tracked allocator, render, deinitialize | Temporary compile allocations are released; persistent data lives until deinit and is released once. |
 | R-006 | Focused | Reuse one template sequentially and concurrently across branches, loops, and registered callbacks | Each render owns its program counter, scopes, loop state, and scratch arena; output does not cross-contaminate. |
@@ -230,3 +237,13 @@ and passes verification. Future syntax/API cases stay pending.
 | B-001 | bench/main.zig workloads | Benchmark execution is separate from fixture verification; no timing thresholds. |
 | T-001 | No executable owner; API not defined | Pending comptime API; do not invent fixture syntax or enable. |
 | T-002 | No executable owner; API not defined | Pending comptime API; do not invent diagnostic entry point or enable. |
+
+## Value coverage boundaries
+
+Numbers and null values are covered through specified literal and callback
+operations. Native adapters currently support booleans, byte strings, structs,
+arrays, and slices; numeric and optional fields are not accepted by the adapter.
+Direct null/collection interpolation, cross-type equality, and division/modulo
+by zero remain outside the new expectations until their language semantics are
+settled in the conversation and architecture. This does not disable specified
+boolean, string, sequence lookup, numeric expression, or callable coverage.

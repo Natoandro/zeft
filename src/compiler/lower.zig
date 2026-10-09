@@ -302,7 +302,8 @@ const Lowerer = struct {
             },
             .index => |access| {
                 try self.emitExpr(output, access.base.*);
-                try output.append(self.allocator, .{ .span = access.selector_span, .data = .{ .get_index = access.value } });
+                try self.emitExpr(output, access.value.*);
+                try output.append(self.allocator, .{ .span = access.selector_span, .data = .get_index_dynamic });
             },
             .unary => |unary| {
                 try self.emitExpr(output, unary.operand.*);

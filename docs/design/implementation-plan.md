@@ -302,7 +302,7 @@ reviewed independently of the renderer's actual output.
   entities, and literal CDATA. Exercise all five escape-sensitive characters
   in HTML/XML text and both attribute quote styles. Verification: exact bytes
   and corresponding invalid-markup cases through the public compiler.
-- [ ] **ZEP-077** Expand expression/value fixtures (E-002–E-009, E-011–E-012).
+- [x] **ZEP-077** Expand expression/value fixtures (E-002–E-009, E-011–E-012).
   Cover every operator, adjacent precedence levels, associativity, grouping,
   numeric forms, all six string escapes, literal/name case sensitivity,
   dynamic indexes, nested access, and short-circuit skipping of failing
@@ -322,7 +322,7 @@ reviewed independently of the renderer's actual output.
   HTML whitespace-sensitive element. Verify XML names do not inherit HTML
   sensitivity. Verification: independently authored byte-exact goldens,
   including leading/trailing spaces, tabs, and final-newline differences.
-- [ ] **ZEP-080** Complete compile/render diagnostic fixture tables
+- [x] **ZEP-080** Complete compile/render diagnostic fixture tables
   (C-001–C-005, R-001–R-003, and failures from earlier groups). Cover malformed
   delimiters, literal syntax, selectors, operators, calls, declarations,
   entities, comments, CDATA, attributes, and directives. Cover missing names,

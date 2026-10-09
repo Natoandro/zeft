@@ -389,7 +389,7 @@ fn resolveCachedInclude(raw: *anyopaque, identity: []const u8, writer: *std.Io.W
 
 fn cacheFingerprint(identity: []const u8, source: []const u8, options: CompileOptions) u64 {
     var hasher = std.hash.Wyhash.init(0x5a454654);
-    hasher.update("zeft-compiler-ir-1");
+    hasher.update("zeft-compiler-ir-2");
     hasher.update(identity);
     hasher.update(source);
     hasher.update(&.{ @intFromEnum(options.format), @intFromEnum(options.whitespace) });

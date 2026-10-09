@@ -294,10 +294,7 @@ const Lexer = struct {
         self.offset += 2;
         return .{
             .span = .{ .start = start, .end = self.offset },
-            .data = .{ .expression = .{
-                .start = trimStart(self.source, content_start, content_end),
-                .end = trimEnd(self.source, content_start, content_end),
-            } },
+            .data = .{ .expression = trimSpan(self.source, content_start, content_end) },
         };
     }
 
@@ -566,10 +563,7 @@ const Lexer = struct {
                         self.offset += 2;
                         try segments.append(self.allocator, .{
                             .span = .{ .start = expression_start, .end = self.offset },
-                            .data = .{ .expression = .{
-                                .start = trimStart(self.source, content_start, content_end),
-                                .end = trimEnd(self.source, content_start, content_end),
-                            } },
+                            .data = .{ .expression = trimSpan(self.source, content_start, content_end) },
                         });
                         text_start = self.offset;
                     } else {
@@ -905,7 +899,8 @@ fn trimEnd(source: []const u8, start: usize, end: usize) usize {
 }
 
 fn trimSpan(source: []const u8, start: usize, end: usize) zeft.SourceSpan {
-    return .{ .start = trimStart(source, start, end), .end = trimEnd(source, start, end) };
+    const trimmed_start = trimStart(source, start, end);
+    return .{ .start = trimmed_start, .end = trimEnd(source, trimmed_start, end) };
 }
 
 fn validIdentifier(value: []const u8) bool {
