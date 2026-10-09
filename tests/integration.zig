@@ -23,6 +23,32 @@ fn renderConcurrent(data: *ConcurrentRender) void {
     data.output_len = std.Io.Writer.buffered(&writer).len;
 }
 
+const ConcurrentOptionsRender = struct {
+    template: *const zeft.CompiledTemplate,
+    context: struct { show: bool, items: []const []const u8, fallback: []const u8 },
+    registrations: []const zeft.Registration,
+    allocator: std.mem.Allocator,
+    output: [32]u8 = undefined,
+    output_len: usize = 0,
+    failed: bool = false,
+};
+
+fn renderConcurrentOptions(state: *ConcurrentOptionsRender) void {
+    var writer = std.Io.Writer.fixed(&state.output);
+    const result = state.template.renderWithOptions(&writer, &state.context, .{
+        .allocator = state.allocator,
+        .filters = state.registrations,
+    }) catch {
+        state.failed = true;
+        return;
+    };
+    if (result != .success) {
+        state.failed = true;
+        return;
+    }
+    state.output_len = std.Io.Writer.buffered(&writer).len;
+}
+
 fn expectFixture(source: []const u8, expected: []const u8, options: zeft.CompileOptions, context: anytype) !void {
     const result = try zeft.compile(std.testing.allocator, source, options);
     var template = switch (result) {
@@ -187,6 +213,45 @@ test "one control-flow template can render concurrently with isolated state" {
     try std.testing.expect(!second.failed);
     try std.testing.expectEqualStrings("AB", first.output[0..first.output_len]);
     try std.testing.expectEqualStrings("hidden", second.output[0..second.output_len]);
+}
+
+test "concurrent renders keep branch, loop, and callback scratch state isolated" {
+    const source = "{% if show %}{% for value in items %}{{ value | suffix }}{% endfor %}{% else %}{{ fallback | suffix }}{% endif %}";
+    const result = try zeft.compile(std.testing.allocator, source, .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    const registrations = [_]zeft.Registration{.{ .name = "suffix", .callback = registeredSuffix }};
+    const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true, .stack_trace_frames = 0, .enable_memory_limit = true });
+    var debug_allocator: DebugAllocator = .init;
+    defer _ = debug_allocator.deinit();
+    const allocator = debug_allocator.allocator();
+    var first = ConcurrentOptionsRender{
+        .template = &template,
+        .context = .{ .show = true, .items = &.{ "A", "B" }, .fallback = "unused" },
+        .registrations = &registrations,
+        .allocator = allocator,
+    };
+    var second = ConcurrentOptionsRender{
+        .template = &template,
+        .context = .{ .show = false, .items = &.{}, .fallback = "hidden" },
+        .registrations = &registrations,
+        .allocator = allocator,
+    };
+    const first_thread = try std.Thread.spawn(.{}, renderConcurrentOptions, .{&first});
+    const second_thread = std.Thread.spawn(.{}, renderConcurrentOptions, .{&second}) catch |err| {
+        first_thread.join();
+        return err;
+    };
+    first_thread.join();
+    second_thread.join();
+    try std.testing.expect(!first.failed);
+    try std.testing.expect(!second.failed);
+    try std.testing.expectEqualStrings("A!B!", first.output[0..first.output_len]);
+    try std.testing.expectEqualStrings("hidden!", second.output[0..second.output_len]);
+    try std.testing.expectEqual(@as(usize, 0), debug_allocator.total_requested_bytes);
 }
 
 test "nested loops shadow and restore bindings; break and continue target innermost loop" {
@@ -557,6 +622,39 @@ test "finalized access expressions do not retain the template source" {
     try std.testing.expectEqualStrings("Ada", std.Io.Writer.buffered(&writer));
 }
 
+test "missing roots and local selectors report their own expression spans" {
+    const Item = struct { name: []const u8 };
+    const Context = struct { items: []const Item };
+    const cases = [_]struct {
+        source: []const u8,
+        context: Context,
+        kind: zeft.RenderErrorKind,
+        selector: []const u8,
+    }{
+        .{ .source = "before {{ absent }}", .context = .{ .items = &.{} }, .kind = .missing_variable, .selector = "absent" },
+        .{ .source = "{% for item in items %}{{ item.absent }}{% endfor %}", .context = .{ .items = &.{.{ .name = "x" }} }, .kind = .invalid_property_access, .selector = ".absent" },
+    };
+    for (cases) |case| {
+        const result = try zeft.compile(std.testing.allocator, case.source, .{});
+        var template = switch (result) {
+            .success => |value| value,
+            .failure => return error.UnexpectedCompileFailure,
+        };
+        defer template.deinit();
+        var output: [64]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&output);
+        const rendered = try template.render(&writer, &case.context);
+        switch (rendered) {
+            .success => return error.ExpectedDiagnostic,
+            .failure => |diagnostic| {
+                try std.testing.expectEqual(case.kind, diagnostic.kind);
+                const start = std.mem.indexOf(u8, case.source, case.selector).?;
+                try std.testing.expectEqual(@as(?zeft.SourceSpan, .{ .start = start, .end = start + case.selector.len }), diagnostic.span);
+            },
+        }
+    }
+}
+
 test "expression operators honor precedence and render literals" {
     const result = try zeft.compile(std.testing.allocator, "{{ 1 + 2 * 3 }}|{{ (8 - 2) / 3 }}|{{ !false }}|{{ 'a\\n' }}", .{});
     var template = switch (result) {
@@ -678,4 +776,53 @@ test "callable failures and invalid operands retain originating source spans" {
             },
         }
     }
+}
+
+test "render scratch allocations are released after callback output" {
+    const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true, .stack_trace_frames = 0, .enable_memory_limit = true });
+    var debug_allocator: DebugAllocator = .init;
+    defer _ = debug_allocator.deinit();
+    const allocator = debug_allocator.allocator();
+
+    const result = try zeft.compile(std.testing.allocator, "{{ value | suffix }}", .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    const registrations = [_]zeft.Registration{.{ .name = "suffix", .callback = registeredSuffix }};
+    const before_render = debug_allocator.total_requested_bytes;
+    var output: [32]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.renderWithOptions(&writer, .{ .value = "temporary" }, .{
+        .allocator = allocator,
+        .filters = &registrations,
+    });
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("temporary!", std.Io.Writer.buffered(&writer));
+    try std.testing.expectEqual(before_render, debug_allocator.total_requested_bytes);
+
+    var short_output: [2]u8 = undefined;
+    var short_writer = std.Io.Writer.fixed(&short_output);
+    try std.testing.expectError(error.WriteFailed, template.renderWithOptions(&short_writer, .{ .value = "temporary" }, .{
+        .allocator = allocator,
+        .filters = &registrations,
+    }));
+    try std.testing.expectEqual(before_render, debug_allocator.total_requested_bytes);
+
+    const diagnostic_result = try zeft.compile(std.testing.allocator, "{{ value | suffix }}{{ absent }}", .{});
+    var diagnostic_template = switch (diagnostic_result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer diagnostic_template.deinit();
+    var diagnostic_output: [32]u8 = undefined;
+    var diagnostic_writer = std.Io.Writer.fixed(&diagnostic_output);
+    const diagnostic = try diagnostic_template.renderWithOptions(&diagnostic_writer, .{ .value = "temporary" }, .{
+        .allocator = allocator,
+        .filters = &registrations,
+    });
+    try std.testing.expect(diagnostic == .failure);
+    try std.testing.expectEqual(zeft.RenderErrorKind.missing_variable, diagnostic.failure.kind);
+    try std.testing.expectEqual(before_render, debug_allocator.total_requested_bytes);
 }

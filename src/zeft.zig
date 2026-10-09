@@ -285,3 +285,63 @@ test "writer failures propagate from render" {
     var writer = std.Io.Writer.fixed(&output);
     try std.testing.expectError(error.WriteFailed, template.render(&writer, .{}));
 }
+
+test "writer errors propagate unchanged for static and dynamic writes" {
+    const sources = [_][]const u8{ "static output", "{{ value }}" };
+    for (sources) |source| {
+        const result = try compile(std.testing.allocator, source, .{});
+        var template = switch (result) {
+            .success => |value| value,
+            .failure => return error.UnexpectedCompileFailure,
+        };
+        defer template.deinit();
+        var output: [1]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&output);
+        try std.testing.expectError(error.WriteFailed, template.render(&writer, .{ .value = "dynamic" }));
+    }
+}
+
+test "compile temporary storage is released and finalized storage lasts until deinit" {
+    const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true, .stack_trace_frames = 0, .enable_memory_limit = true });
+    var debug_allocator: DebugAllocator = .init;
+    defer _ = debug_allocator.deinit();
+    const allocator = debug_allocator.allocator();
+
+    const baseline_bytes = debug_allocator.total_requested_bytes;
+    const result = try compile(allocator, "<p>{{ name }}</p>", .{});
+    var template = switch (result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    const first_template_bytes = debug_allocator.total_requested_bytes - baseline_bytes;
+    try std.testing.expect(first_template_bytes > 0);
+
+    const second_result = try compile(allocator, "<p>{{ name }}</p>", .{});
+    var second_template = switch (second_result) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    try std.testing.expectEqual(first_template_bytes, debug_allocator.total_requested_bytes - baseline_bytes - first_template_bytes);
+    second_template.deinit();
+    try std.testing.expectEqual(baseline_bytes + first_template_bytes, debug_allocator.total_requested_bytes);
+
+    var output: [32]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    try std.testing.expectEqual(RenderResult.success, try template.render(&writer, .{ .name = "Ada" }));
+    try std.testing.expectEqualStrings("<p>Ada</p>", std.Io.Writer.buffered(&writer));
+
+    const finalized_bytes = debug_allocator.total_requested_bytes;
+    const failed_compile = try compile(allocator, "<p>{{ broken", .{});
+    switch (failed_compile) {
+        .success => |unexpected_template| {
+            var unexpected = unexpected_template;
+            unexpected.deinit();
+            return error.ExpectedCompileFailure;
+        },
+        .failure => {},
+    }
+    try std.testing.expectEqual(finalized_bytes, debug_allocator.total_requested_bytes);
+
+    template.deinit();
+    try std.testing.expectEqual(@as(usize, 0), debug_allocator.total_requested_bytes);
+}

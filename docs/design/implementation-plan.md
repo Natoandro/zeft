@@ -189,17 +189,17 @@ that respect markup and text semantics.
 **Outcome:** the renderer has explicit error behavior, safe immutable template
 reuse, and well-defined allocation lifetimes.
 
-- [ ] **ZEP-054** Make missing-variable behavior an error by default and test
+- [x] **ZEP-054** Make missing-variable behavior an error by default and test
   its source location and error category.
-- [ ] **ZEP-055** Define runtime errors for non-iterable values, invalid
+- [x] **ZEP-055** Define runtime errors for non-iterable values, invalid
   property access, invalid operands, and filter/function failures.
-- [ ] **ZEP-056** Ensure writer failures propagate without being replaced by
+- [x] **ZEP-056** Ensure writer failures propagate without being replaced by
   template errors.
-- [ ] **ZEP-057** Verify compile temporaries are released after finalization
+- [x] **ZEP-057** Verify compile temporaries are released after finalization
   and persistent template storage remains valid until `deinit`.
-- [ ] **ZEP-058** Verify every render owns its program counter, scopes, and loop
+- [x] **ZEP-058** Verify every render owns its program counter, scopes, and loop
   iterators, and that concurrent renders do not share mutable state.
-- [ ] **ZEP-059** Document allocator requirements and the lifetime rules for
+- [x] **ZEP-059** Document allocator requirements and the lifetime rules for
   compiled templates and render-local scratch data.
 
 ## Phase 7 — Add explicit cache and independently compiled includes

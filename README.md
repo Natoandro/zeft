@@ -45,6 +45,22 @@ pub fn renderExample(allocator: std.mem.Allocator, writer: *std.Io.Writer) !void
 Compilation syntax/markup failures and runtime template failures are returned
 as diagnostic results. Writer failures propagate as Zig errors.
 
+The allocator passed to `compile` must remain valid until the compiled
+template's `deinit`; the template owns its finalized data and does not retain
+the source buffer or compile options' indentation slice. Call `deinit` exactly
+once after all renders have finished. Each render owns its control-flow state
+and scratch arena. The renderer releases render-local allocations through
+`RenderOptions.allocator` when rendering ends, subject to that allocator's
+semantics. Strings returned by registered callbacks must remain valid through
+the end of that render and must be allocated from the supplied allocator when
+newly created. The default allocator is thread-safe; if concurrent renders
+share a custom allocator, that allocator must support concurrent use.
+
+An immutable compiled template can be rendered concurrently as long as it is
+not deinitialized during a render. Each call must have its own writer and
+should use immutable context and callback data, or synchronize any shared
+mutable data itself.
+
 ## Requirements
 
 - Zig 0.16.0

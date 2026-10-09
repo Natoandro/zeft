@@ -141,9 +141,22 @@ the compiled template retains it. Writer errors MUST propagate to the caller.
 
 Compilation MAY allocate temporary and persistent memory. Temporary compiler
 memory SHOULD be released as a unit after finalization. Persistent compiled
-data MUST remain valid until the template is deinitialized.
+data MUST remain valid until the template is deinitialized. The allocator
+provided to compilation MUST remain valid until deinitialization. The compiled
+template MUST own copies of all data derived from source and compile options
+that it needs for rendering. A template MUST be deinitialized exactly once,
+after all renders using it have finished.
 
 Render state MUST be isolated per call. The common rendering path SHOULD avoid
 allocation where practical; any required scratch allocation MUST be owned by
 or explicitly supplied to that render and MUST NOT be stored in the compiled
-template.
+template. Render scratch storage MUST be released when rendering returns,
+whether it succeeds, returns a template diagnostic, or propagates a writer
+error. Values returned by registered callbacks that refer to scratch
+allocations MUST remain valid through the render's completion.
+
+An immutable compiled template MAY be rendered concurrently. Each render MUST
+use independent writer and mutable context state. Shared custom allocators,
+callback registrations, callback user data, context data, and writers MUST be
+safe for the concurrency with which callers use them. Deinitialization MUST
+NOT race with an active render.

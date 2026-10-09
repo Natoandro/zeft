@@ -96,13 +96,13 @@ element-only document formatting whitespace is removed.
 
 | ID | Status | Scenario | Expected result |
 | --- | --- | --- | --- |
-| R-001 | Existing tests | Invalid property/index access and invalid operand | Return the correct runtime category and originating selector/operator span. |
+| R-001 | Existing tests | Invalid property/index access, invalid operand, and local selector spans | Return the correct runtime category and originating selector/operator span. |
 | R-002 | Existing tests | Unknown/failing filters and functions | Return filter/function failure at the call site. |
-| R-003 | Defined | Missing root variable | Return `missing_variable` by default at the identifier span. |
-| R-004 | Defined | Writer that fails during static and dynamic writes | Propagate the writer error without converting it to a template diagnostic. |
-| R-005 | Defined | Compile with tracked allocator, render, deinitialize | Temporary compile allocations are released; persistent data lives until deinit and is released once. |
-| R-006 | Defined | Reuse one template sequentially and concurrently | Each render owns its program counter, scopes, and loop state; output does not cross-contaminate. |
-| R-007 | Defined | Callable returns scratch-allocated bytes | Result remains valid through render and scratch data is reset when render ends. |
+| R-003 | Existing tests | Missing root variable | Return `missing_variable` by default at the identifier span; source before the expression does not shift the reported span. |
+| R-004 | Existing tests | Writer that fails during static and dynamic writes | Propagate the original Zig writer error without converting it to a template diagnostic. |
+| R-005 | Existing tests | Compile with tracked allocator, render, deinitialize | Temporary compile allocations are released; persistent data lives until deinit and is released once. |
+| R-006 | Existing tests | Reuse one template sequentially and concurrently across branches, loops, and registered callbacks | Each render owns its program counter, scopes, loop state, and scratch arena; output does not cross-contaminate. |
+| R-007 | Existing tests | Callable returns scratch-allocated bytes | Result remains valid through render output; all render allocations are released when the call ends. |
 | R-008 | Existing test | `tests/integration.zig` source-lifetime case | Free source immediately after compile, then render; compiled template has no dependency on source or temporary AST storage. |
 
 ## Cache, includes, optimization, and comptime
