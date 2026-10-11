@@ -84,9 +84,8 @@ fn expectFixture(
     try fixtures.expectSuccess(
         .{
             .id = "focused",
-            .path = source,
-            .source = source,
-            .expected = expected,
+            .template = source,
+            .output = expected,
             .compile_options = options,
         },
         context,
@@ -95,18 +94,16 @@ fn expectFixture(
 
 fn expectGolden(
     comptime id: []const u8,
-    comptime source_path: []const u8,
-    comptime expected_path: []const u8,
+    template: []const u8,
+    output: []const u8,
     options: zeft.CompileOptions,
     context: anytype,
 ) !void {
     try fixtures.expectSuccess(
         .{
             .id = id,
-            .path = source_path,
-            .expected_path = expected_path,
-            .source = @embedFile(source_path),
-            .expected = @embedFile(expected_path),
+            .template = template,
+            .output = output,
             .compile_options = options,
         },
         context,
@@ -118,8 +115,12 @@ test "enabled golden fixtures compile and render byte-for-byte" {
 
     try expectGolden(
         "M-001–M-004",
-        "fixtures/html/static.tmpl",
-        "fixtures/html/static.out",
+        \\<!dOcTyPe   hTmL ><main id='root'><p>left {{ '{{' }} literal }} \\ right</p><BR/><input disabled checked="false"><!-- {{ ignored }} --></main>
+        \\
+    ,
+        \\<!dOcTyPe   hTmL ><main id='root'><p>left {{ literal }} \\ right</p><BR/><input disabled checked="false"><!-- {{ ignored }} --></main>
+        \\
+    ,
         .{},
         .{},
     );
@@ -127,8 +128,12 @@ test "enabled golden fixtures compile and render byte-for-byte" {
     const HtmlContext = struct { value: []const u8 };
     try expectGolden(
         "E-001",
-        "fixtures/html/dynamic.tmpl",
-        "fixtures/html/dynamic.out",
+        \\<a title='{{ value }}'>{{ value }}</a>
+        \\
+    ,
+        \\<a title='A&amp;B&quot;&#39;&lt;'>A&amp;B"'&lt;</a>
+        \\
+    ,
         .{},
         HtmlContext{ .value = "A&B\"'<" },
     );
@@ -140,8 +145,12 @@ test "enabled golden fixtures compile and render byte-for-byte" {
     };
     try expectGolden(
         "E-002",
-        "fixtures/html/expressions.tmpl",
-        "fixtures/html/expressions.out",
+        \\<p>{{ people[1].name | upper }}|{{ 1 + 2 * 3 }}|{{ false && missing.value }}|{{ blank | default('fallback') | trim }}</p>
+        \\
+    ,
+        \\<p>GRACE &amp; HOPPER|7|false|fallback</p>
+        \\
+    ,
         .{},
         &ExpressionContext{
             .people = .{ .{ .name = "Ada" }, .{ .name = "Grace & Hopper" } },
@@ -152,8 +161,12 @@ test "enabled golden fixtures compile and render byte-for-byte" {
     const ControlContext = struct { item: []const u8, show: bool, items: []const []const u8 };
     try expectGolden(
         "F-004/F-007",
-        "fixtures/html/control-flow.tmpl",
-        "fixtures/html/control-flow.out",
+        \\{{ item }}:{#if show}yes{:else}no{/if}:{#for item in items}[{{ item }}]{/for}:{{ item }}
+        \\
+    ,
+        \\root:yes:[A][B]:root
+        \\
+    ,
         .{},
         &ControlContext{ .item = "root", .show = true, .items = &.{ "A", "B" } },
     );
@@ -161,27 +174,160 @@ test "enabled golden fixtures compile and render byte-for-byte" {
     const XmlContext = struct { value: []const u8 };
     try expectGolden(
         "M-010",
-        "fixtures/xml/fragment.tmpl",
-        "fixtures/xml/fragment.out",
+        \\<?xml version='1.0'?><Root value="{{ value }}"><Child /><![CDATA[ {{ literal }} & < ]]>{{ value }}</Root>
+        \\
+    ,
+        \\<?xml version='1.0'?><Root value="&amp;&lt;&gt;&quot;&apos;"><Child /><![CDATA[ {{ literal }} & < ]]>&amp;&lt;&gt;"'</Root>
+        \\
+    ,
         .{ .format = .xml },
         XmlContext{ .value = "&<>\"'" },
     );
 
-    try expectGolden("W-html-preserve", "fixtures/html/whitespace.tmpl", "fixtures/html/whitespace-preserve.out", .{}, .{});
-    try expectGolden("W-html-compact", "fixtures/html/whitespace.tmpl", "fixtures/html/whitespace-compact.out", .{ .whitespace = .compact }, .{});
-    try expectGolden("W-html-pretty", "fixtures/html/whitespace.tmpl", "fixtures/html/whitespace-pretty.out", .{ .whitespace = .pretty }, .{});
-    try expectGolden("W-xml-preserve", "fixtures/xml/whitespace.tmpl", "fixtures/xml/whitespace-preserve.out", .{ .format = .xml }, .{});
-    try expectGolden("W-xml-compact", "fixtures/xml/whitespace.tmpl", "fixtures/xml/whitespace-compact.out", .{ .format = .xml, .whitespace = .compact }, .{});
-    try expectGolden("W-xml-pretty", "fixtures/xml/whitespace.tmpl", "fixtures/xml/whitespace-pretty.out", .{ .format = .xml, .whitespace = .pretty }, .{});
+    try expectGolden("W-html-preserve",
+        \\<div>
+        \\  <section>
+        \\    <p>Hello <em>there</em>!</p>
+        \\    <p>Second   line</p>
+        \\  </section>
+        \\  <form><label>Name</label><textarea>  keep  spaces
+        \\  </textarea></form>
+        \\  <pre>  a  b
+        \\ c</pre>
+        \\  <script>if (a  < b) { x(); }</script>
+        \\  <style>.x  { color: red; }</style>
+        \\</div>
+        \\
+    ,
+        \\<div>
+        \\  <section>
+        \\    <p>Hello <em>there</em>!</p>
+        \\    <p>Second   line</p>
+        \\  </section>
+        \\  <form><label>Name</label><textarea>  keep  spaces
+        \\  </textarea></form>
+        \\  <pre>  a  b
+        \\ c</pre>
+        \\  <script>if (a  < b) { x(); }</script>
+        \\  <style>.x  { color: red; }</style>
+        \\</div>
+        \\
+    , .{}, .{});
+    try expectGolden(
+        "W-html-compact",
+        \\<div>
+        \\  <section>
+        \\    <p>Hello <em>there</em>!</p>
+        \\    <p>Second   line</p>
+        \\  </section>
+        \\  <form><label>Name</label><textarea>  keep  spaces
+        \\  </textarea></form>
+        \\  <pre>  a  b
+        \\ c</pre>
+        \\  <script>if (a  < b) { x(); }</script>
+        \\  <style>.x  { color: red; }</style>
+        \\</div>
+        \\
+    ,
+        \\<div><section><p>Hello <em>there</em>!</p><p>Second line</p></section><form><label>Name</label><textarea>  keep  spaces
+        \\  </textarea></form><pre>  a  b
+        \\ c</pre><script>if (a  < b) { x(); }</script><style>.x  { color: red; }</style></div>
+    ,
+        .{ .whitespace = .compact },
+        .{},
+    );
+    try expectGolden("W-html-pretty",
+        \\<div>
+        \\  <section>
+        \\    <p>Hello <em>there</em>!</p>
+        \\    <p>Second   line</p>
+        \\  </section>
+        \\  <form><label>Name</label><textarea>  keep  spaces
+        \\  </textarea></form>
+        \\  <pre>  a  b
+        \\ c</pre>
+        \\  <script>if (a  < b) { x(); }</script>
+        \\  <style>.x  { color: red; }</style>
+        \\</div>
+        \\
+    ,
+        \\<div>
+        \\  <section>
+        \\    <p>Hello <em>there</em>!</p>
+        \\    <p>Second   line</p>
+        \\  </section>
+        \\  <form>
+        \\    <label>Name</label>
+        \\    <textarea>  keep  spaces
+        \\  </textarea>
+        \\  </form>
+        \\  <pre>  a  b
+        \\ c</pre>
+        \\  <script>if (a  < b) { x(); }</script>
+        \\  <style>.x  { color: red; }</style>
+        \\</div>
+        \\
+    , .{ .whitespace = .pretty }, .{});
+    try expectGolden("W-xml-preserve",
+        \\<root>
+        \\  <group>
+        \\    <item>Hello <em>XML</em>!</item>
+        \\    <item>Second   line</item>
+        \\    <pre> a  b </pre>
+        \\  </group>
+        \\</root>
+        \\
+    ,
+        \\<root>
+        \\  <group>
+        \\    <item>Hello <em>XML</em>!</item>
+        \\    <item>Second   line</item>
+        \\    <pre> a  b </pre>
+        \\  </group>
+        \\</root>
+        \\
+    , .{ .format = .xml }, .{});
+    try expectGolden("W-xml-compact",
+        \\<root>
+        \\  <group>
+        \\    <item>Hello <em>XML</em>!</item>
+        \\    <item>Second   line</item>
+        \\    <pre> a  b </pre>
+        \\  </group>
+        \\</root>
+        \\
+    , "<root><group><item>Hello <em>XML</em>!</item><item>Second line</item><pre> a b </pre></group></root>", .{ .format = .xml, .whitespace = .compact }, .{});
+    try expectGolden("W-xml-pretty",
+        \\<root>
+        \\  <group>
+        \\    <item>Hello <em>XML</em>!</item>
+        \\    <item>Second   line</item>
+        \\    <pre> a  b </pre>
+        \\  </group>
+        \\</root>
+        \\
+    ,
+        \\<root>
+        \\  <group>
+        \\    <item>Hello <em>XML</em>!</item>
+        \\    <item>Second   line</item>
+        \\    <pre> a  b </pre>
+        \\  </group>
+        \\</root>
+        \\
+    , .{ .format = .xml, .whitespace = .pretty }, .{});
 }
 
 test "whitespace policies retain dynamic boundaries across empty and repeated loop output" {
     const Context = struct { name: []const u8, items: []const []const u8 };
-    const source = @embedFile("fixtures/html/whitespace-dynamic.tmpl");
+    const source = "<p>Hello {{ name }} {#for item in items}<b>{{ item }}</b>{/for}!</p>";
     const context = &Context{ .name = "Ada", .items = &.{ "A", "B" } };
-    try expectGolden("W-dynamic-preserve", "fixtures/html/whitespace-dynamic.tmpl", "fixtures/html/whitespace-dynamic-preserve.out", .{}, context);
-    try expectGolden("W-dynamic-compact", "fixtures/html/whitespace-dynamic.tmpl", "fixtures/html/whitespace-dynamic-compact.out", .{ .whitespace = .compact }, context);
-    try expectGolden("W-dynamic-pretty", "fixtures/html/whitespace-dynamic.tmpl", "fixtures/html/whitespace-dynamic-pretty.out", .{ .whitespace = .pretty }, context);
+    try expectGolden("W-dynamic-preserve", "<p>Hello {{ name }} {#for item in items}<b>{{ item }}</b>{/for}!</p>", "<p>Hello Ada <b>A</b><b>B</b>!</p>", .{}, context);
+    try expectGolden("W-dynamic-compact", "<p>Hello {{ name }} {#for item in items}<b>{{ item }}</b>{/for}!</p>", "<p>Hello Ada <b>A</b><b>B</b>!</p>", .{ .whitespace = .compact }, context);
+    try expectGolden("W-dynamic-pretty", "<p>Hello {{ name }} {#for item in items}<b>{{ item }}</b>{/for}!</p>",
+        \\<p>Hello Ada <b>A</b><b>B</b>!</p>
+        \\
+    , .{ .whitespace = .pretty }, context);
     try expectFixture(source, "<p>Hello Ada !</p>", .{ .whitespace = .compact }, &Context{ .name = "Ada", .items = &.{} });
 }
 
@@ -1028,9 +1174,8 @@ test "fixture runner supports large output and typed callback registrations" {
     const registrations = [_]zeft.Registration{.{ .name = "suffix", .callback = registeredSuffix }};
     try fixtures.expectSuccess(.{
         .id = "runner-large-output",
-        .path = "inline/runner-large-output",
-        .source = "{{ value | suffix }}",
-        .expected = value ++ "!",
+        .template = "{{ value | suffix }}",
+        .output = value ++ "!",
         .render_options = .{ .allocator = std.testing.allocator, .filters = &registrations },
     }, &Context{ .value = value });
 }
@@ -1038,14 +1183,12 @@ test "fixture runner supports large output and typed callback registrations" {
 test "fixture runner checks compile and render diagnostic descriptors" {
     try fixtures.expectCompileFailure(.{
         .id = "runner-compile-diagnostic",
-        .path = "inline/runner-compile-diagnostic",
-        .source = "<div/>",
+        .template = "<div/>",
         .diagnostic = .{ .kind = .invalid_markup, .span = .{ .start = 0, .end = 6 } },
     });
     try fixtures.expectRenderFailure(.{
         .id = "runner-render-diagnostic",
-        .path = "inline/runner-render-diagnostic",
-        .source = "before {{ absent }}",
+        .template = "before {{ absent }}",
         .diagnostic = .{ .kind = .missing_variable, .span = .{ .start = 10, .end = 16 } },
     }, .{});
 }

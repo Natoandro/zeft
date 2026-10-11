@@ -1,14 +1,15 @@
 //! Cache and include scenarios through the public API.
+const fixture_data = @import("fixtures/cache.zig");
 const std = @import("std");
 const zeft = @import("zeft");
 const allocator = std.testing.allocator;
 const context = .{ .value = @as([]const u8, "<Ada>") };
-const root = @embedFile("fixtures/includes/root.tmpl");
-const child = @embedFile("fixtures/includes/child.tmpl");
-const child_v2 = @embedFile("fixtures/includes/child-v2.tmpl");
-const invalid = @embedFile("fixtures/includes/invalid.tmpl");
+const root = fixture_data.includes.root.template;
+const child = fixture_data.includes.child.template;
+const child_v2 = fixture_data.includes.child_v2.template;
+const invalid = fixture_data.includes.invalid.template;
 
-pub const harness_ids = [_][]const u8{ "CA-001", "CA-002", "CA-003", "CA-004", "CA-005", "CA-006", "CA-007" };
+const cache_cases = @import("fixtures/cache.zig");
 
 fn load(
     cache: *zeft.TemplateCache,
@@ -52,7 +53,7 @@ fn render(
 }
 
 test "CA-001 cache hits distinct identities and source versions" {
-    errdefer std.debug.print("CA-001 fixtures/includes/child.tmpl\n", .{});
+    errdefer std.debug.print("CA-001 fixture input\n", .{});
     var cache = zeft.TemplateCache.init(allocator);
     defer cache.deinit();
     var first = try load(&cache, "child", child, .{});
@@ -70,10 +71,10 @@ test "CA-001 cache hits distinct identities and source versions" {
 }
 
 test "CA-002 cache options preserve independent retained outputs" {
-    errdefer std.debug.print("CA-002 fixtures/includes/options.tmpl\n", .{});
+    errdefer std.debug.print("CA-002 fixture input\n", .{});
     var cache = zeft.TemplateCache.init(allocator);
     defer cache.deinit();
-    const source = @embedFile("fixtures/includes/options.tmpl");
+    const source = fixture_data.includes.options.template;
     const options = [_]zeft.CompileOptions{
         .{},
         .{ .whitespace = .compact },
@@ -85,11 +86,11 @@ test "CA-002 cache options preserve independent retained outputs" {
         .{ .format = .xml },
     };
     const outputs = [_][]const u8{
-        @embedFile("fixtures/includes/options-preserve.out"),
-        @embedFile("fixtures/includes/options-compact.out"),
-        @embedFile("fixtures/includes/options-pretty.out"),
-        @embedFile("fixtures/includes/options-tab.out"),
-        @embedFile("fixtures/includes/options-preserve.out"),
+        fixture_data.includes.options_preserve.output,
+        fixture_data.includes.options_compact.output,
+        fixture_data.includes.options_pretty.output,
+        fixture_data.includes.options_tab.output,
+        fixture_data.includes.options_preserve.output,
     };
     var leases: [options.len]zeft.TemplateLease = undefined;
     var initialized: usize = 0;
@@ -103,30 +104,30 @@ test "CA-002 cache options preserve independent retained outputs" {
 }
 
 test "CA-003 independently compiled nested and repeated includes reload children" {
-    errdefer std.debug.print("CA-003 fixtures/includes/root.tmpl\n", .{});
+    errdefer std.debug.print("CA-003 fixture input\n", .{});
     var cache = zeft.TemplateCache.init(allocator);
     defer cache.deinit();
     var parent = try load(&cache, "root", root, .{});
     defer parent.deinit();
     var initial_child = try load(&cache, "child", child, .{});
     defer initial_child.deinit();
-    try expectLease(&parent, @embedFile("fixtures/includes/root.out"));
+    try expectLease(&parent, fixture_data.includes.root.output);
     var next_child = try load(&cache, "child", child_v2, .{});
     defer next_child.deinit();
-    try expectLease(&parent, @embedFile("fixtures/includes/root-child-v2.out"));
-    var next_parent = try load(&cache, "root", @embedFile("fixtures/includes/root-v2.tmpl"), .{});
+    try expectLease(&parent, fixture_data.includes.root_child_v2.output);
+    var next_parent = try load(&cache, "root", fixture_data.includes.root_v2.template, .{});
     defer next_parent.deinit();
-    try expectLease(&next_parent, @embedFile("fixtures/includes/root-v2.out"));
-    try expectLease(&parent, @embedFile("fixtures/includes/root-child-v2.out"));
-    var nested = try load(&cache, "child", @embedFile("fixtures/includes/nested.tmpl"), .{});
+    try expectLease(&next_parent, fixture_data.includes.root_v2.output);
+    try expectLease(&parent, fixture_data.includes.root_child_v2.output);
+    var nested = try load(&cache, "child", fixture_data.includes.nested.template, .{});
     defer nested.deinit();
-    var leaf = try load(&cache, "leaf", @embedFile("fixtures/includes/leaf.tmpl"), .{});
+    var leaf = try load(&cache, "leaf", fixture_data.includes.leaf.template, .{});
     defer leaf.deinit();
-    try expectLease(&parent, @embedFile("fixtures/includes/nested.out"));
+    try expectLease(&parent, fixture_data.includes.nested.output);
 }
 
 test "CA-004 failed parent and child reloads preserve valid versions" {
-    errdefer std.debug.print("CA-004 fixtures/includes/invalid.tmpl\n", .{});
+    errdefer std.debug.print("CA-004 fixture input\n", .{});
     var cache = zeft.TemplateCache.init(allocator);
     defer cache.deinit();
     var parent = try load(&cache, "root", root, .{});
@@ -152,15 +153,15 @@ test "CA-004 failed parent and child reloads preserve valid versions" {
             ),
         }
     }
-    try expectLease(&parent, @embedFile("fixtures/includes/root.out"));
+    try expectLease(&parent, fixture_data.includes.root.output);
     var buffer: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
     try std.testing.expectEqual(zeft.RenderResult.success, try render(&cache, "root", &writer));
-    try std.testing.expectEqualStrings(@embedFile("fixtures/includes/root.out"), writer.buffered());
+    try std.testing.expectEqualStrings(fixture_data.includes.root.output, writer.buffered());
 }
 
 test "CA-005 missing dependencies and initial child failure retain diagnostic identities" {
-    errdefer std.debug.print("CA-005 fixtures/includes/missing.tmpl\n", .{});
+    errdefer std.debug.print("CA-005 fixture input\n", .{});
     var cache = zeft.TemplateCache.init(allocator);
     defer cache.deinit();
     var buffer: [256]u8 = undefined;
@@ -176,7 +177,7 @@ test "CA-005 missing dependencies and initial child failure retain diagnostic id
             &writer,
         ),
     );
-    var parent = try load(&cache, "parent", @embedFile("fixtures/includes/missing.tmpl"), .{});
+    var parent = try load(&cache, "parent", fixture_data.includes.missing.template, .{});
     var parent_alive = true;
     defer if (parent_alive) parent.deinit();
     const missing = try render(&cache, "parent", &writer);
@@ -229,18 +230,18 @@ test "CA-005 missing dependencies and initial child failure retain diagnostic id
     try std.testing.expectEqualStrings("absent", failed.failure.include_identity.?);
     var fixed = try load(&cache, "absent", child, .{});
     defer fixed.deinit();
-    var restored = try load(&cache, "parent", @embedFile("fixtures/includes/missing.tmpl"), .{});
+    var restored = try load(&cache, "parent", fixture_data.includes.missing.template, .{});
     defer restored.deinit();
     try expectLease(&restored, "<p>&lt;Ada&gt;</p>");
 }
 
 test "CA-006 recursive includes report the offending dependency edge" {
-    errdefer std.debug.print("CA-006 fixtures/includes/cycle-a.tmpl\n", .{});
+    errdefer std.debug.print("CA-006 fixture input\n", .{});
     var cache = zeft.TemplateCache.init(allocator);
     defer cache.deinit();
-    var a = try load(&cache, "a", @embedFile("fixtures/includes/cycle-a.tmpl"), .{});
+    var a = try load(&cache, "a", fixture_data.includes.cycle_a.template, .{});
     defer a.deinit();
-    var b = try load(&cache, "b", @embedFile("fixtures/includes/cycle-b.tmpl"), .{});
+    var b = try load(&cache, "b", fixture_data.includes.cycle_b.template, .{});
     defer b.deinit();
     var buffer: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
@@ -263,7 +264,7 @@ test "CA-006 recursive includes report the offending dependency edge" {
 }
 
 test "CA-007 eviction keeps retained roots valid and resolves current children" {
-    errdefer std.debug.print("CA-007 fixtures/includes/root.tmpl\n", .{});
+    errdefer std.debug.print("CA-007 fixture input\n", .{});
     var cache = zeft.TemplateCache.init(allocator);
     defer cache.deinit();
     var parent = try load(&cache, "root", root, .{});
@@ -271,7 +272,7 @@ test "CA-007 eviction keeps retained roots valid and resolves current children" 
     var initial_child = try load(&cache, "child", child, .{});
     defer initial_child.deinit();
     cache.evict("root");
-    try expectLease(&parent, @embedFile("fixtures/includes/root.out"));
+    try expectLease(&parent, fixture_data.includes.root.output);
     cache.evict("child");
     try expectLease(&initial_child, "<p>&lt;Ada&gt;</p>");
     var buffer: [256]u8 = undefined;
@@ -280,5 +281,5 @@ test "CA-007 eviction keeps retained roots valid and resolves current children" 
     try std.testing.expectEqual(zeft.RenderErrorKind.missing_include, failure.failure.kind);
     var changed = try load(&cache, "child", child_v2, .{});
     defer changed.deinit();
-    try expectLease(&parent, @embedFile("fixtures/includes/root-child-v2.out"));
+    try expectLease(&parent, fixture_data.includes.root_child_v2.output);
 }

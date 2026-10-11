@@ -1,17 +1,8 @@
+const fixture_data = @import("fixtures/lifecycle.zig");
 const std = @import("std");
 const zeft = @import("zeft");
 
-pub const harness_ids = [_][]const u8{
-    "LC-001/source-and-options-ownership",
-    "LC-002/static-writer-error",
-    "LC-003/dynamic-writer-error-scratch",
-    "LC-004/include-writer-error-scratch",
-    "LC-005/callback-error-scratch",
-    "LC-006/diagnostic-error-scratch",
-    "LC-007/overlapping-compiled-renders",
-    "LC-008/active-child-eviction-and-reload",
-    "LC-009/byte-array-context-storage",
-};
+const lifecycle_cases = @import("fixtures/lifecycle.zig");
 
 const DebugAllocator = std.heap.DebugAllocator(.{
     .thread_safe = true,
@@ -24,16 +15,16 @@ const copy_registration = [_]zeft.Registration{.{ .name = "copy", .callback = co
 test "LC-009 byte arrays retain context storage for pointer value and nested contexts" {
     const Bytes = struct { bytes: [4]u8 };
     const context = Bytes{ .bytes = "byte".* };
-    var root = try compile(@embedFile("fixtures/lifecycle/array-root.tmpl"), .{});
+    var root = try compile(fixture_data.lifecycle.array_root.template, .{});
     defer root.deinit();
     var buffer: [32]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
     try std.testing.expectEqual(zeft.RenderResult.success, try root.render(&writer, &context));
-    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/array.out"), writer.buffered());
+    try std.testing.expectEqualStrings(fixture_data.lifecycle.array.output, writer.buffered());
     writer = .fixed(&buffer);
     try std.testing.expectEqual(zeft.RenderResult.success, try root.render(&writer, context));
-    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/array.out"), writer.buffered());
-    var nested = try compile(@embedFile("fixtures/lifecycle/array-nested.tmpl"), .{});
+    try std.testing.expectEqualStrings(fixture_data.lifecycle.array.output, writer.buffered());
+    var nested = try compile(fixture_data.lifecycle.array_nested.template, .{});
     defer nested.deinit();
     const nested_context = struct { record: Bytes }{ .record = context };
     writer = .fixed(&buffer);
@@ -44,7 +35,7 @@ test "LC-009 byte arrays retain context storage for pointer value and nested con
             &nested_context,
         ),
     );
-    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/array.out"), writer.buffered());
+    try std.testing.expectEqualStrings(fixture_data.lifecycle.array.output, writer.buffered());
 }
 
 fn compile(source: []const u8, options: zeft.CompileOptions) !zeft.CompiledTemplate {
@@ -84,7 +75,7 @@ test "LC-001 compiled source and indentation survive buffer release" {
     defer std.testing.expect(tracked.deinit() == .ok) catch @panic("compile allocation leak");
     const allocator = tracked.allocator();
     var template = blk: {
-        const source = try allocator.dupe(u8, @embedFile("fixtures/lifecycle/ownership.tmpl"));
+        const source = try allocator.dupe(u8, fixture_data.lifecycle.ownership.template);
         defer allocator.free(source);
         const indentation = try allocator.dupe(u8, "\t");
         defer allocator.free(indentation);
@@ -117,7 +108,7 @@ test "LC-001 compiled source and indentation survive buffer release" {
             ValueContext{ .value = "<owned>" },
         ),
     );
-    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/ownership.out"), writer.buffered());
+    try std.testing.expectEqualStrings(fixture_data.lifecycle.ownership.output, writer.buffered());
     try std.testing.expectEqual(owned_bytes, tracked.total_requested_bytes);
     template.deinit();
     template_alive = false;
@@ -125,7 +116,7 @@ test "LC-001 compiled source and indentation survive buffer release" {
 }
 
 test "LC-002 original static writer error propagates" {
-    var template = try compile(@embedFile("fixtures/lifecycle/static.tmpl"), .{});
+    var template = try compile(fixture_data.lifecycle.static.template, .{});
     defer template.deinit();
     var buffer: [1]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
@@ -135,7 +126,7 @@ test "LC-002 original static writer error propagates" {
 test "LC-003 dynamic writer error releases callback scratch" {
     var tracked: DebugAllocator = .init;
     defer std.testing.expect(tracked.deinit() == .ok) catch @panic("render allocation leak");
-    var template = try compile(@embedFile("fixtures/lifecycle/dynamic.tmpl"), .{});
+    var template = try compile(fixture_data.lifecycle.dynamic.template, .{});
     defer template.deinit();
     var buffer: [1]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
@@ -158,9 +149,9 @@ test "LC-004 include writer error releases render state and child lease" {
     defer std.testing.expect(tracked.deinit() == .ok) catch @panic("include allocation leak");
     var cache = zeft.TemplateCache.init(tracked.allocator());
     defer cache.deinit();
-    var parent = try load(&cache, "parent", @embedFile("fixtures/lifecycle/parent.tmpl"));
+    var parent = try load(&cache, "parent", fixture_data.lifecycle.parent.template);
     defer parent.deinit();
-    var child = try load(&cache, "child", @embedFile("fixtures/lifecycle/child.tmpl"));
+    var child = try load(&cache, "child", fixture_data.lifecycle.child.template);
     child.deinit();
     const baseline = tracked.total_requested_bytes;
     var buffer: [1]u8 = undefined;
@@ -187,7 +178,7 @@ test "LC-004 include writer error releases render state and child lease" {
 test "LC-005 callback failure releases allocations made before error" {
     var tracked: DebugAllocator = .init;
     defer std.testing.expect(tracked.deinit() == .ok) catch @panic("callback allocation leak");
-    var template = try compile(@embedFile("fixtures/lifecycle/callback-error.tmpl"), .{});
+    var template = try compile(fixture_data.lifecycle.callback_error.template, .{});
     defer template.deinit();
     const registration = [_]zeft.Registration{.{ .name = "fail", .callback = allocateThenFail }};
     var buffer: [64]u8 = undefined;
@@ -217,7 +208,7 @@ test "LC-005 callback failure releases allocations made before error" {
 test "LC-006 later template diagnostic releases successful callback scratch" {
     var tracked: DebugAllocator = .init;
     defer std.testing.expect(tracked.deinit() == .ok) catch @panic("diagnostic allocation leak");
-    var template = try compile(@embedFile("fixtures/lifecycle/diagnostic.tmpl"), .{});
+    var template = try compile(fixture_data.lifecycle.diagnostic.template, .{});
     defer template.deinit();
     var buffer: [64]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
@@ -303,7 +294,7 @@ fn renderCompiled(worker: *CompiledWorker) void {
 test "LC-007 synchronized overlapping renders isolate branch loop and scratch state" {
     var tracked: DebugAllocator = .init;
     defer std.testing.expect(tracked.deinit() == .ok) catch @panic("concurrent allocation leak");
-    var template = try compile(@embedFile("fixtures/lifecycle/concurrent.tmpl"), .{});
+    var template = try compile(fixture_data.lifecycle.concurrent.template, .{});
     defer template.deinit();
     var first_gate = Gate{};
     var second_gate = Gate{};
@@ -349,13 +340,19 @@ test "LC-007 synchronized overlapping renders isolate branch loop and scratch st
     second_thread.join();
     second_joined = true;
     try std.testing.expect(!second.failed);
-    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/concurrent-second.out"), second.bytes[0..second.len]);
+    try std.testing.expectEqualStrings(
+        fixture_data.lifecycle.concurrent_second.output,
+        second.bytes[0..second.len],
+    );
     try std.testing.expect(!first_gate.done.load(.acquire));
     first_gate.proceed.store(true, .release);
     // Join through the deferred cleanup before checking shared allocation count.
     while (!first_gate.done.load(.acquire)) std.atomic.spinLoopHint();
     try std.testing.expect(!first.failed);
-    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/concurrent-first.out"), first.bytes[0..first.len]);
+    try std.testing.expectEqualStrings(
+        fixture_data.lifecycle.concurrent_first.output,
+        first.bytes[0..first.len],
+    );
     try std.testing.expectEqual(@as(usize, 0), tracked.total_requested_bytes);
 }
 
@@ -395,9 +392,9 @@ fn renderCache(worker: *CacheWorker) void {
 test "LC-008 active included child survives eviction and reload" {
     var cache = zeft.TemplateCache.init(std.testing.allocator);
     defer cache.deinit();
-    var parent = try load(&cache, "parent", @embedFile("fixtures/lifecycle/parent.tmpl"));
+    var parent = try load(&cache, "parent", fixture_data.lifecycle.parent.template);
     defer parent.deinit();
-    var child = try load(&cache, "child", @embedFile("fixtures/lifecycle/held-child.tmpl"));
+    var child = try load(&cache, "child", fixture_data.lifecycle.held_child.template);
     child.deinit();
     var gate = Gate{};
     var worker = CacheWorker{ .cache = &cache, .gate = &gate };
@@ -410,7 +407,7 @@ test "LC-008 active included child survives eviction and reload" {
     try waitUntilEntered(&gate);
     // The callback runs inside the independently acquired child lease.
     cache.evict("child");
-    var replacement = try load(&cache, "child", @embedFile("fixtures/lifecycle/new-child.tmpl"));
+    var replacement = try load(&cache, "child", fixture_data.lifecycle.new_child.template);
     defer replacement.deinit();
     var bytes: [64]u8 = undefined;
     var writer = std.Io.Writer.fixed(&bytes);
@@ -421,11 +418,14 @@ test "LC-008 active included child survives eviction and reload" {
             ValueContext{},
         ),
     );
-    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/new-child.out"), writer.buffered());
+    try std.testing.expectEqualStrings(fixture_data.lifecycle.new_child.output, writer.buffered());
     try std.testing.expect(!gate.done.load(.acquire));
     gate.proceed.store(true, .release);
     thread.join();
     joined = true;
     try std.testing.expect(!worker.failed);
-    try std.testing.expectEqualStrings(@embedFile("fixtures/lifecycle/held-child.out"), worker.bytes[0..worker.len]);
+    try std.testing.expectEqualStrings(
+        fixture_data.lifecycle.held_child.output,
+        worker.bytes[0..worker.len],
+    );
 }

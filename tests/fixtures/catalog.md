@@ -10,8 +10,9 @@ allocation assertions remain in focused tests.
 
 ## Executable suites
 
-- **ZEP-076:** `tests/e2e_markup.zig` registers MK-001–MK-072: 51 exact
-  output cases and 21 compile diagnostic cases. Covers M-001–M-013 and
+- **ZEP-076:** `tests/fixtures/markup.zig` defines MK-001–MK-051 as exact output
+  cases; `tests/e2e_markup.zig` registers MK-052–MK-072 as compile diagnostics
+  using `tests/fixtures/markup.zig`. Covers M-001–M-013 and
   E-001/E-010, including every HTML void opening form, all escaping contexts,
   XML fragments, declarations, entities, and literal comments/CDATA.
 
@@ -35,16 +36,16 @@ allocation assertions remain in focused tests.
 
 | ID | Status | Fixture or scenario | Expected result |
 | --- | --- | --- | --- |
-| M-001 | Fixture | `html/static.tmpl` | Nested HTML serializes exactly; source spelling, static attributes, and final newline are retained. |
-| M-002 | Fixture | `html/static.tmpl` | Backslashes remain literal; interpolation can emit delimiter text; comment contents remain literal. |
-| M-003 | Fixture | `html/static.tmpl` | Mixed-case void tags preserve their original opening tags and get no end tag. |
-| M-004 | Fixture | `html/static.tmpl` | HTML5 doctype casing and whitespace are preserved. |
+| M-001 | Fixture | `text.html.static.template` | Nested HTML serializes exactly; source spelling, static attributes, and final newline are retained. |
+| M-002 | Fixture | `text.html.static.template` | Backslashes remain literal; interpolation can emit delimiter text; comment contents remain literal. |
+| M-003 | Fixture | `text.html.static.template` | Mixed-case void tags preserve their original opening tags and get no end tag. |
+| M-004 | Fixture | `text.html.static.template` | HTML5 doctype casing and whitespace are preserved. |
 | M-005 | Fixture | `tests/integration.zig` static-attribute case | Bare boolean attributes and quoted boolean-looking values remain distinct and exact. |
 | M-006 | Fixture | HTML void-element table from the architecture, in `<tag>` and `<tag/>` forms | Every listed void element is accepted and preserved; children/end tags and non-void self-closing tags fail. |
 | M-007 | Fixture | Parser unit cases | Comments preserve bytes; unterminated comments and unsupported declarations fail as invalid markup. |
 | M-008 | Fixture | Parser unit cases | Nested elements, mixed content, source spelling, and malformed tag spans are checked. |
 | M-009 | Fixture | Parser unit cases | XML name case sensitivity, quoted attributes, and empty-element spelling are checked. |
-| M-010 | Fixture | `xml/fragment.tmpl` | XML declaration, empty child, CDATA, and dynamic XML text/attribute escaping render exactly. |
+| M-010 | Fixture | `text.xml.fragment.template` | XML declaration, empty child, CDATA, and dynamic XML text/attribute escaping render exactly. |
 | M-011 | Fixture | Parser unit cases | XML entity references are retained; invalid references, raw `<`, `]]>`, malformed comments, declarations, and CDATA fail. |
 | M-012 | Fixture | HTML attribute interpolation with both quote styles and multiple dynamic/static segments | Escape `&<>"'` in either attribute quote style; preserve all surrounding source bytes. |
 | M-013 | Fixture | XML fragment with multiple top-level text, comments, and elements | Render a fragment without imposing one-document-element validation. |
@@ -53,8 +54,8 @@ allocation assertions remain in focused tests.
 
 | ID | Status | Fixture or scenario | Expected result |
 | --- | --- | --- | --- |
-| E-001 | Fixture | `html/dynamic.tmpl` | HTML text and attribute contexts escape the same value according to their distinct rules. |
-| E-002 | Fixture | `html/expressions.tmpl` | Nested property/index access, precedence, short-circuiting, filters, and escaping compose in one render. |
+| E-001 | Fixture | `text.html.dynamic.template` | HTML text and attribute contexts escape the same value according to their distinct rules. |
+| E-002 | Fixture | `text.html.expressions.template` | Nested property/index access, precedence, short-circuiting, filters, and escaping compose in one render. |
 | E-003 | Fixture | `tests/integration.zig` expression cases | Integer arithmetic, grouping, boolean literal, string newline escape, unary not, precedence, and logical short-circuit behavior. |
 | E-004 | Fixture | `tests/integration.zig` access cases | Struct fields, arrays/slices, property chains, zero-based indexes, missing properties, and out-of-range indexes. |
 | E-005 | Fixture | Built-in callable case | `length` for strings/sequences; `upper`, `lower`, `trim`, and `default` behavior. |
@@ -91,10 +92,10 @@ The scenarios use `{#if expression}`, `{:else if expression}`, `{:else}`,
 | F-001 | Fixture | Control-flow fixture and focused cases | True/false conditions emit only the selected branch. |
 | F-002 | Fixture | Control-flow fixture and focused cases | Alternate branch and nested conditions preserve document order. |
 | F-003 | Fixture | Control-flow integration cases | Empty loops emit nothing; non-empty loops emit once per item. |
-| F-004 | Fixture | `html/control-flow.tmpl` | Loop local resolves before root context and expires after its body. |
+| F-004 | Fixture | `text.html.control_flow.template` | Loop local resolves before root context and expires after its body. |
 | F-005 | Fixture | Control-flow integration cases | Nested loops keep independent iteration state and bindings. |
 | F-006 | Fixture | Control-flow integration cases | Inner loop shadows outer name; outer binding is visible again afterward. |
-| F-007 | Fixture | `html/control-flow.tmpl` | Root variable with the loop binding's name is visible before and after the loop. |
+| F-007 | Fixture | `text.html.control_flow.template` | Root variable with the loop binding's name is visible before and after the loop. |
 | F-008 | Fixture | Control-flow integration cases | Non-sequence input returns `non_iterable` at the loop expression span. |
 | F-009 | Fixture | Control-flow integration cases | `continue`/`break` target innermost loop; reject invalid placement. |
 | F-010 | Fixture | Control-flow fixture and focused cases | Branch/loop combinations keep explicit destinations and local scopes. |
@@ -108,12 +109,12 @@ element-only document formatting whitespace is removed.
 
 | ID | Status | Scenario | Expected result |
 | --- | --- | --- | --- |
-| W-001 | Fixture | `html/whitespace.tmpl` preserve output | Preserve source whitespace exactly. |
-| W-002 | Fixture | `html/whitespace-compact.out` and `xml/whitespace-compact.out` | Remove formatting whitespace in element-only content and collapse ordinary text runs. |
-| W-003 | Fixture | `html/whitespace-pretty.out` and `xml/whitespace-pretty.out` | Format nested element-only content with two-space indentation; mixed content stays inline. |
-| W-004 | Fixture | `html/whitespace.tmpl` in all modes | Preserve whitespace in `pre`, `textarea`, `script`, and `style`. |
+| W-001 | Fixture | `text.html.whitespace.template` preserve output | Preserve source whitespace exactly. |
+| W-002 | Fixture | `text.html.whitespace_compact.output` and `text.xml.whitespace_compact.output` | Remove formatting whitespace in element-only content and collapse ordinary text runs. |
+| W-003 | Fixture | `text.html.whitespace_pretty.output` and `text.xml.whitespace_pretty.output` | Format nested element-only content with two-space indentation; mixed content stays inline. |
+| W-004 | Fixture | `text.html.whitespace.template` in all modes | Preserve whitespace in `pre`, `textarea`, `script`, and `style`. |
 | W-005 | Fixture | HTML whitespace fixture and dynamic boundary integration case | Retain form text and meaningful inline boundaries. |
-| W-006 | Fixture | `html/whitespace-dynamic.tmpl` golden outputs and pretty loop integration cases | Preserve inline boundaries for empty/repeated output and indent loop-generated elements. |
+| W-006 | Fixture | `text.html.whitespace_dynamic.template` golden outputs and pretty loop integration cases | Preserve inline boundaries for empty/repeated output and indent loop-generated elements. |
 | W-007 | Fixture | All whitespace golden cases and configurable-indentation case | Outputs distinguish policies and custom indentation is used in pretty mode. |
 
 ## Runtime errors and lifecycle
@@ -172,9 +173,10 @@ optional native fields remain unsupported by the adapter.
 
 ## Fixture inventory
 
-The registered suite has 301 named executions across 271 template sources
-and 195 output files. `tests/check_fixture_inventory.py` validates reachable
-modules, unique IDs, descriptor paths, missing files, and orphan files. All
+The registered suite has 301 named executions. Fixture case arrays live in
+`tests/fixtures/*.zig`; shared exact template/output values live in
+`tests/fixtures/text.zig`. `tests/check_fixture_inventory.py` validates reachable
+modules, unique IDs, and that no standalone text fixture files remain. All
 registered cases run in the integration test binary. LC-009 and EX-029 retain
 fixed byte-array storage through root pointer/value and nested context adapters.
 The executable suite mapping above identifies the current suite owners.

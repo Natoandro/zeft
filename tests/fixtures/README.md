@@ -1,95 +1,60 @@
 # Test fixtures
 
-Fixtures are golden inputs for end-to-end compilation and rendering. Keep
-template source (`.tmpl`) and exact expected output (`.out`) separate from test
-runner code. An active golden fixture is embedded by an executable integration
-case and compares the complete output byte-for-byte.
+Fixture cases are Zig objects under `tests/fixtures/`. Each suite keeps its
+named case arrays beside its fixture data. Successful cases list `.template`
+before `.output`, followed by render parameters and options when needed.
+Compile and render failures store the template and expected diagnostic. Cases
+do not store source paths.
 
-See [catalog.md](catalog.md) for the coverage inventory, stable case IDs,
-executable owners, and remaining scenarios. Architecture documents define
-expected behavior; the catalog tracks coverage and does not replace those
-requirements.
+Use Zig multiline strings (`\\...`) for multiline template and output bytes.
+Add a final empty multiline line when the fixture needs a trailing newline.
+Use escaped Zig strings for control bytes that multiline strings cannot hold.
+Keep expected output and diagnostic spans authored from requirements rather
+than copying observed renderer output.
+
+See [catalog.md](catalog.md) for stable case IDs, executable owners, and
+coverage targets. Preserve case IDs; never reuse an ID removed from the
+catalog. Add IDs when requirements or implementation coverage change.
 
 ## Catalog status conventions
 
 | Status | Meaning |
 | --- | --- |
-| `Fixture` | At least one active golden source/output execution covers the row. The catalog lists coverage targets. |
-| `Focused` | Active focused tests cover at least part of the row, but it has no dedicated golden coverage. This may include parser tests rather than public compile/render tests. |
+| `Fixture` | At least one active golden source/output execution covers the row. |
+| `Focused` | Active focused tests cover at least part of the row, but it has no dedicated golden case. |
 | `Unit` | Internal representation or ownership assertions belong in focused unit tests. |
 | `Benchmark` | A standalone benchmark workload exists; it is separate from correctness fixtures. |
-| `Planned` | Behavior is specified, but the row has no dedicated executable coverage. This does not imply the feature is unimplemented. |
+| `Planned` | Behavior is specified, but the row has no dedicated executable coverage. |
 | `Pending` | Required syntax or API is unresolved. Keep the scenario disabled until it is defined and implemented. |
 
-These statuses identify coverage kind, not complete verification of every
-scenario in a row. Mark new cases active only after their behavior is
-implemented and verified. Preserve case IDs; never reuse an ID removed from
-the catalog. Add IDs when requirements or implementation coverage change.
+These statuses identify coverage kind, not completion of every boundary case.
+Architecture documents define expected behavior; this catalog tracks coverage
+and does not replace those requirements.
 
-## Active golden layout
+## Executable suites
 
-Paths below are fixture basenames, not directories. Each source is paired
-with exact expected output; option variants share source and have distinct
-output files.
+- `markup.zig`: 51 successful output cases and 21 compile failures (MK-001–MK-072).
+- `control_flow.zig`: control-flow goldens, render failures, and case parameters.
+- `whitespace.zig`: 38 output cases across formats, policies, and contexts.
+- `expressions.zig`: 60 successful expression cases (EX-001–EX-060).
+- `diagnostics.zig`: 82 compile/render failures (DG-001–DG-082).
+- `cache.zig` and `lifecycle.zig`: scenario IDs and their fixture inputs/outputs.
 
-| Source basename | Output basename(s) | Coverage |
-| --- | --- | --- |
-| `html/static` | `html/static` | Nested markup, exact static attributes, void elements, doctype, comments, literal backslashes, and delimiter output |
-| `html/dynamic` | `html/dynamic` | Text and quoted-attribute interpolation with HTML escaping |
-| `html/expressions` | `html/expressions` | Property and index access, operators, short-circuiting, and built-in filters/functions |
-| `html/control-flow` | `html/control-flow` | Conditional branches, loop bindings, root-name restoration, and lexical scope |
-| `xml/fragment` | `xml/fragment` | XML declaration, empty elements, CDATA, entity preservation, and XML escaping |
-| `html/whitespace` | `html/whitespace-{preserve,compact,pretty}` | HTML policies, inline boundaries, and whitespace-sensitive elements |
-| `xml/whitespace` | `xml/whitespace-{preserve,compact,pretty}` | XML policies, element-only formatting, and mixed content |
-| `html/whitespace-dynamic` | `html/whitespace-dynamic-{preserve,compact,pretty}` | Dynamic and loop output boundaries across policies |
+`text.zig` holds shared exact template and output bytes referenced by the case
+objects. Multiline values use Zig multiline strings, preserving source offsets,
+whitespace, and final-newline differences.
 
-The initial inventory has eight source files and fourteen source/output
-executions. Fourteen executions do not mean fourteen catalog requirements;
-one execution may cover multiple IDs, and one ID may require multiple cases.
+Run `python3 tests/check_fixture_inventory.py` to check imported suite modules,
+unique execution IDs, and that no standalone `.tmpl`, `.out`, or `.cases` files
+remain. `zig build test` verifies behavior; `zig build test -Doptimize=ReleaseSafe` verifies optimized behavior.
 
-Context values and callable registrations are supplied by Zig tests because
-fixtures contain only template input and expected bytes. Compile and render
-diagnostics compare categories and exact half-open byte spans in named test
-cases. Lifecycle, writer-error, concurrency, and internal IR assertions need
-focused Zig harnesses rather than output files alone.
+Current inventory: **301 named registrations** and **0 standalone text fixture
+files**. There are 179 named successful goldens, 68 compile-error registrations,
+37 render-error registrations, and 17 scenario harnesses. A harness may execute
+several compile/render operations. The counts describe registrations rather
+than Zig test blocks or individual assertions.
 
-Expected bytes and diagnostic spans must be authored from requirements and
-reviewed independently of observed renderer output. Preserve final-newline
-and whitespace differences in `.out` files. Pending comptime cases have no
-invented API or executable fixtures.
-
-## Expanded suites
-
-`tests/e2e_markup.zig` embeds the `markup/` group: 51 successful output cases
-and 21 compile failures, each with a unique MK case ID. Public diagnostic
-fixtures have `.tmpl` inputs and category/span expectations in Zig descriptors.
-
-`tests/e2e_control_flow.zig` supplies 19 named executions, including a reusable
-compiled-template harness. `tests/e2e_whitespace.zig` supplies 38 exact output
-executions across formats, policies, and dynamic contexts.
-
-`tests/e2e_expressions.zig` registers 60 successful expression executions.
-`tests/e2e_diagnostics.zig` registers 82 exact compile/render failures.
-
-`tests/e2e_cache.zig` runs seven cache/include scenarios, and
-`tests/e2e_lifecycle.zig` runs nine lifecycle/concurrency scenarios with
-synchronized overlap. `.gitattributes` disables line-ending conversion for
-fixture sources and outputs, preserving diagnostic offsets and golden bytes.
-
-## Inventory verification
-
-Run `python3 tests/check_fixture_inventory.py` to check reachable fixture
-modules, unique execution IDs, descriptor paths, missing files, and orphan
-inputs/outputs. This is a static inventory check; `zig build test` verifies
-behavior. Run `zig build test -Doptimize=ReleaseSafe` for optimized behavior.
-
-Current inventory: **301 named registrations**, **271 `.tmpl` files**, and
-**195 `.out` files**. There are 179 named successful goldens, 68 compile-error
-registrations, 37 render-error registrations, and 17 scenario harnesses. A
-harness may execute several compile/render operations. The counts describe
-registrations rather than Zig test blocks or individual assertions.
-
-The two comptime cases remain pending until the recorded API direction is
-implemented and can be verified. Numeric and
-optional native fields remain unsupported by the current adapter; numeric/null
-expression values are exercised through literals and callables.
+The two comptime cases remain pending until the comptime API exists and can be
+verified. Numeric and optional native fields remain unsupported by the
+adapter; numeric and null expression values are exercised through literals
+and callables.
