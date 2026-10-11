@@ -136,13 +136,5 @@ workloads. It has no performance thresholds; see
 [`docs/design/benchmark-results.md`](docs/design/benchmark-results.md) for
 the measurement method and current results.
 
-## Repository layout
-
-- `src/` — public module and implementation.
-- `tests/unit.zig` — unit specifications.
-- `tests/integration.zig` — end-to-end specifications.
-- `tests/fixtures/` — template and expected-output fixtures.
-- `tests/fixtures/catalog.md` — suite coverage inventory.
-- `docs/architecture/` — normative architecture requirements.
-- `docs/design/internals.md` — current non-normative implementation design.
-- `docs/design/implementation-plan.md` — sequenced implementation checklist.
+For repository structure and contribution guidance, see
+[CONTRIBUTING.md](CONTRIBUTING.md).
