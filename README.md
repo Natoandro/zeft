@@ -15,19 +15,29 @@ against application data.
 
 ## Format support
 
-Zeft currently supports structured HTML with paired and void elements, quoted
-and boolean attributes, comments, and the HTML5 doctype. XML support includes
-fragments, quoted attributes, declarations, comments, CDATA, predefined
-entities, and empty-element syntax.
+Legend: ✓ supported · ◐ partial · ✗ unsupported
 
-Current HTML limitations include unquoted attribute values, optional end tags,
-nonvoid self-closing syntax, doctypes other than the HTML5 form, browser-style
-error recovery, and complete raw-text handling for elements such as `script`
-and `style`. Dynamic tag and attribute names, trusted raw output, generalized
-postfix expressions, a unified callable API, numeric and
-optional native context fields, and comptime compilation are also not
-implemented yet. See the
-[implementation plan](docs/design/implementation-plan.md) for future work.
+| Feature | HTML | XML |
+| --- | --- | --- |
+| Elements | ✓ Paired and standard void elements | ✓ Fragments, multiple top-level nodes, and paired elements |
+| Element names | ✓ ASCII case-insensitive matching | ✓ Case-sensitive XML names (`[A-Za-z_][A-Za-z0-9_.:-]*`) |
+| Attributes | ✓ Quoted values and valueless attributes | ✓ Quoted values |
+| Unquoted attribute values | ✗ | ✗ |
+| Empty-element syntax | ✓ Standard void elements; ✗ self-closing syntax on other elements | ✓ Any element |
+| Doctype | ✓ HTML5 only | ✗ |
+| XML declaration | ✗ | ✓ At the start of the template |
+| Comments | ✓ | ✓ |
+| CDATA | ✗ | ✓ |
+| Entities | ✓ Preserved as source markup | ✓ Five predefined XML entities |
+| Processing instructions | ✗ | ✗ Except for the XML declaration |
+| Raw-text elements (`script`, `style`) | ◐ Complete raw-text handling is unsupported | — Not applicable |
+| Browser-style error recovery | ✗ Malformed markup fails compilation | ✗ Malformed markup fails compilation |
+
+Template interpolation and block syntax work in both formats. Dynamic tag and
+attribute names, trusted raw output, generalized postfix expressions, a
+unified callable API, numeric and optional native context fields, and comptime
+compilation are planned features. See the
+[implementation plan](docs/design/implementation-plan.md) for the full list.
 
 Blocks use `{#if expression}`, `{:else if expression}`, `{:else}`, and
 `{/if}`, or `{#for name in expression}`, optional `{:else}`, and `{/for}`.
