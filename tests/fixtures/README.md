@@ -40,13 +40,14 @@ and does not replace those requirements.
 - `diagnostics.zig`: 82 compile/render failures (DG-001–DG-082).
 - `cache.zig` and `lifecycle.zig`: scenario IDs and their fixture inputs/outputs.
 
-`text.zig` holds shared exact template and output bytes referenced by the case
-objects. Multiline values use Zig multiline strings, preserving source offsets,
-whitespace, and final-newline differences.
+Each case owns its template and expected output. Multiline values use Zig
+multiline strings, preserving source offsets, whitespace, and final-newline
+differences. The integration test binary checks that execution IDs are unique
+across suites.
 
-Run `python3 tests/check_fixture_inventory.py` to check imported suite modules,
-unique execution IDs, and that no standalone `.tmpl`, `.out`, or `.cases` files
-remain. `zig build test` verifies behavior; `zig build test -Doptimize=ReleaseSafe` verifies optimized behavior.
+Run `zig build test` to verify behavior. Use `zig build test --summary all` to
+see the test counts. `zig build test -Doptimize=ReleaseSafe` verifies optimized
+behavior.
 
 Current inventory: **301 named registrations** and **0 standalone text fixture
 files**. There are 179 named successful goldens, 68 compile-error registrations,

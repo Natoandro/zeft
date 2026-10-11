@@ -8,7 +8,5 @@ pub const Context = struct {
 pub const Case = struct { fixture: runner.Success, context: Context };
 
 test "named HTML and XML whitespace golden cases" {
-    for (whitespace_cases.success_cases) |case| {
-        try runner.expectSuccess(case.fixture, &case.params);
-    }
+    try runner.expectSuccessCases(whitespace_cases.success_cases);
 }

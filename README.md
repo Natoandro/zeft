@@ -75,7 +75,10 @@ zig build test
 ```
 
 `zig build` builds the static library. `zig build test` runs unit and
-integration tests. The public Zig module is named `zeft`.
+integration tests. Successful test runs are quiet by default; use
+`zig build test --summary all` to see the number of tests run and passed. The
+integration suite also checks fixture execution IDs for uniqueness. The public
+Zig module is named `zeft`.
 
 ## Use as a dependency
 

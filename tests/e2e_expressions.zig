@@ -151,11 +151,5 @@ const override_options: zeft.RenderOptions = .{
 };
 
 test "expression fixtures compile and render exact output" {
-    var failures: usize = 0;
-    for (expression_cases.success_cases) |case| {
-        fixtures.expectSuccess(case.fixture, &case.params) catch {
-            failures += 1;
-        };
-    }
-    try std.testing.expectEqual(@as(usize, 0), failures);
+    try fixtures.expectSuccessCases(expression_cases.success_cases);
 }

@@ -19,6 +19,10 @@ test "diagnostic fixture suite" {
     _ = @import("e2e_diagnostics.zig");
 }
 
+test "fixture inventory" {
+    _ = @import("fixture_inventory.zig");
+}
+
 test "cache and include fixture suite" {
     _ = @import("e2e_cache.zig");
 }

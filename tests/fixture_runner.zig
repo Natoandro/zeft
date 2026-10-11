@@ -28,6 +28,64 @@ pub const RenderFailure = struct {
     headroom: usize = 256,
 };
 
+fn caseId(case: anytype) []const u8 {
+    if (@TypeOf(case) == []const u8) return case;
+    if (@hasField(@TypeOf(case), "fixture")) return case.fixture.id;
+    return case.id;
+}
+
+pub fn expectUniqueIds(groups: anytype) anyerror!void {
+    @setEvalBranchQuota(1_000_000);
+    inline for (groups, 0..) |left_group, left_group_index| {
+        inline for (left_group, 0..) |left, left_index| {
+            inline for (groups, 0..) |right_group, right_group_index| {
+                if (right_group_index < left_group_index) continue;
+                inline for (right_group, 0..) |right, right_index| {
+                    if (right_group_index == left_group_index and right_index <= left_index) {
+                        continue;
+                    }
+                    const left_id = caseId(left);
+                    const right_id = caseId(right);
+                    if (std.mem.eql(u8, left_id, right_id)) {
+                        std.debug.print("duplicate fixture ID: {s}\n", .{left_id});
+                        return error.DuplicateFixtureId;
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn expectSuccessCases(cases: anytype) anyerror!void {
+    var failures: usize = 0;
+    for (cases) |case| {
+        expectSuccess(case.fixture, &case.params) catch {
+            failures += 1;
+        };
+    }
+    try std.testing.expectEqual(@as(usize, 0), failures);
+}
+
+pub fn expectCompileFailureCases(cases: anytype) anyerror!void {
+    var failures: usize = 0;
+    for (cases) |case| {
+        expectCompileFailure(case) catch {
+            failures += 1;
+        };
+    }
+    try std.testing.expectEqual(@as(usize, 0), failures);
+}
+
+pub fn expectRenderFailureCases(cases: anytype) anyerror!void {
+    var failures: usize = 0;
+    for (cases) |case| {
+        expectRenderFailure(case.fixture, &case.params) catch {
+            failures += 1;
+        };
+    }
+    try std.testing.expectEqual(@as(usize, 0), failures);
+}
+
 fn report(case: anytype, failure: anyerror) void {
     std.debug.print("\nfixture {s}: {s}\n", .{ case.id, @errorName(failure) });
 }

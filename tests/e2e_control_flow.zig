@@ -29,12 +29,8 @@ const groups = [_]Group{ .{ .name = "outer1", .items = &items }, .{ .name = "out
 pub const Case = struct { fixture: runner.Success, context: Context };
 
 test "named control-flow golden cases" {
-    for (control_flow_cases.success_cases) |case| {
-        try runner.expectSuccess(case.fixture, &case.params);
-    }
-    for (control_flow_cases.failure_cases) |case| {
-        try runner.expectRenderFailure(case.fixture, &case.params);
-    }
+    try runner.expectSuccessCases(control_flow_cases.success_cases);
+    try runner.expectRenderFailureCases(control_flow_cases.failure_cases);
 }
 
 test "control-flow compiled template resets state after success and failure" {

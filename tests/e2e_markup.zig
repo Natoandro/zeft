@@ -3,9 +3,9 @@ const fixtures = @import("fixture_runner.zig");
 const markup_cases = @import("fixtures/markup.zig");
 
 test "markup fixtures preserve exact output and escape dynamic values" {
-    for (markup_cases.success_cases) |case| try fixtures.expectSuccess(case.fixture, &case.params);
+    try fixtures.expectSuccessCases(markup_cases.success_cases);
 }
 
 test "markup fixtures reject invalid source with precise diagnostics" {
-    for (markup_cases.compile_failure_cases) |case| try fixtures.expectCompileFailure(case);
+    try fixtures.expectCompileFailureCases(markup_cases.compile_failure_cases);
 }

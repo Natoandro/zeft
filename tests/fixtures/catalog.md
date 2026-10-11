@@ -173,11 +173,10 @@ optional native fields remain unsupported by the adapter.
 
 ## Fixture inventory
 
-The registered suite has 301 named executions. Fixture case arrays live in
-`tests/fixtures/*.zig`; shared exact template/output values live in
-`tests/fixtures/text.zig`. `tests/check_fixture_inventory.py` validates reachable
-modules, unique IDs, and that no standalone text fixture files remain. All
-registered cases run in the integration test binary. LC-009 and EX-029 retain
+The registered suite has 301 named executions. Fixture case arrays and their
+template/output values live in `tests/fixtures/*.zig`. The integration test
+binary checks that execution IDs are unique across suites. All registered cases
+run in the integration test binary. LC-009 and EX-029 retain
 fixed byte-array storage through root pointer/value and nested context adapters.
 The executable suite mapping above identifies the current suite owners.
 
