@@ -1,0 +1,29 @@
+name: Validate
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Zig 0.16.0
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Install Zig
+        uses: vercel-labs/setup-zig@v1
+        with:
+          version: 0.16.0
+      - name: Check formatting
+        run: zig fmt --check build.zig src tests bench
+      - name: Build
+        run: zig build
+      - name: Run tests
+        run: zig build test

@@ -43,3 +43,22 @@ run:
 ```sh
 python3 scripts/check_zig_line_length.py
 ```
+
+## Releasing
+
+Update the package version in `build.zig.zon`, commit the release changes, and
+run `scripts/tag-release.sh` from a clean working tree. It creates an annotated
+`v<version>` tag. Push that tag to `origin` to trigger the GitHub Release
+workflow, which checks the tag against the package version and generates
+release notes. `--push` pushes the release tag, and `--bump` increments the
+version and commits it after tagging. The bump level can be `major`, `minor`,
+or `patch` (the default). Combine them to push the release tag and then make
+the next-version commit locally:
+
+```sh
+scripts/tag-release.sh --push --bump
+scripts/tag-release.sh --push --bump minor
+```
+
+Use `scripts/bump-version.sh [major|minor|patch]` to update the package version
+without creating a release tag. The level defaults to `patch`.

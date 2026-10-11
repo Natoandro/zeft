@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Install Zig
+        uses: vercel-labs/setup-zig@v1
+        with:
+          version: 0.16.0
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="$(sed -nE 's/^[[:space:]]*\.version = "([^"]+)"[,]?$/\1/p' build.zig.zon)"
+          if [[ -z "$version" || "$RELEASE_TAG" != "v$version" ]]; then
+            echo "Tag '$RELEASE_TAG' does not match package version '$version'." >&2
+            exit 1
+          fi
+      - name: Check formatting
+        run: zig fmt --check build.zig src tests bench
+      - name: Build
+        run: zig build
+      - name: Run tests
+        run: zig build test
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
