@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+log() {
+  printf '[tag-release] %s\n' "$*" >&2
+}
+
+trap 'status=$?; printf "[tag-release] ERROR: command failed (exit %s, line %s): %s\n" \
+  "$status" "$LINENO" "$BASH_COMMAND" >&2; exit "$status"' ERR
+
+log "Parsing release options."
 push_tag=false
 bump_version=false
 bump_level=patch
@@ -10,14 +18,14 @@ while [[ "$#" -gt 0 ]]; do
   case "$option" in
     --push)
       if [[ "$push_tag" == true ]]; then
-        echo "Option '--push' can only be specified once." >&2
+        log "ERROR: option '--push' can only be specified once."
         exit 2
       fi
       push_tag=true
       ;;
     --bump)
       if [[ "$bump_version" == true ]]; then
-        echo "Option '--bump' can only be specified once." >&2
+        log "ERROR: option '--bump' can only be specified once."
         exit 2
       fi
       bump_version=true
@@ -28,87 +36,108 @@ while [[ "$#" -gt 0 ]]; do
             shift
             ;;
           *)
-            echo "Bump level must be major, minor, or patch." >&2
+            log "ERROR: bump level must be major, minor, or patch."
             exit 2
             ;;
         esac
       fi
       ;;
     *)
-      echo "Usage: scripts/tag-release.sh [--push] [--bump [major|minor|patch]]" >&2
+      log "ERROR: usage: scripts/tag-release.sh [--push] [--bump [major|minor|patch]]"
       exit 2
       ;;
   esac
 done
+log "Options: push=$push_tag, bump=$bump_version, bump_level=$bump_level."
 
+log "Locating repository root."
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
+log "Repository root: $repo_root"
 
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Release tagging requires a clean working tree." >&2
+log "Checking working tree is clean."
+working_tree_status="$(git status --porcelain)"
+if [[ -n "$working_tree_status" ]]; then
+  log "ERROR: release tagging requires a clean working tree."
   exit 1
 fi
+log "Working tree is clean."
 if [[ "$bump_version" == true ]]; then
+  log "Checking the Git index before version bump."
   if ! git diff --cached --quiet; then
-    echo "Version bump requires an empty Git index." >&2
+    log "ERROR: version bump requires an empty Git index."
     exit 1
   fi
+  log "Checking Git author identity."
   git var GIT_AUTHOR_IDENT >/dev/null
 fi
 
+log "Reading package version from build.zig.zon."
 version="$(sed -nE 's/^[[:space:]]*\.version = "([^"]+)"[,]?$/\1/p' build.zig.zon)"
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
-  echo "Could not read a valid package version from build.zig.zon." >&2
+  log "ERROR: could not read a valid package version from build.zig.zon."
   exit 1
 fi
+log "Package version: $version"
 if [[ "$bump_version" == true && ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "Automatic version bumps require a stable major.minor.patch version." >&2
+  log "ERROR: automatic version bumps require a stable major.minor.patch version."
   exit 1
 fi
 
 tag="v$version"
+log "Checking whether tag $tag already exists."
 if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
   tag_commit="$(git rev-parse "$tag^{commit}")"
   head_commit="$(git rev-parse HEAD)"
   if [[ "$push_tag" != true || "$tag_commit" != "$head_commit" ]]; then
-    echo "Tag '$tag' already exists." >&2
+    log "ERROR: tag '$tag' already exists and cannot be reused in this state."
     exit 1
   fi
+  log "Reusing existing tag $tag at HEAD."
 else
+  log "Creating annotated tag $tag."
   git tag -a "$tag" -m "Release $tag"
+  log "Created annotated tag $tag."
 fi
 
 if [[ "$push_tag" == true ]]; then
+  log "Pushing tag $tag to origin."
   git push origin "$tag"
+  log "Pushed tag $tag to origin."
 fi
 
 if [[ "$bump_version" == true ]]; then
+  log "Bumping package version at level $bump_level."
   next_version="$(scripts/bump-version.sh "$bump_level")"
+  log "Next package version: $next_version"
+  log "Checking the Git index before staging the version file."
   if ! git diff --cached --quiet; then
-    echo "Refusing to create the version bump commit with staged files." >&2
+    log "ERROR: refusing to create the version bump commit with staged files."
     exit 1
   fi
+  log "Staging build.zig.zon."
   git add build.zig.zon
   staged_paths="$(git diff --cached --name-only)"
   if [[ "$staged_paths" != build.zig.zon ]]; then
-    echo "Refusing to create the version bump commit with unrelated staged files." >&2
+    log "ERROR: refusing to create the version bump commit with unrelated staged files."
     exit 1
   fi
+  log "Creating Conventional Commit for version $next_version."
   git commit -m "chore(release): bump version to $next_version"
-  printf 'Bumped package version to %s and committed it.\n' "$next_version"
+  log "Committed version bump to $next_version."
 fi
 
 if [[ "$push_tag" == true ]]; then
   if [[ "$bump_version" == true ]]; then
-    printf 'Pushed release tag %s. Push the version bump commit separately when ready.\n' \
-      "$tag"
+    log "Pushed release tag $tag. Push the version bump commit separately when ready."
   else
-    printf 'Pushed tag %s to origin.\n' "$tag"
+    log "Pushed tag $tag to origin."
   fi
 else
   if [[ "$bump_version" == true ]]; then
-    printf 'Push the release tag %s and the version bump commit when ready.\n' "$tag"
+    log "Push the release tag $tag and the version bump commit when ready."
   else
-    printf 'Created annotated tag %s. Push it with: git push origin %s\n' "$tag" "$tag"
+    log "Created annotated tag $tag. Push it with: git push origin $tag"
   fi
 fi
+log "Release tagging finished."
