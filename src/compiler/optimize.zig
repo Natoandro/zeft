@@ -369,6 +369,10 @@ fn foldUnary(op: ir.Operator, literal: ir.Literal) ?ir.Literal {
 
 fn foldBinary(op: ir.Operator, left: ir.Literal, right: ir.Literal) ?ir.Literal {
     if (op == .equal or op == .not_equal) {
+        if (left == .null or right == .null) {
+            const equal = left == .null and right == .null;
+            return .{ .boolean = if (op == .equal) equal else !equal };
+        }
         if (std.meta.activeTag(left) != std.meta.activeTag(right)) return null;
         const equal = switch (left) {
             .null => right == .null,

@@ -74,5 +74,73 @@ class RenderingTests(unittest.TestCase):
             template.render({})
 
 
+class SafetyTests(unittest.TestCase):
+    def test_nested_conversion_errors_clean_up_once(self):
+        with zeft.compile("{{ value }}") as template:
+            for value in ([object()], {"nested": object()}, [{"nested": b"no"}]):
+                with self.subTest(value=value), self.assertRaises(TypeError):
+                    template.render({"value": value})
+            cycle = []
+            cycle.append(cycle)
+            with self.assertRaises(ValueError):
+                template.render({"value": cycle})
+            self.assertEqual(template.render({"value": "ok"}), "ok")
+
+    def test_temporary_mapping_and_sequence_strings_are_owned(self):
+        class Mapping:
+            def __getitem__(self, key):
+                raise KeyError(key)
+
+            def items(self):
+                return [("value", "".join(["A"] * 80))]
+
+        class Sequence(list):
+            def __getitem__(self, index):
+                return "".join(["A"] * 80)
+
+        with zeft.compile("{{ obj.value }}|{{ values[0] }}") as template:
+            self.assertEqual(
+                template.render({"obj": Mapping(), "values": Sequence([None])}),
+                "A" * 80 + "|" + "A" * 80,
+            )
+
+    def test_malformed_mapping_items_raise_type_error(self):
+        class Mapping:
+            def __getitem__(self, key):
+                raise KeyError(key)
+
+            def items(self):
+                return [("value",)]
+
+        with zeft.compile("{{ value }}") as template:
+            with self.assertRaises(TypeError):
+                template.render(Mapping())
+
+    def test_native_options_are_checked_and_default_indentation_lives_through_compile(self):
+        from zeft import _native
+
+        for format, whitespace in ((-1, 0), (2, 0), (0, -1), (0, 3), (2**32, 0)):
+            with self.assertRaises((ValueError, OverflowError)):
+                _native.compile("ok", format, whitespace)
+        template = _native.compile("<a><b></b></a>", 0, 2)
+        self.assertEqual(template.render({}), "<a>\n  <b></b>\n</a>\n")
+
+    def test_executable_html_interpolation_is_rejected(self):
+        for source in (
+            '<script>const x="{{ value }}";</script>',
+            '<style>{{ value }}</style>',
+            '<p onclick="{{ value }}">ok</p>',
+        ):
+            with self.subTest(source=source), self.assertRaises(zeft.CompileError) as error:
+                zeft.compile(source)
+            self.assertEqual(error.exception.kind, "unsupported_syntax")
+
+    def test_deep_expressions_raise_compile_error(self):
+        source = "{{" + "(" * 20000 + "1" + ")" * 20000 + "}}"
+        with self.assertRaises(zeft.CompileError) as error:
+            zeft.compile(source)
+        self.assertEqual(error.exception.kind, "unsupported_syntax")
+
+
 if __name__ == "__main__":
     unittest.main()

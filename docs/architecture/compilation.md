@@ -20,6 +20,15 @@ finalization stages with separate render and expression IR. Those stages and
 the physical IR are implementation design, not public ABI. They may change as
 long as the observable contracts remain satisfied.
 
+## Resource limits
+
+Markup and block nesting, expression parser nesting, and expression tree depth
+are limited to 128 levels. Compilation MUST reject deeper input with
+`unsupported_syntax` and a source span, including in skipped branches.
+Expression tree depth counts the literal or identifier leaf as one level.
+Flat collections of nodes or call arguments are not subject to this nesting
+limit.
+
 ## Compiled representation
 
 A compiled template MUST own or otherwise retain every byte and metadata item

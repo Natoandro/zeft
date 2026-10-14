@@ -50,7 +50,7 @@ the decision; do not maintain a separate decision log.
   `{:else}` as specified by the language contract. Verification: cover empty, nested, shadowed, break,
   and continue behavior with exact diagnostics for invalid placement.
 
-- [ ] **ZEP-095** Make null equality compatible with every value type: null
+- [x] **ZEP-095** Make null equality compatible with every value type: null
   equals null, differs from every nonnull value, and does not relax other
   cross-type equality rules. Verification: exercise both operators against all
   value tags in folded and runtime expressions.
@@ -120,6 +120,31 @@ the decision; do not maintain a separate decision log.
   common Python context values and compile/render diagnostic exceptions.
   Verification: cover normal rendering, HTML escaping, invalid templates,
   value validation, and native template cleanup in focused Python tests.
+
+- [x] **ZEP-107** Reject interpolation in executable HTML element and attribute
+  contexts; validate XML attribute names, uniqueness, UTF-8, and literal
+  characters. Enforce a 128-level compiler nesting limit. Verification: S-001,
+  S-002, and S-004 cover unsafe contexts, XML failures, and nesting boundaries.
+
+- [x] **ZEP-108** Make Python conversion ownership safe for partial failures,
+  cycles, custom mappings, and sequence subclasses. Validate native compile
+  options and retain default indentation through compilation. Verification:
+  run binding regression tests with Python's debug allocator.
+
+- [x] **ZEP-109** Persist cache diagnostic identities before child leases are
+  released and retain missing-root identities through cache deinitialization.
+  Verification: S-005 evicts an active child that subsequently fails an include.
+
+- [x] **ZEP-110** Validate evaluated logical operands, support expression stacks
+  and argument counts for large flat calls, and propagate callback allocation
+  failures. Make all built-ins available to direct calls and let function
+  registrations override piped built-ins. Verification: S-003, S-006, S-007,
+  and S-009 cover short-circuiting, allocator errors, large calls, and built-ins.
+
+- [x] **ZEP-111** Use hash lookup for larger symbol and string sets, borrow static
+  lexer text, release finalization lookup storage, and compute compiled size
+  once. Verification: O-003, allocation-failure tests, and compile-scaling
+  benchmarks cover ownership, lookup behavior, and scaling without thresholds.
 
 Add future work here only after its required behavior and boundaries have been
 decided. Record unresolved ideas outside the implementation plan until they

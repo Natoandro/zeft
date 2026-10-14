@@ -1158,40 +1158,6 @@ pub const render_failure_cases = [_]RenderCase{
     },
     .{
         .fixture = .{
-            .id = "DG-079",
-            .template =
-            \\{{ null == true }}
-            \\
-            ,
-            .diagnostic = .{
-                .kind = .invalid_operand,
-                .span = .{
-                    .start = 8,
-                    .end = 10,
-                },
-            },
-        },
-        .params = .{},
-    },
-    .{
-        .fixture = .{
-            .id = "DG-080",
-            .template =
-            \\{{ null != true }}
-            \\
-            ,
-            .diagnostic = .{
-                .kind = .invalid_operand,
-                .span = .{
-                    .start = 8,
-                    .end = 10,
-                },
-            },
-        },
-        .params = .{},
-    },
-    .{
-        .fixture = .{
             .id = "DG-081",
             .template =
             \\{{ 5 / 0 }}

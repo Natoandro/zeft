@@ -4,3 +4,5 @@ zig-out/
 __pycache__/
 *.py[cod]
 bindings/python/dist/
+bindings/python/src/zeft/_native*.so
+bindings/python/src/zeft/_native*.pyd

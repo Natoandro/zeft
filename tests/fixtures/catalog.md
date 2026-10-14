@@ -68,7 +68,7 @@ allocation assertions remain in focused tests.
 | E-011 | Fixture | Root names repeated and in different case | Repeated case-sensitive roots reuse symbols; distinct names resolve independently and missing roots fail by default. |
 | E-012 | Fixture | Supported native bool/string/array/slice/struct adapters; numeric/null literals and callback values | Verify supported value operations, property lookup, indexing, and invalid operation categories. Native numeric/optional fields remain unsupported. |
 | E-013 | Fixture | Direct null/sequence/object interpolation, nonnull cross-type equality, division/modulo by zero | Null emits no bytes; sequences and objects fail direct interpolation; nonnull cross-type equality and division/modulo by zero return `invalid_operand`. |
-| E-014 | Planned | Equality and inequality between null and every value tag | Null equals null and differs from every nonnull value; implement and enable with ZEP-095. |
+| E-014 | Focused | S-008 and DG-079–DG-080 | Null equals null and differs from every nonnull value in runtime and folded expressions. |
 | E-015 | Planned | Direct and piped calls through one registration namespace | Both forms resolve the same callable, with the piped value supplied first; implement and enable with ZEP-097. |
 | E-016 | Planned | Properties and indexes following grouped expressions and calls | Postfix operations compose uniformly and retain their precedence; implement and enable with ZEP-098. |
 | E-017 | Focused | `tests/e2e_expressions.zig`: signed integer render and arithmetic cases | Preserve i64 boundaries and decimal formatting, detect overflow, promote exact integral floats to i64 for mixed arithmetic, promote other mixed operations to f64, always divide as f64, and apply the same promotion rule to comparisons. |
@@ -170,13 +170,12 @@ operations. Native adapters currently support booleans, byte strings, structs,
 arrays, and slices; numeric and optional fields are not accepted by the adapter.
 Direct null interpolation and direct sequence/object interpolation are covered
 by EX-060 and DG-075–DG-076. Nonnull cross-type equality and zero-divisor
-arithmetic are covered by DG-077–DG-078 and DG-081–DG-082. DG-079–DG-080 record
-the current null-comparison failure until ZEP-095 implements E-014. Numeric and
+arithmetic are covered by DG-077–DG-078 and DG-081–DG-082. DG-079–DG-080 cover successful folded null comparisons in the expression suite. Numeric and
 optional native fields remain unsupported by the adapter.
 
 ## Fixture inventory
 
-The registered suite has 301 named executions. Fixture case arrays and their
+The registered suite has 311 named executions. Fixture case arrays and their
 template/output values live in `tests/fixtures/*.zig`. The integration test
 binary checks that execution IDs are unique across suites. All registered cases
 run in the integration test binary. LC-009 and EX-029 retain
@@ -185,3 +184,20 @@ The executable suite mapping above identifies the current suite owners.
 
 T-001/T-002 remain pending until
 the comptime API exists. No fixture invents expectations for these cases.
+
+## Safety and compilation scaling
+
+| ID | Status | Executable owner | Expected result |
+| --- | --- | --- | --- |
+| S-001 | Focused | `tests/e2e_safety.zig` | Reject executable HTML interpolation; retain static HTML and XML contexts. |
+| S-002 | Focused | `tests/e2e_safety.zig` | Reject malformed XML attributes, invalid UTF-8, and forbidden literal characters. |
+| S-003 | Focused | `tests/e2e_safety.zig` | Require evaluated logical operands to be boolean and preserve short-circuit skips. |
+| S-004 | Focused | `tests/e2e_safety.zig` | Enforce compiler nesting limits without stack exhaustion. |
+| S-005 | Focused | `tests/e2e_safety.zig` | Keep include diagnostics valid after active child eviction and retain missing-root identities. |
+| S-006 | Focused | `tests/e2e_safety.zig` | Propagate callable allocation failures as Zig errors. |
+| S-007 | Focused | `tests/e2e_safety.zig` | Support large flat argument lists and safe zero-argument calls at high stack depth. |
+| S-008 | Focused | `tests/e2e_safety.zig` | Compare null against every runtime value tag and fold null comparisons consistently. |
+| S-009 | Focused | `tests/e2e_safety.zig` | Support direct built-in calls and function overrides of piped built-ins. |
+| O-003 | Focused | `tests/e2e_safety.zig` | Preserve symbol identity, string ownership, and compiled-size stability across large sets. |
+| B-002 | Benchmark | `bench/main.zig` | Report five-sample median compilation time for distinct symbols and static fragments at increasing sizes. |
+| P-001 | Focused | `bindings/python/tests/test_api.py` | Clean nested and cyclic conversion failures once; own temporary strings and validate mapping items and native options. |

@@ -121,18 +121,18 @@ constructs, renders, and releases a template on every operation.
 
 | Items | Engine | Version | Compile | Render | Compile + render |
 | --- | --- | --- | ---: | ---: | ---: |
-| 1 | Zeft | 0.1.0 | 42,276 | 10,622 | 67,164 |
-| 1 | Jinja2 | 3.1.6 | 522,659 | 7,025 | 545,763 |
-| 1 | Mako | 1.4.3 | 493,919 | 7,973 | 521,974 |
-| 100 | Zeft | 0.1.0 | 42,502 | 142,287 | 201,211 |
-| 100 | Jinja2 | 3.1.6 | 535,575 | 147,792 | 711,467 |
-| 100 | Mako | 1.4.3 | 501,130 | 79,264 | 617,307 |
+| 1 | Zeft | 0.1.0 | 43,413 | 11,173 | 71,877 |
+| 1 | Jinja2 | 3.1.6 | 602,156 | 7,201 | 562,392 |
+| 1 | Mako | 1.4.3 | 518,222 | 8,551 | 581,938 |
+| 100 | Zeft | 0.1.0 | 43,635 | 158,369 | 220,554 |
+| 100 | Jinja2 | 3.1.6 | 543,675 | 155,294 | 718,432 |
+| 100 | Mako | 1.4.3 | 511,966 | 80,760 | 631,978 |
 
-For this workload, Zeft compiles about 12 times faster than Jinja2 and Mako.
-Compile + render is about 8 times faster with one item and 3–4 times faster
+For this workload, Zeft compiles about 12–14 times faster than Jinja2 and Mako.
+Compile + render is about 8 times faster with one item and 2.9–3.3 times faster
 with 100 items. Reused-template rendering is slower than both engines with
-one item; with 100 items, it is slightly faster than Jinja2 and about 1.8 times
-slower than Mako. These observations cover this escaping and loop workload;
+one item; with 100 items, it is close to Jinja2 and about 2 times slower than
+Mako. These observations cover this escaping and loop workload;
 they do not establish performance across other templates or machines.
 
 The engine lives in the repository's `src/` directory. Binding implementation

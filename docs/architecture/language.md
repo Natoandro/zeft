@@ -19,9 +19,18 @@ void elements: `area`, `base`, `br`, `col`, `embed`, `hr`, `img`, `input`,
 tag. Zeft MUST document deviations from accepted HTML syntax until broader
 HTML compatibility is implemented.
 
+HTML interpolation MUST fail compilation with `unsupported_syntax` inside
+`script` or `style` elements, or in `style`, `srcdoc`, or attributes whose names
+begin with `on` (ASCII case-insensitive). Static content in those positions
+remains supported within the accepted markup syntax. HTML text and attribute
+escaping does not validate URL schemes; callers MUST validate untrusted URL
+values before placing them in URL-bearing attributes.
+
 XML templates are fragments and MAY contain multiple top-level nodes or text.
 XML names use `[A-Za-z_][A-Za-z0-9_.:-]*` and are case-sensitive. Attributes
-MUST be quoted. Any element may use empty-element syntax. An XML declaration
+MUST be quoted, have valid XML names, and be unique by exact name. Literal
+XML source MUST be valid UTF-8 and contain only characters permitted by its
+XML version; restricted XML 1.1 characters require character references. Any element may use empty-element syntax. An XML declaration
 at byte offset zero, comments, CDATA, and the five predefined entities are
 supported. XML doctypes, custom entities, and processing instructions other
 than the declaration are unsupported.

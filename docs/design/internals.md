@@ -37,7 +37,10 @@ The C shim initializes `zeft._native`, whose `Template` object releases its
 opaque Zig compiled-template owner when finalized. The Zig bridge compiles
 UTF-8 source with selected compile options and renders through the engine's
 runtime API. The C shim converts mappings, scalar values, lists, and tuples to
-a temporary recursive tree for each synchronous render. That tree and the
+a temporary recursive tree for each synchronous render. String values and
+mapping keys are copied into owned C allocations, including values supplied
+by custom mappings and sequence subclasses. Partial conversion cleanup is
+idempotent and accepts partially allocated containers. That tree and the
 Python context remain live until rendering returns. Compile and render
 diagnostics cross the boundary as a kind and optional byte span; the Python
 package adapts them to `CompileError` and `RenderError`. The `Template` wrapper
@@ -61,6 +64,11 @@ flowchart LR
     F --> T[CompiledTemplate]
 ```
 
+The lexer borrows unchanged static text from the source during compilation.
+XML validates UTF-8, literal characters, attribute names, and attribute
+uniqueness. Markup/block parsing and expression parsing/tree construction
+check the 128-level compiler nesting limit before recursive traversal.
+
 Parsing produces a temporary document tree containing text, serialized static
 markup, elements, attributes, interpolations, conditionals, loops, loop
 control, and includes. Expression source spans are parsed separately into
@@ -74,7 +82,10 @@ controls bypass it.
 
 Analysis assigns root symbol IDs in first-occurrence order, resolves known loop
 bindings to local slots, and records whether interpolations occur in text or an
-attribute. Lowering serializes markup and whitespace policy output, appends
+attribute. HTML analysis rejects interpolation in executable element and
+attribute contexts. Analysis and lowering use hash lookup for symbol sets
+larger than 16 entries, retaining first-occurrence IDs; smaller sets use bounded
+linear scans. Lowering serializes markup and whitespace policy output, appends
 static byte strings, and creates render and expression instruction streams.
 
 The temporary arena is destroyed when `compile` returns. A successful result
@@ -91,7 +102,9 @@ root names use a symbol table. Every instruction carries a source span.
 
 Expression IR is stack based. It can load a root symbol or local slot, push a
 literal, select properties or indexes, apply unary and binary operators,
-short-circuit through jumps, invoke functions and filters, and return a value.
+short-circuit through jumps, validate the evaluated logical right operand,
+invoke functions and filters, and return a value. Call argument counts use
+`usize`.
 Expression instructions also carry source spans.
 
 The IR types live in `src/compiler/ir.zig`. They are private implementation
@@ -110,7 +123,11 @@ The optimizer currently:
 Finalization creates a persistent arena, copies instructions and metadata, and
 interns repeated string payloads used by static output, symbols, string
 literals, property names, callback names, and include identities. It also owns
-a copy of the pretty-indentation option. `CompiledTemplate.deinit` releases the
+a copy of the pretty-indentation option. Interning uses bounded linear scans
+for fewer than 16 strings and hash lookup for larger sets. Lookup maps and
+string remapping arrays use temporary storage. Finalization computes the logical
+compiled size once; `compiledSize` returns that stored value.
+`CompiledTemplate.deinit` releases the
 persistent arena and its outer bookkeeping allocations.
 
 ## Rendering
@@ -123,9 +140,12 @@ loop instructions change the program counter using their compiled targets.
 Each render creates a scratch arena from `RenderOptions.allocator`. Local
 bindings and loop frames are allocated from that arena with capacity based on
 the render instruction count. The arena is destroyed on every return path.
-Expression evaluation uses a fixed 256-value stack.
+Expression evaluation uses a 256-value inline stack for small programs and
+scratch storage sized to the instruction count for larger programs. Expression
+IR is acyclic, so this capacity bounds every possible value push, including
+zero-argument calls.
 
-The runtime value union currently contains null, `bool`, `f64`, borrowed byte
+The runtime value union currently contains null, `bool`, `i64`, `f64`, borrowed byte
 strings, callback-backed objects, and callback-backed sequences. Native
 adaptation supports booleans, byte strings, structs, arrays, and slices.
 Aggregate nested values require the root context to be passed by pointer so
@@ -137,8 +157,9 @@ name/value entries. Objects and sequences retain an opaque pointer plus a
 comptime-generated lookup callback. Property lookup scans names
 case-sensitively; root lookup scans the context entry slice.
 
-Functions and filters are resolved from per-render registrations before the
-built-ins. Pipe calls try filters before functions. Callback errors currently
+All built-ins support direct and pipe calls. Pipe calls try filter and function
+registrations before built-ins; direct calls try function registrations.
+Callback allocation failures propagate as `OutOfMemory`. Other callback errors currently
 become `filter_failure` or `function_failure` diagnostics and do not retain the
 original Zig error name. Callback result bytes may use the render scratch arena.
 
@@ -173,8 +194,10 @@ that no entry is still leased.
 Cache rendering installs private include callback fields in `RenderOptions`.
 The callback acquires the current child entry for each include, tracks active
 identities in a render-local dependency stack, detects cycles, and releases the
-child after its render. Include diagnostic identity bytes are copied into a
-cache-owned diagnostic arena so they survive replacement or eviction. The
+child after its render. Include diagnostic identity bytes are interned into a
+cache-owned diagnostic arena before each child lease is released, and remain
+valid through cache deinitialization. Missing-root identities use the same
+storage. Repeated identities share storage. The
 public resolver abstraction described by the architecture is not implemented
 yet.
 
@@ -184,6 +207,7 @@ Focused module and unit tests cover parser structure, IR invariants,
 optimization, allocation failure, cache ownership, and concurrency. Public
 end-to-end suites are imported through `tests/integration.zig`:
 
+- `tests/e2e_safety.zig`
 - `tests/e2e_markup.zig`
 - `tests/e2e_expressions.zig`
 - `tests/e2e_control_flow.zig`

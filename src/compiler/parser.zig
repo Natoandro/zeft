@@ -120,6 +120,7 @@ pub const Expression = struct {
 
 pub const Document = struct {
     nodes: []Node,
+    format: zeft.OutputFormat = .html,
 };
 
 pub const LexResult = union(enum) {
@@ -149,6 +150,28 @@ pub fn lexWithFormat(
         try tokens.append(allocator, token);
     }
     if (lexer.failure) |diagnostic| return .{ .failure = diagnostic };
+    if (format == .xml) {
+        const view = std.unicode.Utf8View.init(source) catch return .{ .failure = .{
+            .kind = .invalid_markup,
+            .span = .{ .start = 0, .end = source.len },
+        } };
+        var iterator = view.iterator();
+        while (iterator.i < source.len) {
+            const start = iterator.i;
+            const codepoint = iterator.nextCodepoint().?;
+            if (!isXmlCharacter(codepoint, lexer.xml_1_1) or (lexer.xml_1_1 and
+                ((codepoint >= 1 and codepoint <= 8) or codepoint == 0xb or
+                    codepoint == 0xc or (codepoint >= 0xe and codepoint <= 0x1f) or
+                    (codepoint >= 0x7f and codepoint <= 0x84) or
+                    (codepoint >= 0x86 and codepoint <= 0x9f))))
+            {
+                return .{ .failure = .{
+                    .kind = .invalid_markup,
+                    .span = .{ .start = start, .end = iterator.i },
+                } };
+            }
+        }
+    }
     return .{ .success = try tokens.toOwnedSlice(allocator) };
 }
 
@@ -180,7 +203,7 @@ pub fn parseWithFormat(
         .kind = .invalid_construct,
         .span = parsed.stop_span,
     } };
-    return .{ .success = .{ .nodes = parsed.nodes } };
+    return .{ .success = .{ .nodes = parsed.nodes, .format = format } };
 }
 
 const Lexer = struct {
@@ -220,7 +243,6 @@ const Lexer = struct {
         if (self.format == .xml and self.source[self.offset] == '<')
             return self.invalidSpecialMarkup(start);
 
-        var decoded: std.ArrayList(u8) = .empty;
         while (self.offset < self.source.len) {
             if (self.format == .xml and self.source[self.offset] == '&') {
                 const end = xmlReferenceEnd(self.source, self.offset, self.xml_1_1) orelse {
@@ -236,7 +258,6 @@ const Lexer = struct {
                     };
                     return null;
                 };
-                try decoded.appendSlice(self.allocator, self.source[self.offset..end]);
                 self.offset = end;
             } else if (self.format == .xml and startsWith(self.source, self.offset, "]]>")) {
                 self.failure = .{
@@ -262,7 +283,6 @@ const Lexer = struct {
             {
                 break;
             } else {
-                try decoded.append(self.allocator, self.source[self.offset]);
                 self.offset += 1;
             }
         }
@@ -271,7 +291,7 @@ const Lexer = struct {
         if (self.offset == start) return self.next();
         return .{
             .span = .{ .start = start, .end = self.offset },
-            .data = .{ .text = try decoded.toOwnedSlice(self.allocator) },
+            .data = .{ .text = self.source[start..self.offset] },
         };
     }
 
@@ -632,6 +652,8 @@ const Lexer = struct {
         }
 
         var attributes: std.ArrayList(Attribute) = .empty;
+        var attribute_names: std.StringHashMapUnmanaged(void) = .empty;
+        defer attribute_names.deinit(self.allocator);
         while (self.offset < self.source.len) {
             const whitespace_start = self.offset;
             while (self.offset < self.source.len and
@@ -673,6 +695,14 @@ const Lexer = struct {
             {}
             if (self.offset == attribute_start) return self.invalidTag(start);
             const attribute_name = self.source[attribute_start..self.offset];
+            if (self.format == .xml) {
+                if (!isNameStart(attribute_name[0])) return self.invalidTag(start);
+                for (attribute_name[1..]) |byte| {
+                    if (!isNameContinue(byte)) return self.invalidTag(start);
+                }
+                const entry = try attribute_names.getOrPut(self.allocator, attribute_name);
+                if (entry.found_existing) return self.invalidTag(start);
+            }
             const name_end = self.offset;
 
             while (self.offset < self.source.len and
@@ -802,6 +832,7 @@ const Parser = struct {
     tokens: []const Token,
     format: zeft.OutputFormat,
     index: usize = 0,
+    depth: usize = 0,
     failure: ?zeft.CompileDiagnostic = null,
 
     fn parseConditional(
@@ -819,6 +850,8 @@ const Parser = struct {
             if (body.stop) |stop| switch (stop) {
                 .endif => {},
                 .else_if => |next_condition| {
+                    self.depth += 1;
+                    defer self.depth -= 1;
                     const next = try self.parseConditional(
                         end_span,
                         next_condition,
@@ -862,6 +895,18 @@ const Parser = struct {
         parent_span: ?zeft.SourceSpan,
         loop_depth: usize,
     ) std.mem.Allocator.Error!ParsedChildren {
+        if (self.depth > zeft.max_compile_nesting) {
+            self.failure = .{
+                .kind = .unsupported_syntax,
+                .span = parent_span orelse if (self.index < self.tokens.len)
+                    self.tokens[self.index].span
+                else
+                    .{ .start = self.source.len, .end = self.source.len },
+            };
+            return .{ .nodes = &.{}, .close_span = null };
+        }
+        self.depth += 1;
+        defer self.depth -= 1;
         var nodes: std.ArrayList(Node) = .empty;
         while (self.index < self.tokens.len and self.failure == null) {
             const token = self.tokens[self.index];

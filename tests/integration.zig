@@ -1196,3 +1196,7 @@ test "fixture runner checks compile and render diagnostic descriptors" {
         .diagnostic = .{ .kind = .missing_variable, .span = .{ .start = 10, .end = 16 } },
     }, .{});
 }
+
+test "compiler and runtime safety regressions" {
+    _ = @import("e2e_safety.zig");
+}

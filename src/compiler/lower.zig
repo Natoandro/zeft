@@ -23,6 +23,12 @@ pub fn lower(
         .analyzed = analyzed,
         .options = options,
     };
+    defer lowerer.symbol_ids.deinit(allocator);
+    if (analyzed.symbols.len > 16) {
+        for (analyzed.symbols) |symbol| {
+            try lowerer.symbol_ids.put(allocator, symbol.name, symbol.id);
+        }
+    }
     if (options.whitespace == .compact and isElementOnly(document.nodes)) {
         try lowerer.visitCompactChildren(document.nodes);
     } else if (options.whitespace == .pretty and isElementOnly(document.nodes) and
@@ -51,6 +57,7 @@ pub fn lower(
 const Lowerer = struct {
     allocator: std.mem.Allocator,
     analyzed: analysis.Result,
+    symbol_ids: std.StringHashMapUnmanaged(analysis.SymbolId) = .empty,
     options: zeft.CompileOptions,
     expression_index: usize = 0,
     strings: std.ArrayList([]const u8) = .empty,
@@ -490,6 +497,10 @@ const Lowerer = struct {
                         },
                     );
                     try self.emitExpr(output, binary.right.*);
+                    try output.append(self.allocator, .{
+                        .span = binary.right.span,
+                        .data = .require_boolean,
+                    });
                     const target: u32 = @intCast(output.items.len);
                     if (binary.op == .and_) output.items[jump_index].data.jump_if_false =
                         target else output.items[jump_index].data.jump_if_true = target;
@@ -512,7 +523,7 @@ const Lowerer = struct {
                         .span = call.call_span,
                         .data = .{ .call_function = .{
                             .name = call.name,
-                            .argument_count = @intCast(call.args.len),
+                            .argument_count = call.args.len,
                         } },
                     },
                 );
@@ -526,7 +537,7 @@ const Lowerer = struct {
                         .span = filter.call_span,
                         .data = .{ .call_filter = .{
                             .name = filter.name,
-                            .argument_count = @intCast(filter.args.len + 1),
+                            .argument_count = filter.args.len + 1,
                         } },
                     },
                 );
@@ -535,12 +546,13 @@ const Lowerer = struct {
     }
 
     fn findSymbol(self: *Lowerer, name: []const u8) analysis.SymbolId {
-        for (self.analyzed.symbols) |symbol| if (std.mem.eql(
-            u8,
-            symbol.name,
-            name,
-        )) return symbol.id;
-        unreachable;
+        if (self.symbol_ids.count() == 0) {
+            for (self.analyzed.symbols) |symbol| {
+                if (std.mem.eql(u8, symbol.name, name)) return symbol.id;
+            }
+            unreachable;
+        }
+        return self.symbol_ids.get(name).?;
     }
 
     fn findLocal(self: *Lowerer, name: []const u8) ?u32 {

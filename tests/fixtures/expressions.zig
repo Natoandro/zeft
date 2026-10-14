@@ -565,6 +565,14 @@ pub const success_cases = [_]SuccessCase{
         },
         .params = .{},
     },
+    .{
+        .fixture = .{ .id = "DG-079", .template = "{{ null == true }}\n", .output = "false\n" },
+        .params = .{},
+    },
+    .{
+        .fixture = .{ .id = "DG-080", .template = "{{ null != true }}\n", .output = "true\n" },
+        .params = .{},
+    },
 };
 const Person = struct { name: []const u8, label: []const u8 = "", active: bool = false };
 const Context = struct {

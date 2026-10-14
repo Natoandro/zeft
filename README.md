@@ -33,6 +33,11 @@ Legend: ✓ supported · ◐ partial · ✗ unsupported
 | Raw-text elements (`script`, `style`) | ◐ Complete raw-text handling is unsupported | — Not applicable |
 | Browser-style error recovery | ✗ Malformed markup fails compilation | ✗ Malformed markup fails compilation |
 
+Compilation rejects interpolation in HTML `script`/`style` elements and in
+`style`, `srcdoc`, or `on*` attributes. Markup/block nesting, expression parser
+nesting, and expression tree depth are limited to 128 levels; deeper templates
+return `unsupported_syntax`.
+
 Template interpolation and block syntax work in both formats. Dynamic tag and
 attribute names, trusted raw output, generalized postfix expressions, a
 unified callable API, numeric and optional native context fields, and comptime
@@ -140,7 +145,8 @@ zig build -Doptimize=ReleaseFast bench
 
 It reports compile and render timing, allocator activity, writer calls, output
 bytes, and finalized template size for small, large, dynamic, and control-flow
-workloads. It has no performance thresholds; see
+workloads, plus compile-only scaling for distinct symbols and static fragments.
+It has no performance thresholds; see
 [`docs/design/benchmark-results.md`](docs/design/benchmark-results.md) for
 the measurement method and current results.
 

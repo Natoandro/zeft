@@ -95,6 +95,42 @@ pub fn main() !void {
     };
     std.debug.print("case,compile_ns,render_ns,compile_allocs,compile_bytes,render_allocs,render_bytes,write_calls,output_bytes,compiled_bytes\n", .{});
     for (cases) |case| try runCase(case);
+    try runCompileScaling();
+}
+
+fn runCompileScaling() !void {
+    const allocator = std.heap.page_allocator;
+    std.debug.print("scaling_case,entries,source_bytes,median_compile_ns\n", .{});
+    for (0..2) |kind| {
+        for ([_]usize{ 500, 1000, 2000, 4000, 8000 }) |count| {
+            var source = std.Io.Writer.Allocating.init(allocator);
+            defer source.deinit();
+            for (0..count) |index| {
+                if (kind == 0) {
+                    try source.writer.print("{{{{ v{d} }}}}", .{index});
+                } else {
+                    try source.writer.print("s{d}{{{{ x }}}}", .{index});
+                }
+            }
+            var samples: [5]u64 = undefined;
+            for (&samples) |*sample| {
+                const started = nowNs();
+                var template = switch (try zeft.compile(allocator, source.written(), .{})) {
+                    .success => |value| value,
+                    .failure => return error.BenchmarkCompileFailed,
+                };
+                sample.* = nowNs() - started;
+                template.deinit();
+            }
+            std.mem.sort(u64, &samples, {}, std.sort.asc(u64));
+            std.debug.print("{s},{d},{d},{d}\n", .{
+                if (kind == 0) "unique-symbols" else "unique-static",
+                count,
+                source.written().len,
+                samples[samples.len / 2],
+            });
+        }
+    }
 }
 
 fn runCase(case: Case) !void {

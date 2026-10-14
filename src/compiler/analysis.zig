@@ -41,7 +41,12 @@ pub fn analyze(
     source: []const u8,
     document: parser.Document,
 ) std.mem.Allocator.Error!AnalyzeResult {
-    var analyzer = Analyzer{ .allocator = allocator, .source = source };
+    var analyzer = Analyzer{
+        .allocator = allocator,
+        .source = source,
+        .format = document.format,
+    };
+    defer analyzer.symbol_ids.deinit(allocator);
     try analyzer.visit(document.nodes);
     if (analyzer.failure) |diagnostic| return .{ .failure = diagnostic };
     return .{ .success = .{
@@ -54,9 +59,12 @@ const Analyzer = struct {
     allocator: std.mem.Allocator,
     source: []const u8,
     symbols: std.ArrayList(Symbol) = .empty,
+    symbol_ids: std.StringHashMapUnmanaged(SymbolId) = .empty,
     expressions: std.ArrayList(AnalyzedExpression) = .empty,
     locals: std.ArrayList(LocalBinding) = .empty,
     failure: ?zeft.CompileDiagnostic = null,
+    executable_depth: usize = 0,
+    format: zeft.OutputFormat = .html,
 
     fn visit(self: *Analyzer, nodes: []const parser.Node) std.mem.Allocator.Error!void {
         for (nodes) |node| {
@@ -80,16 +88,48 @@ const Analyzer = struct {
                             for (value.segments) |segment| {
                                 switch (segment.data) {
                                     .text => {},
-                                    .expression => |span| try self.addExpression(span, .attribute),
+                                    .expression => |span| {
+                                        if (self.format == .html and
+                                            (std.ascii.eqlIgnoreCase(attribute.name, "style") or
+                                                std.ascii.eqlIgnoreCase(attribute.name, "srcdoc") or
+                                                (attribute.name.len >= 2 and
+                                                    std.ascii.eqlIgnoreCase(
+                                                        attribute.name[0..2],
+                                                        "on",
+                                                    ))))
+                                        {
+                                            self.failure = .{
+                                                .kind = .unsupported_syntax,
+                                                .span = span,
+                                            };
+                                            return;
+                                        }
+                                        try self.addExpression(span, .attribute);
+                                    },
                                 }
                                 if (self.failure != null) return;
                             }
                         }
                     }
+                    const executable = self.format == .html and
+                        (std.ascii.eqlIgnoreCase(element.name, "script") or
+                            std.ascii.eqlIgnoreCase(element.name, "style"));
+                    if (executable) self.executable_depth += 1;
                     try self.visit(element.children);
+                    if (executable) self.executable_depth -= 1;
                 },
-                .expression => |expr| try self.addExpression(expr.source_span, .text),
+                .expression => |expr| {
+                    if (self.executable_depth != 0) {
+                        self.failure = .{
+                            .kind = .unsupported_syntax,
+                            .span = expr.source_span,
+                        };
+                        return;
+                    }
+                    try self.addExpression(expr.source_span, .text);
+                },
             }
+            if (self.failure != null) return;
         }
     }
 
@@ -155,16 +195,31 @@ const Analyzer = struct {
     }
 
     fn getSymbolId(self: *Analyzer, name: []const u8) SymbolId {
-        for (self.symbols.items) |symbol| if (std.mem.eql(u8, name, symbol.name)) return symbol.id;
-        unreachable;
+        if (self.symbol_ids.count() == 0) {
+            for (self.symbols.items) |symbol| {
+                if (std.mem.eql(u8, symbol.name, name)) return symbol.id;
+            }
+            unreachable;
+        }
+        return self.symbol_ids.get(name).?;
     }
 
     fn getOrAddSymbol(self: *Analyzer, name: []const u8) std.mem.Allocator.Error!SymbolId {
-        for (self.symbols.items) |symbol| {
-            if (std.mem.eql(u8, symbol.name, name)) return symbol.id;
+        if (self.symbols.items.len < 16) {
+            for (self.symbols.items) |symbol| {
+                if (std.mem.eql(u8, symbol.name, name)) return symbol.id;
+            }
+        } else {
+            if (self.symbol_ids.count() == 0) {
+                for (self.symbols.items) |symbol| {
+                    try self.symbol_ids.put(self.allocator, symbol.name, symbol.id);
+                }
+            }
+            if (self.symbol_ids.get(name)) |id| return id;
         }
         const id = std.math.cast(SymbolId, self.symbols.items.len) orelse unreachable;
         try self.symbols.append(self.allocator, .{ .id = id, .name = name });
+        if (self.symbol_ids.count() != 0) try self.symbol_ids.put(self.allocator, name, id);
         return id;
     }
 };

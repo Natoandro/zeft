@@ -62,6 +62,7 @@ export fn zeft_template_compile(
     out_kind: *c_int,
     out_span: *CSpan,
 ) c_int {
+    if (format < 0 or format > 1 or whitespace < 0 or whitespace > 2) return -1;
     const owner = std.heap.c_allocator.create(NativeTemplate) catch return -1;
     const formats = [_]zeft.OutputFormat{ .html, .xml };
     const policies = [_]zeft.WhitespacePolicy{ .preserve, .compact, .pretty };
@@ -115,9 +116,12 @@ export fn zeft_template_render(
     };
     switch (result) {
         .success => {
-            const list = allocating.toArrayList();
-            output.* = list.items.ptr;
-            output_len.* = list.items.len;
+            const bytes = allocating.toOwnedSlice() catch {
+                allocating.deinit();
+                return -1;
+            };
+            output.* = bytes.ptr;
+            output_len.* = bytes.len;
             return 0;
         },
         .failure => |diagnostic| {

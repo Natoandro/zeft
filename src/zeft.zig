@@ -36,6 +36,7 @@ const FinalizedTemplate = struct {
     storage: *std.heap.ArenaAllocator,
     program: ir.Program,
     options: CompileOptions,
+    logical_size: usize,
 };
 
 const CacheMutex = struct {
@@ -75,28 +76,7 @@ pub const CompiledTemplate = struct {
     /// Returns the logical byte size of finalized IR and owned string data.
     /// Allocator and arena bookkeeping overhead is excluded.
     pub fn compiledSize(self: *const CompiledTemplate) usize {
-        const data = self.finalized();
-        const program = data.program;
-        var size = program.strings.len * @sizeOf([]const u8) +
-            program.symbols.len * @sizeOf(analysis.Symbol) +
-            program.instructions.len * @sizeOf(ir.Instruction) +
-            program.expressions.len * @sizeOf(ir.ExpressionProgram) +
-            data.options.indentation.len;
-        for (program.expressions) |expression| size += expression.instructions.len *
-            @sizeOf(ir.ExpressionInstruction);
-        var payload_index: usize = 0;
-        while (payloadAt(program, payload_index)) |payload| : (payload_index += 1) {
-            var first = true;
-            for (0..payload_index) |previous_index| {
-                const previous = payloadAt(program, previous_index).?;
-                if (previous.ptr == payload.ptr and previous.len == payload.len) {
-                    first = false;
-                    break;
-                }
-            }
-            if (first) size += payload.len;
-        }
-        return size;
+        return self.finalized().logical_size;
     }
 
     /// Render against a struct with byte-string fields, or pass a pointer when
@@ -208,6 +188,7 @@ const CacheRenderFrame = struct {
 pub const TemplateCache = struct {
     allocator: std.mem.Allocator,
     diagnostic_storage: std.heap.ArenaAllocator,
+    diagnostic_identities: std.StringHashMapUnmanaged([]const u8) = .empty,
     mutex: CacheMutex = .{},
     entries: std.ArrayList(*CacheEntry) = .empty,
     all_entries: std.ArrayList(*CacheEntry) = .empty,
@@ -311,10 +292,9 @@ pub const TemplateCache = struct {
         context: anytype,
         options: RenderOptions,
     ) anyerror!RenderResult {
-        var root = self.acquire(identity) orelse return .{ .failure = .{
-            .kind = .missing_template,
-            .include_identity = identity,
-        } };
+        var root = self.acquire(identity) orelse return self.persistIncludeDiagnostic(.{
+            .failure = .{ .kind = .missing_template, .include_identity = identity },
+        });
         defer root.deinit();
         return self.renderLeaseWithAllocator(allocator, &root, writer, context, options);
     }
@@ -363,6 +343,7 @@ pub const TemplateCache = struct {
         self.entries.deinit(self.allocator);
         self.all_entries.deinit(self.allocator);
         self.failures.deinit(self.allocator);
+        self.diagnostic_identities.deinit(self.allocator);
         self.diagnostic_storage.deinit();
         self.* = undefined;
     }
@@ -377,18 +358,20 @@ pub const TemplateCache = struct {
         defer self.mutex.unlock();
         var diagnostic = result.failure;
         if (diagnostic.include_identity) |identity| {
-            diagnostic.include_identity = try self.diagnostic_storage.allocator().dupe(
-                u8,
-                identity,
-            );
+            diagnostic.include_identity = try self.persistIdentity(identity);
         }
         if (diagnostic.include_parent_identity) |identity| {
-            diagnostic.include_parent_identity = try self.diagnostic_storage.allocator().dupe(
-                u8,
-                identity,
-            );
+            diagnostic.include_parent_identity = try self.persistIdentity(identity);
         }
         return .{ .failure = diagnostic };
+    }
+
+    // The cache mutex is held by persistIncludeDiagnostic.
+    fn persistIdentity(self: *TemplateCache, identity: []const u8) ![]const u8 {
+        if (self.diagnostic_identities.get(identity)) |owned| return owned;
+        const owned = try self.diagnostic_storage.allocator().dupe(u8, identity);
+        try self.diagnostic_identities.put(self.allocator, owned, owned);
+        return owned;
     }
 
     fn acquire(self: *TemplateCache, identity: []const u8) ?TemplateLease {
@@ -512,7 +495,9 @@ fn resolveCachedInclude(
     try frame.dependencies.append(frame.allocator, child.entry.identity);
     defer _ = frame.dependencies.pop();
     _ = format;
-    return child.entry.template.renderRuntime(writer, context, options);
+    const result = try child.entry.template.renderRuntime(writer, context, options);
+    // Copy dependency strings while the child's retained storage is still alive.
+    return frame.cache.persistIncludeDiagnostic(result);
 }
 
 fn cacheFingerprint(identity: []const u8, source: []const u8, options: CompileOptions) u64 {
@@ -608,11 +593,12 @@ pub fn compile(
 
     // Run optimization on every successful compile, including the no-op case.
     const optimized = try optimizer.optimize(temp_allocator, program);
-    return .{ .success = try finalize(allocator, optimized, options) };
+    return .{ .success = try finalize(allocator, temp_allocator, optimized, options) };
 }
 
 fn finalize(
     allocator: std.mem.Allocator,
+    temporary: std.mem.Allocator,
     program: ir.Program,
     options: CompileOptions,
 ) std.mem.Allocator.Error!CompiledTemplate {
@@ -624,50 +610,37 @@ fn finalize(
     }
     const persistent = storage.allocator();
 
-    var interned: std.ArrayList([]const u8) = .empty;
-    const string_map = try persistent.alloc(ir.StringId, program.strings.len);
+    var interned = ByteInterner{ .persistent = persistent, .temporary = temporary };
+    defer interned.deinit();
+    const string_map = try temporary.alloc(ir.StringId, program.strings.len);
+    defer temporary.free(string_map);
     for (program.strings, 0..) |value, index| {
-        const canonical = try internBytes(persistent, &interned, value);
-        string_map[index] = @intCast(indexOfBytes(interned.items, canonical));
+        string_map[index] = @intCast(try interned.internId(value));
     }
-    const strings = try persistent.dupe([]const u8, interned.items);
+    const strings = try persistent.dupe([]const u8, interned.values.items);
 
     const symbols = try persistent.dupe(analysis.Symbol, program.symbols);
-    for (symbols) |*symbol| symbol.name = try internBytes(persistent, &interned, symbol.name);
+    for (symbols) |*symbol| symbol.name = try interned.intern(symbol.name);
 
     const expressions = try persistent.alloc(ir.ExpressionProgram, program.expressions.len);
     for (program.expressions, 0..) |expression, index| {
         const instructions = try persistent.dupe(ir.ExpressionInstruction, expression.instructions);
         for (instructions) |*instruction| switch (instruction.data) {
-            .get_property => |name| instruction.data = .{ .get_property = try internBytes(
-                persistent,
-                &interned,
-                name,
-            ) },
+            .get_property => |name| instruction.data = .{
+                .get_property = try interned.intern(name),
+            },
             .push_literal => |literal| switch (literal) {
                 .string => |value| instruction.data = .{ .push_literal = .{
-                    .string = try internBytes(
-                        persistent,
-                        &interned,
-                        value,
-                    ),
+                    .string = try interned.intern(value),
                 } },
                 else => {},
             },
             .call_function => |call| instruction.data = .{ .call_function = .{
-                .name = try internBytes(
-                    persistent,
-                    &interned,
-                    call.name,
-                ),
+                .name = try interned.intern(call.name),
                 .argument_count = call.argument_count,
             } },
             .call_filter => |call| instruction.data = .{ .call_filter = .{
-                .name = try internBytes(
-                    persistent,
-                    &interned,
-                    call.name,
-                ),
+                .name = try interned.intern(call.name),
                 .argument_count = call.argument_count,
             } },
             else => {},
@@ -682,10 +655,18 @@ fn finalize(
         .include => |*include| include.identity = string_map[include.identity],
         else => {},
     };
+    var logical_size = strings.len * @sizeOf([]const u8) +
+        symbols.len * @sizeOf(analysis.Symbol) +
+        instructions.len * @sizeOf(ir.Instruction) +
+        expressions.len * @sizeOf(ir.ExpressionProgram) + indentation.len;
+    for (expressions) |expr| logical_size += expr.instructions.len *
+        @sizeOf(ir.ExpressionInstruction);
+    for (interned.values.items) |bytes| logical_size += bytes.len;
     const finalized = try allocator.create(FinalizedTemplate);
     finalized.* = .{
         .owner_allocator = allocator,
         .storage = storage,
+        .logical_size = logical_size,
         .program = .{
             .strings = strings,
             .symbols = symbols,
@@ -698,50 +679,42 @@ fn finalize(
     return .{ .impl = finalized };
 }
 
-fn payloadAt(program: ir.Program, index: usize) ?[]const u8 {
-    if (index < program.strings.len) return program.strings[index];
-    var current = index - program.strings.len;
-    if (current < program.symbols.len) return program.symbols[current].name;
-    current -= program.symbols.len;
-    for (program.expressions) |expression| {
-        for (expression.instructions) |instruction| {
-            const value: ?[]const u8 = switch (instruction.data) {
-                .get_property => |name| name,
-                .push_literal => |literal| switch (literal) {
-                    .string => |value| value,
-                    else => null,
-                },
-                .call_function => |call| call.name,
-                .call_filter => |call| call.name,
-                else => null,
-            };
-            if (value) |bytes| {
-                if (current == 0) return bytes;
-                current -= 1;
-            }
-        }
+const ByteInterner = struct {
+    persistent: std.mem.Allocator,
+    temporary: std.mem.Allocator,
+    values: std.ArrayList([]const u8) = .empty,
+    ids: std.StringHashMapUnmanaged(usize) = .empty,
+
+    fn deinit(self: *ByteInterner) void {
+        self.values.deinit(self.temporary);
+        self.ids.deinit(self.temporary);
     }
-    return null;
-}
 
-fn internBytes(
-    allocator: std.mem.Allocator,
-    values: *std.ArrayList([]const u8),
-    value: []const u8,
-) std.mem.Allocator.Error![]const u8 {
-    for (values.items) |existing| if (std.mem.eql(u8, existing, value)) return existing;
-    const owned = try allocator.dupe(u8, value);
-    try values.append(allocator, owned);
-    return owned;
-}
+    fn internId(self: *ByteInterner, value: []const u8) std.mem.Allocator.Error!usize {
+        if (self.values.items.len < 16) {
+            for (self.values.items, 0..) |existing, id| {
+                if (std.mem.eql(u8, existing, value)) return id;
+            }
+        } else {
+            if (self.ids.count() == 0) {
+                for (self.values.items, 0..) |existing, id| {
+                    try self.ids.put(self.temporary, existing, id);
+                }
+            }
+            if (self.ids.get(value)) |id| return id;
+        }
+        const owned = try self.persistent.dupe(u8, value);
+        const id = self.values.items.len;
+        try self.values.append(self.temporary, owned);
+        if (self.ids.count() != 0) try self.ids.put(self.temporary, owned, id);
+        return id;
+    }
 
-fn indexOfBytes(values: []const []const u8, value: []const u8) usize {
-    for (
-        values,
-        0..,
-    ) |existing, index| if (existing.ptr == value.ptr and existing.len == value.len) return index;
-    unreachable;
-}
+    fn intern(self: *ByteInterner, value: []const u8) std.mem.Allocator.Error![]const u8 {
+        const id = try self.internId(value);
+        return self.values.items[id];
+    }
+};
 
 test "compile options default to HTML with preserved whitespace" {
     const options: CompileOptions = .{};
@@ -763,7 +736,7 @@ test "finalization interns repeated strings and symbol names" {
         .expressions = &.{},
         .instructions = @constCast(&instructions),
     };
-    var template = try finalize(std.testing.allocator, program, .{});
+    var template = try finalize(std.testing.allocator, std.testing.allocator, program, .{});
     defer template.deinit();
     const finalized = template.finalized().program;
     try std.testing.expectEqual(@as(usize, 1), finalized.strings.len);

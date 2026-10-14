@@ -41,11 +41,12 @@ pub const ExpressionInstruction = struct {
         get_index_dynamic,
         unary: Operator,
         binary: Operator,
+        require_boolean,
         jump_if_false: u32,
         jump_if_true: u32,
         jump: u32,
-        call_function: struct { name: []const u8, argument_count: u16 },
-        call_filter: struct { name: []const u8, argument_count: u16 },
+        call_function: struct { name: []const u8, argument_count: usize },
+        call_filter: struct { name: []const u8, argument_count: usize },
         return_value,
     };
 };

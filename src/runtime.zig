@@ -184,7 +184,7 @@ pub fn renderWithOptions(
         switch (instruction.data) {
             .write_static => |id| try writer.writeAll(program.strings[id]),
             .write_expression => |write| {
-                const value = switch (evaluateExpression(
+                const value = switch (try evaluateExpression(
                     program,
                     write.expression_id,
                     context,
@@ -218,7 +218,7 @@ pub fn renderWithOptions(
                 }
             },
             .jump_if_false => |branch| {
-                const value = switch (evaluateExpression(
+                const value = switch (try evaluateExpression(
                     program,
                     branch.expression_id,
                     context,
@@ -241,7 +241,7 @@ pub fn renderWithOptions(
             },
             .jump => |target| pc = target - 1,
             .loop_begin => |begin| {
-                const iterable = switch (evaluateExpression(
+                const iterable = switch (try evaluateExpression(
                     program,
                     begin.expression_id,
                     context,
@@ -360,14 +360,17 @@ fn evaluateExpression(
     options: RenderOptions,
     allocator: std.mem.Allocator,
     locals: []const LocalValue,
-) ExpressionResult {
+) std.mem.Allocator.Error!ExpressionResult {
     if (expression_id >= program.expressions.len)
         return .{ .failure = .{ .kind = .invalid_operand } };
     const expression = program.expressions[expression_id];
-    // Expression evaluation is render-local and stack based. Keep a generous
-    // fixed cap so rendering does not allocate; malformed/deep programs fail
-    // with the normal invalid-operand diagnostic.
-    var stack: [256]Value = undefined;
+    // An acyclic expression can push at most one value per instruction.
+    // Keep ordinary expressions on the stack and spill larger programs to scratch.
+    var inline_stack: [256]Value = undefined;
+    const stack = if (expression.instructions.len <= inline_stack.len)
+        inline_stack[0..]
+    else
+        try allocator.alloc(Value, expression.instructions.len);
     var depth: usize = 0;
     var pc: usize = 0;
     while (pc < expression.instructions.len) : (pc += 1) {
@@ -537,6 +540,12 @@ fn evaluateExpression(
                     } },
                 };
             },
+            .require_boolean => {
+                if (depth == 0 or stack[depth - 1] != .boolean) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
+            },
             .jump_if_false => |target| {
                 if (depth == 0) return .{ .failure = .{
                     .kind = .invalid_operand,
@@ -584,16 +593,19 @@ fn evaluateExpression(
                 const function = findRegistration(
                     options.functions,
                     call.name,
-                ) orelse findBuiltinFunction(call.name);
+                ) orelse findBuiltinFunction(call.name) orelse findBuiltinFilter(call.name);
                 const result = if (function) |registered|
                     registered.callback(
                         allocator,
                         registered.user_data,
                         args,
-                    ) catch return .{ .failure = .{
-                        .kind = .function_failure,
-                        .span = instruction.span,
-                    } }
+                    ) catch |err| {
+                        if (err == error.OutOfMemory) return error.OutOfMemory;
+                        return .{ .failure = .{
+                            .kind = .function_failure,
+                            .span = instruction.span,
+                        } };
+                    }
                 else
                     return .{ .failure = .{ .kind = .function_failure, .span = instruction.span } };
                 depth -= count;
@@ -611,18 +623,21 @@ fn evaluateExpression(
                 // filter, the same pipe syntax can invoke a function with the
                 // piped value occupying its first argument.
                 const callable = findRegistration(options.filters, call.name) orelse
-                    findBuiltinFilter(call.name) orelse
                     findRegistration(options.functions, call.name) orelse
+                    findBuiltinFilter(call.name) orelse
                     findBuiltinFunction(call.name);
                 const result = if (callable) |registered|
                     registered.callback(
                         allocator,
                         registered.user_data,
                         args,
-                    ) catch return .{ .failure = .{
-                        .kind = .filter_failure,
-                        .span = instruction.span,
-                    } }
+                    ) catch |err| {
+                        if (err == error.OutOfMemory) return error.OutOfMemory;
+                        return .{ .failure = .{
+                            .kind = .filter_failure,
+                            .span = instruction.span,
+                        } };
+                    }
                 else
                     return .{ .failure = .{ .kind = .filter_failure, .span = instruction.span } };
                 depth -= count;
@@ -739,6 +754,10 @@ fn builtinTrim(
 
 fn applyBinary(op: ir.Operator, left: Value, right: Value) ?Value {
     if (op == .equal or op == .not_equal) {
+        if (left == .null or right == .null) {
+            const equal = left == .null and right == .null;
+            return .{ .boolean = if (op == .equal) equal else !equal };
+        }
         if ((left == .integer or left == .float) and
             (right == .integer or right == .float))
         {

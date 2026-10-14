@@ -4,6 +4,7 @@ const std = @import("std");
 
 pub const OutputFormat = enum { html, xml };
 pub const WhitespacePolicy = enum { preserve, compact, pretty };
+pub const max_compile_nesting = 128;
 
 pub const CompileOptions = struct {
     format: OutputFormat = .html,

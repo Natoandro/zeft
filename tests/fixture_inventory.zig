@@ -23,5 +23,6 @@ test "fixture execution IDs are unique across suites" {
         markup.success_cases,
         markup.compile_failure_cases,
         whitespace.success_cases,
+        @import("fixtures/safety.zig").harness_ids,
     });
 }

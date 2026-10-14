@@ -24,6 +24,7 @@ pub const Literal = union(enum) { null, boolean: bool, number: f64, string: []co
 pub const Expression = struct {
     span: zeft.SourceSpan,
     data: Data,
+    depth: usize = 1,
     pub const Data = union(enum) {
         literal: Literal,
         identifier: []const u8,
@@ -62,13 +63,23 @@ pub fn parse(
         .offset = span.start,
     };
     p.skipSpace();
-    const root = (try p.parseBinary(1)) orelse return invalid(.{
-        .start = p.offset,
-        .end = @min(
-            p.offset + 1,
-            span.end,
-        ),
-    });
+    const root = (try p.parseBinary(1)) orelse {
+        if (p.too_deep) return .{ .failure = .{
+            .kind = .unsupported_syntax,
+            .span = span,
+        } };
+        return invalid(.{
+            .start = p.offset,
+            .end = @min(
+                p.offset + 1,
+                span.end,
+            ),
+        });
+    };
+    if (p.too_deep) return .{ .failure = .{
+        .kind = .unsupported_syntax,
+        .span = span,
+    } };
     p.skipSpace();
     if (p.offset != span.end) return invalid(.{ .start = p.offset, .end = span.end });
     return .{ .success = root.* };
@@ -80,13 +91,31 @@ const Parser = struct {
     start: usize,
     end: usize,
     offset: usize,
+    nesting: usize = 0,
+    too_deep: bool = false,
     fn make(
         self: *Parser,
         span: zeft.SourceSpan,
         data: Expression.Data,
     ) std.mem.Allocator.Error!*Expression {
         const result = try self.allocator.create(Expression);
-        result.* = .{ .span = span, .data = data };
+        var child_depth: usize = 0;
+        switch (data) {
+            .literal, .identifier => {},
+            .property => |v| child_depth = v.base.depth,
+            .index => |v| child_depth = @max(v.base.depth, v.value.depth),
+            .unary => |v| child_depth = v.operand.depth,
+            .binary => |v| child_depth = @max(v.left.depth, v.right.depth),
+            .call => |v| for (v.args) |arg| {
+                child_depth = @max(child_depth, arg.depth);
+            },
+            .filter => |v| {
+                child_depth = v.input.depth;
+                for (v.args) |arg| child_depth = @max(child_depth, arg.depth);
+            },
+        }
+        if (child_depth >= zeft.max_compile_nesting) self.too_deep = true;
+        result.* = .{ .span = span, .data = data, .depth = child_depth + 1 };
         return result;
     }
     fn skipSpace(self: *Parser) void {
@@ -147,6 +176,12 @@ const Parser = struct {
         return lhs;
     }
     fn parseUnary(self: *Parser) std.mem.Allocator.Error!?*Expression {
+        if (self.nesting > zeft.max_compile_nesting or self.too_deep) {
+            self.too_deep = true;
+            return null;
+        }
+        self.nesting += 1;
+        defer self.nesting -= 1;
         self.skipSpace();
         if (self.offset >= self.end) return null;
         const begin = self.offset;

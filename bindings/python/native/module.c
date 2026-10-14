@@ -65,13 +65,16 @@ static PyTypeObject ZeftTemplateType;
 
 static void free_value(ZeftValue *value) {
     if (value->tag == VALUE_OBJECT || value->tag == VALUE_SEQUENCE) {
-        for (size_t i = 0; i < value->len; i++) {
-            free_value(&value->children[i]);
-            if (value->tag == VALUE_OBJECT) free((void *)value->keys[i].data);
-        }
+        if (value->children)
+            for (size_t i = 0; i < value->len; i++) free_value(&value->children[i]);
+        if (value->keys)
+            for (size_t i = 0; i < value->len; i++) free((void *)value->keys[i].data);
         free(value->children);
         free(value->keys);
+    } else if (value->tag == VALUE_STRING) {
+        free((void *)value->data);
     }
+    memset(value, 0, sizeof(*value));
 }
 
 static int convert_value(PyObject *object, ZeftValue *out, int depth) {
@@ -102,7 +105,11 @@ static int convert_value(PyObject *object, ZeftValue *out, int depth) {
         Py_ssize_t length;
         const char *data = PyUnicode_AsUTF8AndSize(object, &length);
         if (!data) return STATUS_ERROR;
-        out->tag = VALUE_STRING; out->data = data; out->len = (size_t)length;
+        char *copy = malloc((size_t)length + C_STRING_TERMINATOR_SIZE);
+        if (!copy) { PyErr_NoMemory(); return STATUS_ERROR; }
+        memcpy(copy, data, (size_t)length);
+        copy[length] = '\0';
+        out->tag = VALUE_STRING; out->data = copy; out->len = (size_t)length;
         return STATUS_OK;
     }
     if (PyList_Check(object) || PyTuple_Check(object)) {
@@ -137,8 +144,15 @@ static int convert_value(PyObject *object, ZeftValue *out, int depth) {
         }
         for (size_t i = 0; i < out->len; i++) {
             PyObject *pair = PyList_GetItem(items, (Py_ssize_t)i);
+            if (!pair || !PyTuple_Check(pair) || PyTuple_Size(pair) != 2) {
+                PyErr_SetString(PyExc_TypeError, "mapping items must be key/value tuples");
+                Py_DECREF(items); free_value(out); return STATUS_ERROR;
+            }
             PyObject *key = PyTuple_GetItem(pair, MAPPING_KEY_INDEX);
             PyObject *child = PyTuple_GetItem(pair, MAPPING_VALUE_INDEX);
+            if (!key || !child) {
+                Py_DECREF(items); free_value(out); return STATUS_ERROR;
+            }
             if (!PyUnicode_Check(key)) {
                 PyErr_SetString(PyExc_TypeError, "mapping keys must be strings");
                 Py_DECREF(items); free_value(out); return STATUS_ERROR;
@@ -211,10 +225,16 @@ static PyObject *module_compile(PyObject *module, PyObject *args, PyObject *kwar
     if (!PyUnicode_Check(source)) {
         PyErr_SetString(PyExc_TypeError, "source must be str"); return NULL;
     }
-    int format = format_obj ? (int)PyLong_AsLong(format_obj) : FORMAT_HTML;
-    int whitespace = whitespace_obj ? (int)PyLong_AsLong(whitespace_obj) :
-                                      WHITESPACE_PRESERVE;
+    long format_value = format_obj ? PyLong_AsLong(format_obj) : FORMAT_HTML;
+    long whitespace_value = whitespace_obj ? PyLong_AsLong(whitespace_obj) :
+                                            WHITESPACE_PRESERVE;
     if (PyErr_Occurred()) return NULL;
+    if (format_value < 0 || format_value > 1 ||
+        whitespace_value < 0 || whitespace_value > 2) {
+        PyErr_SetString(PyExc_ValueError, "invalid native compile option"); return NULL;
+    }
+    int format = (int)format_value;
+    int whitespace = (int)whitespace_value;
     PyObject *indent = indent_obj ? indent_obj : PyUnicode_FromString("  ");
     if (!indent) return NULL;
     if (!PyUnicode_Check(indent)) {
@@ -224,15 +244,21 @@ static PyObject *module_compile(PyObject *module, PyObject *args, PyObject *kwar
     Py_ssize_t source_len, indent_len;
     const char *source_data = PyUnicode_AsUTF8AndSize(source, &source_len);
     const char *indent_data = PyUnicode_AsUTF8AndSize(indent, &indent_len);
-    if (!indent_obj) Py_DECREF(indent);
-    if (!source_data || !indent_data) return NULL;
+    if (!source_data || !indent_data) {
+        if (!indent_obj) Py_DECREF(indent);
+        return NULL;
+    }
     ZeftTemplate *result = PyObject_New(ZeftTemplate, &ZeftTemplateType);
-    if (!result) return NULL;
+    if (!result) {
+        if (!indent_obj) Py_DECREF(indent);
+        return NULL;
+    }
     result->compiled = NULL;
     result->weakrefs = NULL;
     int kind = STATUS_OK; ZeftSpan span = {0};
     int status = zeft_template_compile(source_data, (size_t)source_len, format,
         whitespace, indent_data, (size_t)indent_len, &result->compiled, &kind, &span);
+    if (!indent_obj) Py_DECREF(indent);
     if (status != STATUS_OK) {
         Py_DECREF(result);
         if (status == STATUS_ERROR) return PyErr_NoMemory();

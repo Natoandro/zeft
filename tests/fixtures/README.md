@@ -36,8 +36,9 @@ and does not replace those requirements.
 - `markup.zig`: 51 successful output cases and 21 compile failures (MK-001–MK-072).
 - `control_flow.zig`: control-flow goldens, render failures, and case parameters.
 - `whitespace.zig`: 38 output cases across formats, policies, and contexts.
-- `expressions.zig`: 60 successful expression cases (EX-001–EX-060).
-- `diagnostics.zig`: 82 compile/render failures (DG-001–DG-082).
+- `expressions.zig`: 62 successful expression cases (EX-001–EX-060, DG-079–DG-080).
+- `diagnostics.zig`: 80 compile/render failures (DG-001–DG-078, DG-081–DG-082).
+- `safety.zig`: safety and compilation lookup scenario registrations.
 - `cache.zig` and `lifecycle.zig`: scenario IDs and their fixture inputs/outputs.
 
 Each case owns its template and expected output. Multiline values use Zig
@@ -49,9 +50,9 @@ Run `zig build test` to verify behavior. Use `zig build test --summary all` to
 see the test counts. `zig build test -Doptimize=ReleaseSafe` verifies optimized
 behavior.
 
-Current inventory: **301 named registrations** and **0 standalone text fixture
-files**. There are 179 named successful goldens, 68 compile-error registrations,
-37 render-error registrations, and 17 scenario harnesses. A harness may execute
+Current inventory: **311 named registrations** and **0 standalone text fixture
+files**. There are 181 named successful goldens, 68 compile-error registrations,
+35 render-error registrations, and 27 scenario harnesses. A harness may execute
 several compile/render operations. The counts describe registrations rather
 than Zig test blocks or individual assertions.
 
