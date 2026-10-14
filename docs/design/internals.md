@@ -35,10 +35,16 @@ runner for Linux x86_64/aarch64, macOS x86_64/arm64, and Windows x86_64, with
 CPython 3.11 through 3.14. Each job installs and imports its wheel.
 The C shim initializes `zeft._native`, whose `Template` object releases its
 opaque Zig compiled-template owner when finalized. The Zig bridge compiles
-UTF-8 source with default options. Python rendering, context conversion, and
-diagnostic adaptation remain unimplemented. The target API and lifetime
-contract are in `docs/architecture/python.md`. The Zig package build remains
-independent of Python and `uv`.
+UTF-8 source with selected compile options and renders through the engine's
+runtime API. The C shim converts mappings, scalar values, lists, and tuples to
+a temporary recursive tree for each synchronous render. That tree and the
+Python context remain live until rendering returns. Compile and render
+diagnostics cross the boundary as a kind and optional byte span; the Python
+package adapts them to `CompileError` and `RenderError`. The `Template` wrapper
+releases its native owner on `close()`, context manager exit, or finalization.
+The target API and lifetime contract are in
+`docs/architecture/python.md`. The Zig package build remains independent of
+Python and `uv`.
 
 ## Compilation flow
 

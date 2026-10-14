@@ -116,6 +116,11 @@ the decision; do not maintain a separate decision log.
   targets. Verification: build and inspect each wheel's `abi3` tag, then
   install and import it on CPython 3.11 through 3.14 on every target platform.
 
+- [x] **ZEP-106** Complete Python template rendering with conversions for
+  common Python context values and compile/render diagnostic exceptions.
+  Verification: cover normal rendering, HTML escaping, invalid templates,
+  value validation, and native template cleanup in focused Python tests.
+
 Add future work here only after its required behavior and boundaries have been
 decided. Record unresolved ideas outside the implementation plan until they
 are concrete enough to implement and verify.

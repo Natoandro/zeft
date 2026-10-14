@@ -29,7 +29,7 @@ pub const Callable = runtime.Callable;
 pub const Registration = runtime.Registration;
 pub const RenderOptions = runtime.RenderOptions;
 
-const ContextEntry = runtime.ContextEntry;
+pub const ContextEntry = runtime.ContextEntry;
 
 const FinalizedTemplate = struct {
     owner_allocator: std.mem.Allocator,
@@ -143,7 +143,7 @@ pub const CompiledTemplate = struct {
         );
     }
 
-    fn renderRuntime(
+    pub fn renderRuntime(
         self: *const CompiledTemplate,
         writer: *std.Io.Writer,
         context: []const ContextEntry,
