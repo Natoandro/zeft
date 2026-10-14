@@ -77,6 +77,12 @@ semantics, allocator lifetimes, concurrency, callbacks, caching, and includes.
 
 - Zig 0.16.0
 
+## Python binding
+
+The `uv`-managed [Python package](bindings/python/README.md) lives in
+`bindings/python/`. It currently provides a package scaffold; Python compilation
+and rendering APIs are not implemented.
+
 ## Build and test
 
 ```sh

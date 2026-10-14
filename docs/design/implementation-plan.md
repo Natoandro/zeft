@@ -79,6 +79,12 @@ the decision; do not maintain a separate decision log.
   mismatched and missing closing blocks, invalid branch placement, rejection
   of old forms, and exact diagnostic spans.
 
+- [x] **ZEP-100** Bootstrap the Python binding as a standalone `uv` project
+  in `bindings/python/`, with a `src/zeft/` package, typed package marker,
+  reproducible dependency lock, and development instructions. Verification:
+  build a source distribution and wheel, install the package with `uv`, and
+  verify that it imports from the installed package.
+
 Add future work here only after its required behavior and boundaries have been
 decided. Record unresolved ideas outside the implementation plan until they
 are concrete enough to implement and verify.

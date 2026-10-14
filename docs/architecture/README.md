@@ -25,6 +25,7 @@ The documents in this directory define the details:
   escaping, and whitespace.
 - [Public API](public-api.md): results, ownership, native values, callbacks,
   resolvers, diagnostics, and concurrency.
+- [Python binding](python.md): package placement, tooling, and engine boundary.
 - [Compilation](compilation.md): compiler boundaries and required output.
 - [Runtime](runtime.md): execution invariants and render state.
 - [Caching and ownership](caching-and-ownership.md): cache boundaries,

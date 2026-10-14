@@ -3,6 +3,7 @@
 ## Repository map
 
 - `src/` contains the public module and implementation.
+- `bindings/python/` contains the Python package, managed with `uv`.
 - `tests/unit.zig` contains unit specifications.
 - `tests/integration.zig` contains end-to-end specifications.
 - `tests/fixtures/` contains reusable template and expected-output fixtures.

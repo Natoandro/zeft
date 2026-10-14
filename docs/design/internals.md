@@ -23,6 +23,13 @@ structure or major data flow changes.
 public `zeft` module. The installed static library uses `src/zeft.zig` as its
 root module.
 
+## Python package
+
+`bindings/python/` is a standalone `uv` project with a `src/zeft/` package
+and a Hatchling build backend. It currently provides packaging and a typed
+package marker; compilation, rendering, and native bridge modules are not
+implemented. The Zig build does not depend on the Python project.
+
 ## Compilation flow
 
 `zeft.compile` owns a temporary arena for all intermediate data and runs this
