@@ -28,7 +28,9 @@ root module.
 `bindings/python/` is a standalone `uv` project with a `src/zeft/` package
 and a Hatchling build backend. It currently provides packaging and a typed
 package marker; compilation, rendering, and native bridge modules are not
-implemented. The Zig build does not depend on the Python project.
+implemented. The target API and value/lifetime contract are in
+`docs/architecture/python.md`. The Zig build does not depend on the Python
+project.
 
 ## Compilation flow
 

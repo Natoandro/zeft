@@ -17,9 +17,11 @@ the decision; do not maintain a separate decision log.
   Verification: add compile-success and build-failure cases for the comptime
   API, and verify equivalent runtime and comptime inputs render identically.
 
-- [ ] **ZEP-089** Extend native value adaptation to integers, floats, and
-  optionals with compile-time diagnostics for unsupported Zig types.
-  Verification: cover root, nested, sequence, null, and concurrent contexts.
+- [ ] **ZEP-089** After ZEP-102, adapt supported Zig integers and floats to
+  the distinct integer and `f64` runtime values, and preserve optional values
+  as their child value or null. Keep compile-time diagnostics for unsupported
+  Zig types. Verification: cover root, nested, sequence, null, and concurrent
+  contexts, including out-of-range unsigned values.
 
 - [ ] **ZEP-090** Expand HTML compatibility in explicit batches: raw-text
   elements, unquoted attributes, nonvoid self-closing syntax, additional valid
@@ -84,6 +86,18 @@ the decision; do not maintain a separate decision log.
   reproducible dependency lock, and development instructions. Verification:
   build a source distribution and wheel, install the package with `uv`, and
   verify that it imports from the installed package.
+
+- [x] **ZEP-101** Define the initial Python API and CPython extension boundary
+  in `docs/architecture/python.md`: compile options, context conversions,
+  integer ranges, diagnostics, template ownership, GIL behavior, and MVP
+  exclusions. Verification: review each binding contract against the Zig
+  public API and confirm that packaging remains independent of the Zig build.
+
+- [ ] **ZEP-102** Add signed 64-bit integers as a distinct runtime value
+  alongside `f64`. Preserve exact integer formatting and integer arithmetic,
+  and define mixed numeric operations and comparisons. Verification: cover
+  boundaries, overflow diagnostics, arithmetic, comparisons, formatting, and
+  existing floating-point behavior.
 
 Add future work here only after its required behavior and boundaries have been
 decided. Record unresolved ideas outside the implementation plan until they

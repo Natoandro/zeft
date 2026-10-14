@@ -101,12 +101,24 @@ left-to-right with this precedence, lowest first:
 | 8 | property and index selectors |
 
 Logical operators short-circuit and require booleans. Arithmetic requires
-numbers; `+` does not concatenate strings. Division and modulo by positive or
-negative zero fail with `invalid_operand`.
+numbers; `+` does not concatenate strings. Integer values use signed 64-bit
+representation. Addition, subtraction, multiplication, and modulo of integer
+operands, and unary negation, preserve integer values and detect overflow;
+overflow fails with `invalid_operand`. Integer division returns an `f64`,
+matching division of other numeric values. An operation with at least one
+`f64` operand returns an `f64`; the integer operand is converted to `f64` for
+arithmetic. Division and modulo by positive or negative zero fail with
+`invalid_operand`.
+
+Integer-to-integer comparisons are exact. Comparisons between an integer and
+an `f64` compare their mathematical numeric values without first rounding the
+integer to `f64`. Numeric literals in template source remain `f64` literals.
 
 For equality, `null == null` is true. Comparing null with a nonnull value is
-false, and `!=` is the inverse. Equality between two different nonnull value
-types fails with `invalid_operand`. Ordering requires compatible value types.
+false, and `!=` is the inverse. Integers and `f64` values form one numeric
+comparison group; equality and ordering between them use their mathematical
+values. Equality between other different nonnull value types fails with
+`invalid_operand`. Ordering requires compatible value types.
 
 The built-ins are `length`, `default`, `upper`, `lower`, and `trim`; each may be
 used with direct or pipe syntax. `length` accepts strings and sequences.
@@ -115,9 +127,10 @@ trimming operate on ASCII bytes.
 
 ## Values and output
 
-The value model contains null, booleans, numbers, strings, sequences, and
-objects. Null interpolation emits no bytes. Direct interpolation of a sequence
-or object fails with `invalid_operand`.
+The value model contains null, booleans, signed 64-bit integers, `f64`
+numbers, strings, sequences, and objects. Integer interpolation writes the
+exact base-10 integer. Null interpolation emits no bytes. Direct
+interpolation of a sequence or object fails with `invalid_operand`.
 
 Ordinary interpolation is escaped according to the compile-time output format
 and position. HTML and XML text escape `&`, `<`, and `>`. Attributes also

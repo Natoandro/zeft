@@ -37,9 +37,12 @@ all renders finish.
 
 ## Context values
 
-The native adapter MUST support booleans, integers, floats, optionals, byte
-strings, structs, arrays, and slices. Integers and floats adapt to numbers;
-optionals adapt to their child value or null; structs adapt to objects; and
+The native adapter MUST support booleans, signed integers up to 64 bits,
+`f32`, `f64`, optionals, byte strings, structs, arrays, and slices. Integers
+adapt to signed 64-bit values without passing through floating point; floats
+adapt to `f64`. Unsigned integers are supported when their value fits in
+`i64`. An unsigned value that does not fit fails with `invalid_operand`.
+Optionals adapt to their child value or null; structs adapt to objects; and
 non-byte arrays and slices adapt to sequences. Unsupported types MUST produce a
 clear compile-time error when their type is known at comptime.
 
