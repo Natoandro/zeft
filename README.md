@@ -80,8 +80,10 @@ semantics, allocator lifetimes, concurrency, callbacks, caching, and includes.
 ## Python binding
 
 The `uv`-managed [Python package](bindings/python/README.md) lives in
-`bindings/python/`. It currently provides a package scaffold; Python compilation
-and rendering APIs are not implemented.
+`bindings/python/`. It provides a CPython extension for compiling and rendering
+templates, with Python value conversion and diagnostic exceptions. The package
+README includes a runnable example and a benchmark harness comparing Zeft with
+Jinja2 and Mako.
 
 ## Build and test
 
