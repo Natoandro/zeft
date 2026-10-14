@@ -49,19 +49,54 @@ jobs:
 
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
 
+      - name: Clean build outputs
+        shell: bash
+        run: |
+          rm -rf bindings/python/dist bindings/python/src/zeft/_native* zig-out .zig-cache
+
       - name: Build wheel
-        run: uv build --project bindings/python
+        run: uv build --no-cache --project bindings/python --wheel
 
       - name: Install and import wheel
         shell: bash
         run: |
           wheel=$(find bindings/python/dist -maxdepth 1 -name '*.whl' -print -quit)
           test -n "$wheel"
-          uv pip install --system "$wheel"
-          python -c 'import zeft; template = zeft._native.compile("<p>ok</p>"); assert type(template).__name__ == "Template"'
+          uv pip install --no-cache --system "$wheel"
+          python -I -c 'import zeft; template = zeft.compile("<p>{{ name }}</p>"); assert template.render({"name": "ok"}) == "<p>ok</p>"; template.close()'
 
       - uses: actions/upload-artifact@v4
         with:
           name: zeft-wheel-${{ matrix.platform.zig_target }}-py${{ matrix.python-version }}
           path: bindings/python/dist/*.whl
           if-no-files-found: error
+
+  source-distribution:
+    name: Source distribution / CPython 3.13 / Linux x86_64
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: Build clean source distribution
+        shell: bash
+        run: |
+          rm -rf bindings/python/dist bindings/python/src/zeft/_native* zig-out .zig-cache
+          uv build --no-cache --project bindings/python --sdist
+
+      - name: Install source distribution and render
+        shell: bash
+        run: |
+          sdist=$(find bindings/python/dist -maxdepth 1 -name '*.tar.gz' -print -quit)
+          test -n "$sdist"
+          uv pip install --no-cache --system "$sdist"
+          python -I -c 'import zeft; template = zeft.compile("<p>{{ name }}</p>"); assert template.render({"name": "sdist"}) == "<p>sdist</p>"; template.close()'

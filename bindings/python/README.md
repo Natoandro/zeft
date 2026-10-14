@@ -4,30 +4,64 @@ Python package for the Zeft HTML and XML template engine. The CPython extension
 compiles and renders templates, converts common Python values to engine values,
 and adapts template diagnostics to Python exceptions.
 
+## Install
+
+Install a published release with `python -m pip install zeft` or `uv add zeft`.
+To install a wheel built from a checkout:
+
+```sh
+python -m pip install bindings/python/dist/zeft-*.whl
+```
+
+Wheel installs include the native extension and do not require Zig. A source
+install builds that extension locally and therefore requires Zig 0.16.0 and
+the active CPython's development headers:
+
+```sh
+python -m pip install ./bindings/python
+```
+
+## Supported interpreters and platforms
+
+The package supports CPython 3.11, 3.12, 3.13, and 3.14. It does not currently
+publish PyPy wheels. Native wheels are built and import-tested for:
+
+| Operating system | Architectures |
+| --- | --- |
+| Linux (GNU libc) | x86_64, aarch64 |
+| macOS | x86_64, arm64 |
+| Windows | x86_64 |
+
+Each wheel is built for its CPython version and platform. Use a matching
+interpreter and platform target. Linux wheels are built against the GNU libc
+available on the Ubuntu 24.04 runners.
+
 ## Development
 
-Use Python 3.11 or newer and `uv`. From the repository root:
+Use a supported CPython version, Zig 0.16.0, and `uv`. From the repository
+root:
 
 ```sh
 uv sync --project bindings/python --locked
 uv run --project bindings/python --locked python -c 'import zeft'
-uv build --project bindings/python
+uv build --project bindings/python --wheel
+uv build --project bindings/python --sdist
 ```
 
 The project uses a `src/` layout, a committed `uv.lock`, and Hatchling for
-packaging. Building a wheel invokes the Zig `python-extension` build with the
+packaging. A wheel build invokes the Zig `python-extension` build with the
 active Python's include directory, then packages the resulting extension. The
-source distribution includes the Zig build inputs under `engine/` so wheels
-can be built from the source distribution.
-Build artifacts are written to `bindings/python/dist/`. Building or consuming
-the Zig package does not require Python or `uv`.
+source distribution includes the Zig build inputs under `engine/`; installing
+it builds the extension from those sources. Build artifacts are written to
+`bindings/python/dist/`. Building or consuming the Zig package does not require
+Python or `uv`.
 
 The focused binding tests can be run after building the extension with
 `python3 -m unittest discover -s bindings/python/tests`. The `Python wheels`
-GitHub Actions workflow builds CPython 3.11 through 3.14
-for Linux x86_64/aarch64, macOS x86_64/arm64, and Windows x86_64. Each job
-passes an explicit Zig target, installs the wheel, and checks that the native
-compile entry point imports and returns a template.
+GitHub Actions workflow clears previous build outputs, builds and installs a
+native wheel for every supported interpreter and platform, then checks that
+compilation and rendering work. A separate source distribution job builds and
+installs directly from the sdist in a clean environment.
 
 The engine lives in the repository's `src/` directory. Binding implementation
 and packaging belong here; binding unit tests and integration tests belong in
