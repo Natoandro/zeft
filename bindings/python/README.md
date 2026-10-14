@@ -103,7 +103,37 @@ output fragments before timing, and prints medians in nanoseconds per
 operation. Timings depend on the interpreter, machine, and dependency versions;
 the harness does not impose performance thresholds. It compares equivalent
 HTML escaping and loop work, while each engine uses its own syntax and
-configuration (`autoescape=True` for Jinja2 and Mako's `h` filter).
+configuration (`autoescape=True` for Jinja2 and `default_filters=["h"]` for
+Mako).
+
+### Sample results
+
+Measured on an AMD Ryzen 5 5600G with Python 3.11.12, Linux
+6.12.63+deb13-amd64 (x86_64), and glibc 2.41, using the commands above.
+The Zeft extension uses Zig's default Debug build mode. Each timing is the
+median of seven rounds of 2,000 operations, after up to 100 warmup operations
+per measurement. Representative output checks passed for all engines.
+
+Times are nanoseconds per operation; lower is better. Compilation includes
+template construction and cleanup. Rendering reuses a compiled template and
+includes the Python binding's context conversion for Zeft. Compile + render
+constructs, renders, and releases a template on every operation.
+
+| Items | Engine | Version | Compile | Render | Compile + render |
+| --- | --- | --- | ---: | ---: | ---: |
+| 1 | Zeft | 0.1.0 | 42,276 | 10,622 | 67,164 |
+| 1 | Jinja2 | 3.1.6 | 522,659 | 7,025 | 545,763 |
+| 1 | Mako | 1.4.3 | 493,919 | 7,973 | 521,974 |
+| 100 | Zeft | 0.1.0 | 42,502 | 142,287 | 201,211 |
+| 100 | Jinja2 | 3.1.6 | 535,575 | 147,792 | 711,467 |
+| 100 | Mako | 1.4.3 | 501,130 | 79,264 | 617,307 |
+
+For this workload, Zeft compiles about 12 times faster than Jinja2 and Mako.
+Compile + render is about 8 times faster with one item and 3–4 times faster
+with 100 items. Reused-template rendering is slower than both engines with
+one item; with 100 items, it is slightly faster than Jinja2 and about 1.8 times
+slower than Mako. These observations cover this escaping and loop workload;
+they do not establish performance across other templates or machines.
 
 The engine lives in the repository's `src/` directory. Binding implementation
 and packaging belong here; binding unit tests and integration tests belong in

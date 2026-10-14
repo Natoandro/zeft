@@ -144,5 +144,9 @@ workloads. It has no performance thresholds; see
 [`docs/design/benchmark-results.md`](docs/design/benchmark-results.md) for
 the measurement method and current results.
 
+The [Python comparison benchmark](bindings/python/README.md#sample-results)
+records compilation, reused-template rendering, and compile + render timings
+against Jinja2 and Mako, with the workload and measurement environment.
+
 For repository structure and contribution guidance, see
 [CONTRIBUTING.md](CONTRIBUTING.md).

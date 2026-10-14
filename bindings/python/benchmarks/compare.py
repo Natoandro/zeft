@@ -140,9 +140,9 @@ def make_workloads(item_count: int) -> list[Workload]:
         "</ul></main>"
     )
     mako_source = (
-        "<main><h1>${title | h}</h1><ul>\n"
+        "<main><h1>${title}</h1><ul>\n"
         "% for item in items:\n"
-        '<li>${item["name"] | h}: ${item["description"] | h}</li>\n'
+        '<li>${item["name"]}: ${item["description"]}</li>\n'
         "% endfor\n"
         "</ul></main>"
     )
