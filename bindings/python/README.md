@@ -184,12 +184,8 @@ a memory-safety guarantee: the C bridge still requires correct ownership and
 cleanup, and a detected Zig safety violation can terminate the process.
 
 Performance work should reduce unnecessary initialization, allocations, and
-interpreter dispatch while preserving checks, diagnostics, and lifetimes.
-The implementation tickets are
-[ZEP-113: execution storage](https://github.com/Natoandro/zeft/issues/1),
-[ZEP-114: Python conversion](https://github.com/Natoandro/zeft/issues/2), and
-[ZEP-115: fused instructions](https://github.com/Natoandro/zeft/issues/3).
-A review of the default mode should use representative input fuzzing, native
+interpreter dispatch while preserving checks, diagnostics, and lifetimes. A
+review of the default mode should use representative input fuzzing, native
 memory-safety instrumentation, ownership/error-path coverage, and measurements
 after those optimizations. A faster timing alone is insufficient evidence.
 

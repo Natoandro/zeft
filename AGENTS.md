@@ -12,9 +12,12 @@
   is descriptive and non-normative; update it when modules, data flow, storage,
   or execution design materially change.
 - Keep implementation sequencing and progress in
-  `docs/design/implementation-plan.md`. Each task has a stable reference;
-  preserve those references and check an item only after its implementation
-  and verification are complete.
+  `docs/design/implementation-plan.md`. List only open implementation work
+  that has no GitHub issue; remove an item when it is complete or tracked in
+  GitHub. Track new implementation issues in GitHub, which is the source of
+  truth for their scope and progress. Do not duplicate GitHub issues in the
+  plan or add `ZEP-xxx` identifiers to GitHub issue titles or bodies. Never
+  reuse existing task or issue references.
 - If implementation requires a product or architectural decision not settled
   by the existing requirements, ask the user in the conversation. Do not put
   unresolved alternatives into normative documents.
