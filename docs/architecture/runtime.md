@@ -22,9 +22,12 @@ is not a public ABI.
 
 ## Values and native adaptation
 
-The runtime value model represents null, booleans, numbers, strings, sequences,
-objects, and the format-tagged trusted values specified by the language
-contract. Native Zig adaptation follows the public API contract.
+The runtime value model represents null, booleans, signed 64-bit integers,
+`f64` numbers, strings, sequences, objects, and the format-tagged trusted
+values specified by the language contract. Integer arithmetic preserves exact
+values and reports overflow as `invalid_operand`; mixed operations and
+comparisons follow the language contract. Native Zig adaptation follows the
+public API contract.
 
 Property lookup is case-sensitive. Sequence indexing is zero-based. Missing
 properties and out-of-range indexes return `invalid_property_access` at the

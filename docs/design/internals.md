@@ -132,8 +132,9 @@ original Zig error name. Callback result bytes may use the render scratch arena.
 
 Lowering assigns either text or attribute escape context to every expression
 write. Rendering combines that context with the compiled HTML/XML format.
-Strings and booleans pass through the escaper; numbers are printed directly;
-null writes nothing; sequences and objects fail direct interpolation.
+Strings and booleans pass through the escaper; signed integers and `f64`
+numbers are printed directly; null writes nothing; sequences and objects fail
+direct interpolation.
 
 Output is streamed to the caller's `std.Io.Writer`. A later failure does not
 roll back bytes already written. Writer errors propagate as Zig errors.

@@ -36,7 +36,7 @@ fn number(
     args: []const zeft.Value,
 ) anyerror!zeft.Value {
     if (args.len != 0) return error.InvalidArguments;
-    return .{ .number = 2 };
+    return .{ .float = 2 };
 }
 
 fn greeting(
@@ -93,7 +93,7 @@ fn overrideLength(
     args: []const zeft.Value,
 ) anyerror!zeft.Value {
     if (args.len != 1) return error.InvalidArguments;
-    return .{ .number = 99 };
+    return .{ .float = 99 };
 }
 fn functionChoice(
     _: std.mem.Allocator,
@@ -152,4 +152,103 @@ const override_options: zeft.RenderOptions = .{
 
 test "expression fixtures compile and render exact output" {
     try fixtures.expectSuccessCases(expression_cases.success_cases);
+}
+
+fn numericConstant(
+    _: std.mem.Allocator,
+    pointer: ?*const anyopaque,
+    args: []const zeft.Value,
+) anyerror!zeft.Value {
+    if (args.len != 0) return error.InvalidArguments;
+    const raw = pointer orelse return error.MissingValue;
+    const value: *const zeft.Value = @ptrCast(@alignCast(raw));
+    return value.*;
+}
+
+test "signed integers preserve exact values and numeric semantics" {
+    const min_value = zeft.Value{ .integer = std.math.minInt(i64) };
+    const max_value = zeft.Value{ .integer = std.math.maxInt(i64) };
+    const precise_int = zeft.Value{ .integer = 9007199254740993 };
+    const rounded_float = zeft.Value{ .float = 9007199254740992 };
+    const one = zeft.Value{ .integer = 1 };
+    const three = zeft.Value{ .integer = 3 };
+    const registrations = [_]zeft.Registration{
+        .{ .name = "min", .callback = numericConstant, .user_data = &min_value },
+        .{ .name = "max", .callback = numericConstant, .user_data = &max_value },
+        .{ .name = "precise", .callback = numericConstant, .user_data = &precise_int },
+        .{ .name = "rounded", .callback = numericConstant, .user_data = &rounded_float },
+        .{ .name = "one", .callback = numericConstant, .user_data = &one },
+        .{ .name = "three", .callback = numericConstant, .user_data = &three },
+    };
+    const source = "{{ min() }}|{{ max() }}|{{ min() + one() }}|{{ max() - one() }}|" ++
+        "{{ one() * three() }}|{{ max() % three() }}|" ++
+        "{{ min() < rounded() }}|{{ precise() > rounded() }}|" ++
+        "{{ precise() == rounded() }}|{{ max() < 9223372036854775808 }}|" ++
+        "{{ min() == -9223372036854775808 }}|{{ max() + 0.5 }}|" ++
+        "{{ one() + 0.5 }}|{{ 7 / 2 }}|{{ 5.0 + 2 }}";
+    const compiled = try zeft.compile(std.testing.allocator, source, .{});
+    var template = switch (compiled) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    var output: [512]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.renderWithOptions(&writer, .{}, .{
+        .allocator = std.testing.allocator,
+        .functions = &registrations,
+    });
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings(
+        "-9223372036854775808|9223372036854775807|-9223372036854775807|" ++
+            "9223372036854775806|3|1|true|true|false|" ++
+            "false|true|9223372036854776000|1.5|3.5|7",
+        std.Io.Writer.buffered(&writer),
+    );
+}
+
+test "signed integer overflow reports invalid_operand" {
+    const max_value = zeft.Value{ .integer = std.math.maxInt(i64) };
+    const one = zeft.Value{ .integer = 1 };
+    const registration = [_]zeft.Registration{
+        .{ .name = "max", .callback = numericConstant, .user_data = &max_value },
+        .{ .name = "one", .callback = numericConstant, .user_data = &one },
+    };
+    const compiled = try zeft.compile(std.testing.allocator, "{{ max() + one() }}", .{});
+    var template = switch (compiled) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    var output: [32]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.renderWithOptions(&writer, .{}, .{
+        .allocator = std.testing.allocator,
+        .functions = &registration,
+    });
+    try std.testing.expect(rendered == .failure);
+    try std.testing.expectEqual(zeft.RenderErrorKind.invalid_operand, rendered.failure.kind);
+
+    const exact_float_source = try zeft.compile(
+        std.testing.allocator,
+        "{{ max() + 1.0 }}",
+        .{},
+    );
+    var exact_float_template = switch (exact_float_source) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer exact_float_template.deinit();
+    var exact_float_output: [32]u8 = undefined;
+    var exact_float_writer = std.Io.Writer.fixed(&exact_float_output);
+    const exact_float_result = try exact_float_template.renderWithOptions(
+        &exact_float_writer,
+        .{},
+        .{ .allocator = std.testing.allocator, .functions = &registration },
+    );
+    try std.testing.expect(exact_float_result == .failure);
+    try std.testing.expectEqual(
+        zeft.RenderErrorKind.invalid_operand,
+        exact_float_result.failure.kind,
+    );
 }

@@ -8,7 +8,8 @@ const ir = @import("zeft_ir");
 pub const Value = union(enum) {
     null,
     boolean: bool,
-    number: f64,
+    integer: i64,
+    float: f64,
     string: []const u8,
     object: Object,
     sequence: Sequence,
@@ -208,7 +209,8 @@ pub fn renderWithOptions(
                         write.escape_context,
                         format,
                     ),
-                    .number => |number| try writer.print("{d}", .{number}),
+                    .float => |number| try writer.print("{d}", .{number}),
+                    .integer => |integer| try writer.print("{d}", .{integer}),
                     else => return .{ .failure = .{
                         .kind = .invalid_operand,
                         .span = instruction.span,
@@ -424,7 +426,7 @@ fn evaluateExpression(
                 stack[depth] = switch (literal) {
                     .null => .null,
                     .boolean => |v| .{ .boolean = v },
-                    .number => |v| .{ .number = v },
+                    .number => |v| .{ .float = v },
                     .string => |v| .{ .string = v },
                 };
                 depth += 1;
@@ -470,7 +472,11 @@ fn evaluateExpression(
                 const selector = stack[depth - 1];
                 const current = stack[depth - 2];
                 const index: usize = switch (selector) {
-                    .number => |value| blk: {
+                    .integer => |value| if (value < 0) return .{ .failure = .{
+                        .kind = .invalid_property_access,
+                        .span = instruction.span,
+                    } } else @intCast(value),
+                    .float => |value| blk: {
                         // The rounded floating limit is exclusive, avoiding an
                         // out-of-range float-to-integer conversion at usize max.
                         if (!std.math.isFinite(value) or value < 0 or @trunc(value) != value or
@@ -516,7 +522,10 @@ fn evaluateExpression(
                         } },
                     },
                     .negate => switch (stack[depth - 1]) {
-                        .number => |v| .{ .number = -v },
+                        .float => |v| .{ .float = -v },
+                        .integer => |v| .{ .integer = std.math.sub(i64, 0, v) catch return .{
+                            .failure = .{ .kind = .invalid_operand, .span = instruction.span },
+                        } },
                         else => return .{ .failure = .{
                             .kind = .invalid_operand,
                             .span = instruction.span,
@@ -671,8 +680,8 @@ fn findBuiltinFilter(name: []const u8) ?Registration {
 fn builtinLength(_: std.mem.Allocator, _: ?*const anyopaque, args: []const Value) anyerror!Value {
     if (args.len != 1) return error.InvalidArguments;
     return switch (args[0]) {
-        .string => |value| .{ .number = @floatFromInt(value.len) },
-        .sequence => |value| .{ .number = @floatFromInt(value.len) },
+        .string => |value| .{ .float = @floatFromInt(value.len) },
+        .sequence => |value| .{ .float = @floatFromInt(value.len) },
         else => error.InvalidArguments,
     };
 }
@@ -730,6 +739,12 @@ fn builtinTrim(
 
 fn applyBinary(op: ir.Operator, left: Value, right: Value) ?Value {
     if (op == .equal or op == .not_equal) {
+        if ((left == .integer or left == .float) and
+            (right == .integer or right == .float))
+        {
+            const equal = numericCompare(left, right) == .eq;
+            return .{ .boolean = if (op == .equal) equal else !equal };
+        }
         if (std.meta.activeTag(left) != std.meta.activeTag(right)) return null;
         const equal = switch (left) {
             .null => right == .null,
@@ -737,8 +752,12 @@ fn applyBinary(op: ir.Operator, left: Value, right: Value) ?Value {
                 .boolean => |b| a == b,
                 else => false,
             },
-            .number => |a| switch (right) {
-                .number => |b| a == b,
+            .float => |a| switch (right) {
+                .float => |b| a == b,
+                else => false,
+            },
+            .integer => |a| switch (right) {
+                .integer => |b| a == b,
                 else => false,
             },
             .string => |a| switch (right) {
@@ -749,19 +768,94 @@ fn applyBinary(op: ir.Operator, left: Value, right: Value) ?Value {
         };
         return .{ .boolean = if (op == .equal) equal else !equal };
     }
-    const a = if (left == .number) left.number else return null;
-    const b = if (right == .number) right.number else return null;
+    if ((left == .integer or left == .float) and
+        (right == .integer or right == .float))
+    {
+        if (op == .less or op == .less_equal or op == .greater or op == .greater_equal) {
+            const order = numericCompare(left, right) orelse return .{ .boolean = false };
+            return .{ .boolean = switch (op) {
+                .less => order == .lt,
+                .less_equal => order != .gt,
+                .greater => order == .gt,
+                .greater_equal => order != .lt,
+                else => unreachable,
+            } };
+        }
+        if (op == .divide) {
+            const a = asFloat(left);
+            const b = asFloat(right);
+            return if (b == 0) null else .{ .float = a / b };
+        }
+        if (left == .integer and right == .integer) {
+            return applyIntegerBinary(op, left.integer, right.integer);
+        }
+        if ((left == .integer and right == .float) or
+            (left == .float and right == .integer))
+        {
+            const float_value = if (left == .float) left.float else right.float;
+            if (exactI64(float_value)) |converted| {
+                const a = if (left == .integer) left.integer else converted;
+                const b = if (right == .integer) right.integer else converted;
+                return applyIntegerBinary(op, a, b);
+            }
+        }
+        const a = asFloat(left);
+        const b = asFloat(right);
+        return switch (op) {
+            .add => .{ .float = a + b },
+            .subtract => .{ .float = a - b },
+            .multiply => .{ .float = a * b },
+            .modulo => if (b == 0) null else .{ .float = @rem(a, b) },
+            else => null,
+        };
+    }
+    return null;
+}
+
+fn applyIntegerBinary(op: ir.Operator, a: i64, b: i64) ?Value {
     return switch (op) {
-        .add => .{ .number = a + b },
-        .subtract => .{ .number = a - b },
-        .multiply => .{ .number = a * b },
-        .divide => if (b == 0) null else .{ .number = a / b },
-        .modulo => if (b == 0) null else .{ .number = @rem(a, b) },
-        .less => .{ .boolean = a < b },
-        .less_equal => .{ .boolean = a <= b },
-        .greater => .{ .boolean = a > b },
-        .greater_equal => .{ .boolean = a >= b },
+        .add => .{ .integer = std.math.add(i64, a, b) catch return null },
+        .subtract => .{ .integer = std.math.sub(i64, a, b) catch return null },
+        .multiply => .{ .integer = std.math.mul(i64, a, b) catch return null },
+        .modulo => if (b == 0 or
+            (a == std.math.minInt(i64) and b == -1)) null else .{ .integer = @rem(a, b) },
         else => null,
+    };
+}
+
+fn numericCompare(left: Value, right: Value) ?std.math.Order {
+    if (left == .integer and right == .integer)
+        return std.math.order(left.integer, right.integer);
+    if (left == .float and right == .float) {
+        if (std.math.isNan(left.float) or std.math.isNan(right.float)) return null;
+        return std.math.order(left.float, right.float);
+    }
+    if (left == .integer or right == .integer) {
+        const float_value = if (left == .float) left.float else right.float;
+        if (exactI64(float_value)) |converted| {
+            const a = if (left == .integer) left.integer else converted;
+            const b = if (right == .integer) right.integer else converted;
+            return std.math.order(a, b);
+        }
+    }
+    const a = asFloat(left);
+    const b = asFloat(right);
+    if (std.math.isNan(a) or std.math.isNan(b)) return null;
+    return std.math.order(a, b);
+}
+
+fn exactI64(value: f64) ?i64 {
+    if (!std.math.isFinite(value) or @trunc(value) != value or
+        value < -9223372036854775808.0 or value >= 9223372036854775808.0)
+        return null;
+    return @intFromFloat(value);
+}
+
+fn asFloat(value: Value) f64 {
+    return switch (value) {
+        .integer => |integer| @floatFromInt(integer),
+        .float => |number| number,
+        else => unreachable,
     };
 }
 

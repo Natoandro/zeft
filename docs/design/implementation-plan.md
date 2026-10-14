@@ -93,7 +93,7 @@ the decision; do not maintain a separate decision log.
   exclusions. Verification: review each binding contract against the Zig
   public API and confirm that packaging remains independent of the Zig build.
 
-- [ ] **ZEP-102** Add signed 64-bit integers as a distinct runtime value
+- [x] **ZEP-102** Add signed 64-bit integers as a distinct runtime value
   alongside `f64`. Preserve exact integer formatting and integer arithmetic,
   and define mixed numeric operations and comparisons. Verification: cover
   boundaries, overflow diagnostics, arithmetic, comparisons, formatting, and

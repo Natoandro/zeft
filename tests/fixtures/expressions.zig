@@ -598,7 +598,7 @@ fn number(
     args: []const zeft.Value,
 ) anyerror!zeft.Value {
     if (args.len != 0) return error.InvalidArguments;
-    return .{ .number = 2 };
+    return .{ .float = 2 };
 }
 
 fn greeting(
@@ -655,7 +655,7 @@ fn overrideLength(
     args: []const zeft.Value,
 ) anyerror!zeft.Value {
     if (args.len != 1) return error.InvalidArguments;
-    return .{ .number = 99 };
+    return .{ .float = 99 };
 }
 fn functionChoice(
     _: std.mem.Allocator,

@@ -56,6 +56,8 @@ optional user-data pointer. Direct calls and pipes resolve through the same
 registration set. A callback receives evaluated values and the render scratch
 allocator. Registrations, user data, arguments, and borrowed callback results
 remain valid for the render call. Scratch-backed results MUST NOT escape it.
+Public runtime values use distinct `integer: i64` and `float: f64` variants.
+Numeric literals in template source compile as floats.
 
 Trusted HTML and XML values are explicit public value variants or wrapper
 types. Construction is an application trust boundary. Their format and valid

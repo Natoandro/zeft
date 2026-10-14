@@ -104,20 +104,22 @@ Logical operators short-circuit and require booleans. Arithmetic requires
 numbers; `+` does not concatenate strings. Integer values use signed 64-bit
 representation. Addition, subtraction, multiplication, and modulo of integer
 operands, and unary negation, preserve integer values and detect overflow;
-overflow fails with `invalid_operand`. Integer division returns an `f64`,
-matching division of other numeric values. An operation with at least one
-`f64` operand returns an `f64`; the integer operand is converted to `f64` for
-arithmetic. Division and modulo by positive or negative zero fail with
-`invalid_operand`.
+overflow fails with `invalid_operand`. For mixed `i64` and `f64` operations
+other than division, an `f64` that is an exact integer within the `i64` range
+is converted to `i64`, and the operation uses integer semantics. Otherwise,
+the integer is converted to `f64` and the operation uses floating semantics.
+Division always converts both operands to `f64` and returns an `f64`. Division
+and modulo by positive or negative zero fail with `invalid_operand`.
 
-Integer-to-integer comparisons are exact. Comparisons between an integer and
-an `f64` compare their mathematical numeric values without first rounding the
-integer to `f64`. Numeric literals in template source remain `f64` literals.
+Integer comparisons are exact. For mixed comparisons, an `f64` that is an
+exact integer within the `i64` range is converted to `i64`; otherwise the
+integer is converted to `f64`. Numeric literals in template source remain
+`f64` literals.
 
 For equality, `null == null` is true. Comparing null with a nonnull value is
 false, and `!=` is the inverse. Integers and `f64` values form one numeric
-comparison group; equality and ordering between them use their mathematical
-values. Equality between other different nonnull value types fails with
+comparison group; mixed equality and ordering use the conversion rule above.
+Equality between other different nonnull value types fails with
 `invalid_operand`. Ordering requires compatible value types.
 
 The built-ins are `length`, `default`, `upper`, `lower`, and `trim`; each may be

@@ -21,8 +21,9 @@ allocation assertions remain in focused tests.
   one compiled-template reuse/recovery harness, and 38 whitespace goldens.
   Covers F-001–F-010 and W-001–W-007; synchronized reuse is in ZEP-082.
 
-- **ZEP-077/080/084–086:** `tests/e2e_expressions.zig` registers EX-001–EX-060;
-  `tests/e2e_diagnostics.zig` registers DG-001–DG-082 (47 compile failures,
+- **ZEP-077/080/084–086/102:** `tests/e2e_expressions.zig` registers EX-001–EX-060
+  and focused signed-integer behavior; `tests/e2e_diagnostics.zig` registers
+  DG-001–DG-082 (47 compile failures,
   35 runtime failures). Covers expression grammar, callbacks, operators,
   selectors, invalid markup/directives, and exact error categories/spans.
   Includes computed indexes, missing call terminators, logical jump
@@ -70,6 +71,8 @@ allocation assertions remain in focused tests.
 | E-014 | Planned | Equality and inequality between null and every value tag | Null equals null and differs from every nonnull value; implement and enable with ZEP-095. |
 | E-015 | Planned | Direct and piped calls through one registration namespace | Both forms resolve the same callable, with the piped value supplied first; implement and enable with ZEP-097. |
 | E-016 | Planned | Properties and indexes following grouped expressions and calls | Postfix operations compose uniformly and retain their precedence; implement and enable with ZEP-098. |
+| E-017 | Focused | `tests/e2e_expressions.zig`: signed integer render and arithmetic cases | Preserve i64 boundaries and decimal formatting, detect overflow, promote exact integral floats to i64 for mixed arithmetic, promote other mixed operations to f64, always divide as f64, and apply the same promotion rule to comparisons. |
+| DG-083 | Focused | `tests/e2e_expressions.zig`: signed integer overflow case | Integer overflow returns `invalid_operand`. |
 
 ## Compile diagnostics
 
