@@ -28,6 +28,10 @@ root module.
 `bindings/python/` is a standalone `uv` project with a `src/zeft/` package
 and a Hatchling build backend. Wheel builds use a Hatch hook to invoke the
 root Zig `python-extension` step with the active CPython include directory.
+The hook selects `ReleaseSafe` by default and accepts `ZEFT_ZIG_OPTIMIZE` for
+explicit overrides. The C extension exposes its compiled mode as private
+`_native.build_mode` metadata, which the comparison benchmark reports. The wheel CI selects `ReleaseSafe` for wheel and source
+distribution builds.
 The source distribution carries the Zig build inputs under `engine/` so a
 wheel can be built from the sdist without access to the engine checkout.
 The GitHub Actions wheel matrix selects an explicit Zig target and a matching

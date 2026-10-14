@@ -51,6 +51,7 @@ def main() -> None:
     engines = make_engines()
     workloads = make_workloads(args.items)
     print(f"Python {platform.python_version()} | {platform.platform()}")
+    print(f"Zeft build mode: {getattr(zeft._native, 'build_mode', 'unknown')}")
     print(f"{args.items} items | {args.iterations} iterations x {args.rounds} rounds")
     print("Times are median nanoseconds per operation; output checks run before timing.\n")
 

@@ -73,3 +73,9 @@ the artifacts.
 
 Building and consuming the Zig package MUST NOT require Python or `uv`.
 Python distributions MAY be released independently of the Zig package.
+
+Python wheel builds and extension builds from source distributions MUST default
+to Zig `ReleaseSafe`. Published wheel builds MUST select `ReleaseSafe`
+explicitly. Local builds MAY override the mode through `ZEFT_ZIG_OPTIMIZE`,
+accepting `Debug`, `ReleaseSafe`, `ReleaseFast`, or `ReleaseSmall`. This default
+does not change the Zig package's build-mode selection.

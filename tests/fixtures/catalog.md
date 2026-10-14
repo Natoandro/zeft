@@ -201,3 +201,4 @@ the comptime API exists. No fixture invents expectations for these cases.
 | O-003 | Focused | `tests/e2e_safety.zig` | Preserve symbol identity, string ownership, and compiled-size stability across large sets. |
 | B-002 | Benchmark | `bench/main.zig` | Report five-sample median compilation time for distinct symbols and static fragments at increasing sizes. |
 | P-001 | Focused | `bindings/python/tests/test_api.py` | Clean nested and cyclic conversion failures once; own temporary strings and validate mapping items and native options. |
+| P-002 | Focused | `.github/workflows/python-wheels.yml` wheel and source install checks | Installed artifacts report `ReleaseSafe`; local default wheel verification checks the same native mode and runs binding regressions. |

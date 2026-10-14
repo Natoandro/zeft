@@ -49,11 +49,17 @@ class ZeftBuildHook(BuildHookInterface):
 
     @staticmethod
     def _zig_build_command(include_dir: str) -> list[str]:
+        optimize = os.environ.get("ZEFT_ZIG_OPTIMIZE", "ReleaseSafe")
+        if optimize not in {"Debug", "ReleaseSafe", "ReleaseFast", "ReleaseSmall"}:
+            raise RuntimeError(
+                "ZEFT_ZIG_OPTIMIZE must be Debug, ReleaseSafe, ReleaseFast, or ReleaseSmall"
+            )
         command = [
             "zig",
             "build",
             "python-extension",
             f"-Dpython-include={include_dir}",
+            f"-Doptimize={optimize}",
         ]
         target = os.environ.get("ZEFT_ZIG_TARGET")
         if target:

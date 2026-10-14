@@ -35,6 +35,7 @@ jobs:
 
     env:
       ZEFT_ZIG_TARGET: ${{ matrix.platform.zig_target }}
+      ZEFT_ZIG_OPTIMIZE: ReleaseSafe
 
     steps:
       - uses: actions/checkout@v6
@@ -63,7 +64,7 @@ jobs:
           wheel=$(find bindings/python/dist -maxdepth 1 -name '*.whl' -print -quit)
           test -n "$wheel"
           uv pip install --no-cache --system "$wheel"
-          python -I -c 'import zeft; template = zeft.compile("<p>{{ name }}</p>"); assert template.render({"name": "ok"}) == "<p>ok</p>"; template.close()'
+          python -I -c 'import zeft; assert zeft._native.build_mode == "ReleaseSafe"; template = zeft.compile("<p>{{ name }}</p>"); assert template.render({"name": "ok"}) == "<p>ok</p>"; template.close()'
 
       - uses: actions/upload-artifact@v4
         with:
@@ -74,6 +75,8 @@ jobs:
   source-distribution:
     name: Source distribution / CPython 3.13 / Linux x86_64
     runs-on: ubuntu-24.04
+    env:
+      ZEFT_ZIG_OPTIMIZE: ReleaseSafe
     steps:
       - uses: actions/checkout@v6
 
@@ -99,4 +102,4 @@ jobs:
           sdist=$(find bindings/python/dist -maxdepth 1 -name '*.tar.gz' -print -quit)
           test -n "$sdist"
           uv pip install --no-cache --system "$sdist"
-          python -I -c 'import zeft; template = zeft.compile("<p>{{ name }}</p>"); assert template.render({"name": "sdist"}) == "<p>sdist</p>"; template.close()'
+          python -I -c 'import zeft; assert zeft._native.build_mode == "ReleaseSafe"; template = zeft.compile("<p>{{ name }}</p>"); assert template.render({"name": "sdist"}) == "<p>sdist</p>"; template.close()'

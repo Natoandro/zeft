@@ -62,3 +62,13 @@ small sets retain bounded linear scans. The lexer borrows static source text
 during compilation. Finalization retains owned payloads and IR, releases its
 temporary lookup structures, and stores the logical compiled size for constant
 cost size queries.
+
+## Python build modes
+
+The native benchmark above uses `ReleaseFast`. Python wheels default to
+`ReleaseSafe`; their context conversion and output buffering add work that the
+native counting-sink benchmark does not measure. See the
+[Python build-mode comparison and default policy](../../bindings/python/README.md#releasefast-performance-and-the-releasesafe-default)
+for ReleaseSafe/ReleaseFast rendering observations, measurement limitations,
+the confirmed expression-stack initialization cost, and the validation reasons
+for retaining safety checks in the default binding build.

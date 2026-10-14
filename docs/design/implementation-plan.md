@@ -146,6 +146,37 @@ the decision; do not maintain a separate decision log.
   once. Verification: O-003, allocation-failure tests, and compile-scaling
   benchmarks cover ownership, lookup behavior, and scaling without thresholds.
 
+- [x] **ZEP-112** Default Python wheel and source builds to `ReleaseSafe`, allow
+  explicit `ZEFT_ZIG_OPTIMIZE` overrides, and report the native build mode in
+  comparison benchmarks. Select `ReleaseSafe` explicitly in wheel CI.
+  Verification: build and install the default wheel, check its mode metadata,
+  run binding tests, validate override handling, and record the comparison run.
+
+- [ ] **ZEP-113** Right-size expression execution storage from compiled
+  requirements and reuse render-local storage where callback/include lifetimes
+  allow it, while retaining runtime safety checks. Verification: cover stack
+  boundaries, large calls, short-circuiting, callback lifetimes, includes,
+  allocator cleanup, and concurrent renders; compare initialization, allocations,
+  rendering, compilation, and compiled size in both release modes.
+  Ticket: [#1](https://github.com/Natoandro/zeft/issues/1).
+
+- [ ] **ZEP-114** After ZEP-113, reduce Python context conversion allocations
+  using render-scoped storage and safely retained Python string/key references.
+  Preserve eager validation and GIL/lifetime guarantees for custom containers
+  and temporary values. Verification: test partial failures, reference cleanup,
+  cycles, temporary values, and mutated contexts with native memory instrumentation;
+  measure static empty/full-context and dynamic rendering in both release modes.
+  Ticket: [#2](https://github.com/Natoandro/zeft/issues/2).
+
+- [ ] **ZEP-115** After ZEP-113 and ZEP-114, fuse measured common lookup and
+  interpolation instruction patterns within the existing interpreter. Preserve
+  evaluation order, binding scope, source spans, diagnostics, escaping, and
+  streaming errors without hoisting failures or introducing JIT compilation.
+  Verification: compare fused and general execution, including callbacks and
+  mutable context; measure dispatch, rendering, compilation, and compiled size
+  in both release modes and retain fixture coverage.
+  Ticket: [#3](https://github.com/Natoandro/zeft/issues/3).
+
 Add future work here only after its required behavior and boundaries have been
 decided. Record unresolved ideas outside the implementation plan until they
 are concrete enough to implement and verify.

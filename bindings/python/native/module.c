@@ -318,6 +318,9 @@ PyMODINIT_FUNC PyInit__native(void) {
     if (PyType_Ready(&ZeftTemplateType) < 0) return NULL;
     PyObject *module = PyModule_Create(&module_definition);
     if (!module) return NULL;
+    if (PyModule_AddStringConstant(module, "build_mode", ZEFT_ZIG_BUILD_MODE) < 0) {
+        Py_DECREF(module); return NULL;
+    }
     CompileDiagnostic = PyErr_NewException("zeft._native.CompileDiagnostic", PyExc_Exception, NULL);
     RenderDiagnostic = PyErr_NewException("zeft._native.RenderDiagnostic", PyExc_Exception, NULL);
     if (!CompileDiagnostic || !RenderDiagnostic ||

@@ -129,6 +129,7 @@ pub fn build(b: *std.Build) void {
             .file = b.path("bindings/python/native/module.c"),
             .flags = &.{
                 "-std=c11",
+                b.fmt("-DZEFT_ZIG_BUILD_MODE=\"{s}\"", .{@tagName(optimize)}),
                 b.fmt("-I{s}", .{include_dir}),
                 b.fmt("-I{s}", .{python_include_parent}),
             },
