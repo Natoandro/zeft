@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import sys
 import sysconfig
 from pathlib import Path
 
@@ -30,21 +32,12 @@ class ZeftBuildHook(BuildHookInterface):
         if not include_dir:
             raise RuntimeError("Could not determine the CPython include directory")
 
-        subprocess.run(
-            [
-                "zig",
-                "build",
-                "python-extension",
-                f"-Dpython-include={include_dir}",
-            ],
-            cwd=engine,
-            check=True,
-        )
+        subprocess.run(self._zig_build_command(include_dir), cwd=engine, check=True)
 
         extension_suffix = sysconfig.get_config_var("EXT_SUFFIX")
         if not extension_suffix:
             raise RuntimeError("Could not determine the CPython extension suffix")
-        built_extension = engine / "zig-out" / "lib" / "lib_native.so"
+        built_extension = self._built_extension(engine)
         package_dir = project / "src" / "zeft"
         package_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(built_extension, package_dir / f"_native{extension_suffix}")
@@ -53,6 +46,53 @@ class ZeftBuildHook(BuildHookInterface):
         build_data.setdefault("artifacts", []).append(
             str(package_artifact.relative_to(project))
         )
+
+    @staticmethod
+    def _zig_build_command(include_dir: str) -> list[str]:
+        command = [
+            "zig",
+            "build",
+            "python-extension",
+            f"-Dpython-include={include_dir}",
+        ]
+        target = os.environ.get("ZEFT_ZIG_TARGET")
+        if target:
+            command.append(f"-Dtarget={target}")
+
+        if sys.platform == "win32":
+            library = sysconfig.get_config_var("LIBRARY")
+            if not library:
+                raise RuntimeError("Could not determine the CPython import library")
+            library_dir = sysconfig.get_config_var("LIBDIR") or str(
+                Path(sys.base_prefix) / "libs"
+            )
+            command.extend(
+                [
+                    f"-Dpython-library-dir={library_dir}",
+                    f"-Dpython-library={Path(library).stem}",
+                ]
+            )
+        return command
+
+    @staticmethod
+    def _built_extension(engine: Path) -> Path:
+        library_dir = engine / "zig-out" / "lib"
+        suffix = {
+            "win32": ".dll",
+            "darwin": ".dylib",
+            "linux": ".so",
+        }.get(sys.platform)
+        if not suffix:
+            raise RuntimeError(f"Unsupported platform: {sys.platform}")
+
+        candidates = sorted(library_dir.glob(f"*{suffix}"))
+        extension = next(
+            (path for path in candidates if path.stem in {"_native", "lib_native"}),
+            None,
+        )
+        if extension is None:
+            raise RuntimeError(f"Zig did not produce a CPython library in {library_dir}")
+        return extension
 
     @staticmethod
     def _include_engine_sources(project: Path, build_data: dict[str, object]) -> None:

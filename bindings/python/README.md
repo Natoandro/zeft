@@ -22,6 +22,11 @@ can be built from the source distribution.
 Build artifacts are written to `bindings/python/dist/`. Building or consuming
 the Zig package does not require Python or `uv`.
 
+The `Python wheels` GitHub Actions workflow builds CPython 3.11 through 3.14
+for Linux x86_64/aarch64, macOS x86_64/arm64, and Windows x86_64. Each job
+passes an explicit Zig target, installs the wheel, and checks that the native
+compile entry point imports and returns a template.
+
 The engine lives in the repository's `src/` directory. Binding implementation
 and packaging belong here; binding unit tests and integration tests belong in
 `tests/unit/` and `tests/integration/` under this directory. Reusable engine

@@ -30,6 +30,9 @@ and a Hatchling build backend. Wheel builds use a Hatch hook to invoke the
 root Zig `python-extension` step with the active CPython include directory.
 The source distribution carries the Zig build inputs under `engine/` so a
 wheel can be built from the sdist without access to the engine checkout.
+The GitHub Actions wheel matrix selects an explicit Zig target and a matching
+runner for Linux x86_64/aarch64, macOS x86_64/arm64, and Windows x86_64, with
+CPython 3.11 through 3.14. Each job installs and imports its wheel.
 The C shim initializes `zeft._native`, whose `Template` object releases its
 opaque Zig compiled-template owner when finalized. The Zig bridge compiles
 UTF-8 source with default options. Python rendering, context conversion, and

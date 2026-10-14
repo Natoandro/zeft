@@ -1,0 +1,67 @@
+name: Python wheels
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.platform.name }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: Linux x86_64
+            runner: ubuntu-24.04
+            zig_target: x86_64-linux-gnu
+          - name: Linux aarch64
+            runner: ubuntu-24.04-arm
+            zig_target: aarch64-linux-gnu
+          - name: macOS Intel
+            runner: macos-15-intel
+            zig_target: x86_64-macos
+          - name: macOS Apple Silicon
+            runner: macos-15
+            zig_target: aarch64-macos
+          - name: Windows x86_64
+            runner: windows-2025
+            zig_target: x86_64-windows-msvc
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    env:
+      ZEFT_ZIG_TARGET: ${{ matrix.platform.zig_target }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: Build wheel
+        run: uv build --project bindings/python
+
+      - name: Install and import wheel
+        shell: bash
+        run: |
+          wheel=$(find bindings/python/dist -maxdepth 1 -name '*.whl' -print -quit)
+          test -n "$wheel"
+          uv pip install --system "$wheel"
+          python -c 'import zeft; template = zeft._native.compile("<p>ok</p>"); assert type(template).__name__ == "Template"'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeft-wheel-${{ matrix.platform.zig_target }}-py${{ matrix.python-version }}
+          path: bindings/python/dist/*.whl
+          if-no-files-found: error

@@ -100,6 +100,16 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(library);
 
     const python_include = b.option([]const u8, "python-include", "CPython include directory");
+    const python_library_dir = b.option(
+        []const u8,
+        "python-library-dir",
+        "CPython library directory",
+    );
+    const python_library = b.option(
+        []const u8,
+        "python-library",
+        "CPython import library name",
+    );
     if (python_include) |include_dir| {
         const python_module = b.createModule(.{
             .root_source_file = b.path("bindings/python/native/module.zig"),
@@ -108,15 +118,27 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
             .imports = &.{.{ .name = "zeft", .module = zeft }},
         });
+        if (python_library_dir) |library_dir| {
+            python_module.addLibraryPath(.{ .cwd_relative = library_dir });
+        }
+        if (python_library) |python_lib| {
+            python_module.linkSystemLibrary(python_lib, .{});
+        }
+        const python_include_parent = std.fs.path.dirname(include_dir) orelse include_dir;
         python_module.addCSourceFile(.{
             .file = b.path("bindings/python/native/module.c"),
-            .flags = &.{ "-std=c11", b.fmt("-I{s}", .{include_dir}) },
+            .flags = &.{
+                "-std=c11",
+                b.fmt("-I{s}", .{include_dir}),
+                b.fmt("-I{s}", .{python_include_parent}),
+            },
         });
         const extension = b.addLibrary(.{
             .name = "_native",
             .root_module = python_module,
             .linkage = .dynamic,
         });
+        extension.linker_allow_shlib_undefined = target.result.os.tag == .macos;
         b.installArtifact(extension);
     }
     const python_extension_step = b.step(

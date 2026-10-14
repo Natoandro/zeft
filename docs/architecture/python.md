@@ -64,5 +64,12 @@ references to the render context after `render()` returns. Compiled template
 state remains immutable between calls; context access and rendering happen
 synchronously under the GIL in the initial API.
 
+Python wheels MUST support CPython 3.11 through 3.14 on Linux x86_64 and
+aarch64, macOS x86_64 and arm64, and Windows x86_64. The extension MUST use
+the CPython Stable ABI with Python 3.11 as its minimum ABI version and publish
+`abi3` wheels for each supported platform target. The build workflow MUST
+import-test those wheels on every supported CPython version before publishing
+the artifacts.
+
 Building and consuming the Zig package MUST NOT require Python or `uv`.
 Python distributions MAY be released independently of the Zig package.

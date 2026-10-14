@@ -105,6 +105,17 @@ the decision; do not maintain a separate decision log.
   Verification: build the extension, build the wheel, import it, and confirm
   that the native compile entry point returns an owning template object.
 
+- [ ] **ZEP-104** Build platform-tagged CPython wheels in GitHub Actions for
+  the supported OS, architecture, and Python matrix. Pass explicit Zig target
+  triples and import-test the wheel on each supported CPython version.
+  Verification: complete the matrix successfully and inspect each wheel's
+  platform and ABI tags.
+
+- [ ] **ZEP-105** Use the CPython Stable ABI beginning at Python 3.11 for the
+  native extension and publish `abi3` wheels for the supported platform
+  targets. Verification: build and inspect each wheel's `abi3` tag, then
+  install and import it on CPython 3.11 through 3.14 on every target platform.
+
 Add future work here only after its required behavior and boundaries have been
 decided. Record unresolved ideas outside the implementation plan until they
 are concrete enough to implement and verify.
