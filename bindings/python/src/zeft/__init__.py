@@ -1,4 +1,5 @@
-"""Python bindings for Zeft.
+"""Python bindings for the Zeft template engine."""
 
-The package scaffold does not yet expose compilation or rendering.
-"""
+from . import _native
+
+__all__ = ["_native"]

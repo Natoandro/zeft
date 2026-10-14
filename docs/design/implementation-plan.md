@@ -99,6 +99,12 @@ the decision; do not maintain a separate decision log.
   boundaries, overflow diagnostics, arithmetic, comparisons, formatting, and
   existing floating-point behavior.
 
+- [ ] **ZEP-103** Build the CPython extension from the Zig project and package
+  it through the Python `uv` project. Initialize `zeft._native` and add a
+  native template object that owns and releases a compiled Zig template.
+  Verification: build the extension, build the wheel, import it, and confirm
+  that the native compile entry point returns an owning template object.
+
 Add future work here only after its required behavior and boundaries have been
 decided. Record unresolved ideas outside the implementation plan until they
 are concrete enough to implement and verify.

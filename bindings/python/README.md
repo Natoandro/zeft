@@ -1,7 +1,8 @@
 # Zeft for Python
 
-Python package for the Zeft HTML and XML template engine. The package is a
-bootstrap scaffold: compilation and rendering are not yet exposed to Python.
+Python package for the Zeft HTML and XML template engine. The CPython extension
+currently provides a minimal compile entry point that returns a native owning
+template object. Rendering and the complete documented API are still pending.
 
 ## Development
 
@@ -14,8 +15,12 @@ uv build --project bindings/python
 ```
 
 The project uses a `src/` layout, a committed `uv.lock`, and Hatchling for
-packaging. Build artifacts are written to `bindings/python/dist/`. Python
-packaging is independent of the root Zig build.
+packaging. Building a wheel invokes the Zig `python-extension` build with the
+active Python's include directory, then packages the resulting extension. The
+source distribution includes the Zig build inputs under `engine/` so wheels
+can be built from the source distribution.
+Build artifacts are written to `bindings/python/dist/`. Building or consuming
+the Zig package does not require Python or `uv`.
 
 The engine lives in the repository's `src/` directory. Binding implementation
 and packaging belong here; binding unit tests and integration tests belong in

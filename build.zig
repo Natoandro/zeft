@@ -99,6 +99,40 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(library);
 
+    const python_include = b.option([]const u8, "python-include", "CPython include directory");
+    if (python_include) |include_dir| {
+        const python_module = b.createModule(.{
+            .root_source_file = b.path("bindings/python/native/module.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{.{ .name = "zeft", .module = zeft }},
+        });
+        python_module.addCSourceFile(.{
+            .file = b.path("bindings/python/native/module.c"),
+            .flags = &.{ "-std=c11", b.fmt("-I{s}", .{include_dir}) },
+        });
+        const extension = b.addLibrary(.{
+            .name = "_native",
+            .root_module = python_module,
+            .linkage = .dynamic,
+        });
+        b.installArtifact(extension);
+    }
+    const python_extension_step = b.step(
+        "python-extension",
+        "Build the CPython extension (pass -Dpython-include from Python sysconfig)",
+    );
+    if (python_include) |include_dir| {
+        _ = include_dir;
+        python_extension_step.dependOn(b.getInstallStep());
+    } else {
+        const missing_include = b.addFail(
+            "python-extension requires -Dpython-include=<CPython include directory>",
+        );
+        python_extension_step.dependOn(&missing_include.step);
+    }
+
     const unit_tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("tests/unit.zig"),

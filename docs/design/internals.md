@@ -26,11 +26,16 @@ root module.
 ## Python package
 
 `bindings/python/` is a standalone `uv` project with a `src/zeft/` package
-and a Hatchling build backend. It currently provides packaging and a typed
-package marker; compilation, rendering, and native bridge modules are not
-implemented. The target API and value/lifetime contract are in
-`docs/architecture/python.md`. The Zig build does not depend on the Python
-project.
+and a Hatchling build backend. Wheel builds use a Hatch hook to invoke the
+root Zig `python-extension` step with the active CPython include directory.
+The source distribution carries the Zig build inputs under `engine/` so a
+wheel can be built from the sdist without access to the engine checkout.
+The C shim initializes `zeft._native`, whose `Template` object releases its
+opaque Zig compiled-template owner when finalized. The Zig bridge compiles
+UTF-8 source with default options. Python rendering, context conversion, and
+diagnostic adaptation remain unimplemented. The target API and lifetime
+contract are in `docs/architecture/python.md`. The Zig package build remains
+independent of Python and `uv`.
 
 ## Compilation flow
 

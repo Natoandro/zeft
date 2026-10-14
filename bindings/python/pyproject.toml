@@ -9,3 +9,9 @@ dependencies = []
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["hatch_build.py", "native/**", "src/**", "README.md", "pyproject.toml"]
