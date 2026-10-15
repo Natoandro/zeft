@@ -108,7 +108,7 @@ fi
 
 if [[ "$bump_version" == true ]]; then
   log "Bumping package version at level $bump_level."
-  next_version="$(scripts/bump-version.sh "$bump_level")"
+  next_version="$(python3 scripts/bump_version.py "--$bump_level")"
   log "Next package version: $next_version"
   log "Checking the Git index before staging the version file."
   if ! git diff --cached --quiet; then
@@ -116,9 +116,10 @@ if [[ "$bump_version" == true ]]; then
     exit 1
   fi
   log "Staging build.zig.zon."
-  git add build.zig.zon
+  git add build.zig.zon pyproject.toml bindings/python/pyproject.toml uv.lock
   staged_paths="$(git diff --cached --name-only)"
-  if [[ "$staged_paths" != build.zig.zon ]]; then
+  expected_paths=$'bindings/python/pyproject.toml\nbuild.zig.zon\npyproject.toml\nuv.lock'
+  if [[ "$staged_paths" != "$expected_paths" ]]; then
     log "ERROR: refusing to create the version bump commit with unrelated staged files."
     exit 1
   fi

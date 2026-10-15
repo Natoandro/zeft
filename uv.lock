@@ -1,0 +1,19 @@
+version = 1
+revision = 2
+requires-python = ">=3.11"
+
+[manifest]
+members = [
+    "zeft",
+    "zeft-dev-tools",
+]
+
+[[package]]
+name = "zeft"
+version = "0.1.0"
+source = { editable = "bindings/python" }
+
+[[package]]
+name = "zeft-dev-tools"
+version = "0.1.0"
+source = { editable = "." }

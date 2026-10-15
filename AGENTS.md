@@ -35,7 +35,7 @@
 - The `pre-commit` hook checks staged Zig files for lines over 100 characters
   and fails without changing files. Enable it with
   `git config core.hooksPath .githooks`. Run
-  `python3 scripts/check_zig_line_length.py` to check staged Zig files manually.
+  `uv run check-zig-line-length` to check staged Zig files manually.
 - Keep unit tests, integration tests, and reusable fixtures in their
   respective `tests/` locations.
 

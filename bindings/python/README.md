@@ -143,6 +143,8 @@ constructs, renders, and releases a template on every operation.
 | 100 | Jinja2 | 3.1.6 | 547,336 | 151,610 | 733,531 |
 | 100 | Mako | 1.4.3 | 528,500 | 81,638 | 633,446 |
 
+These benchmark measurements used Zeft 0.1.0.
+
 For this workload, Zeft compiles about 84–90 times faster than Jinja2 and Mako.
 Compile + render is about 28 times faster with one item and 2.5–2.8 times faster
 with 100 items. Reused-template rendering is slower than both engines;
