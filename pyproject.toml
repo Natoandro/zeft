@@ -8,6 +8,7 @@ dependencies = []
 [project.scripts]
 bump-version = "scripts.bump_version:main"
 check-zig-line-length = "scripts.check_zig_line_length:main"
+tag-release = "scripts.tag_release:main"
 
 [build-system]
 requires = ["hatchling"]

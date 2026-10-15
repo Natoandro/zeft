@@ -5,6 +5,10 @@ log() {
   printf '[tag-release] %s\n' "$*" >&2
 }
 
+usage() {
+  printf 'Usage: uv run tag-release [--push] [--bump [major|minor|patch]]\n'
+}
+
 trap 'status=$?; printf "[tag-release] ERROR: command failed (exit %s, line %s): %s\n" \
   "$status" "$LINENO" "$BASH_COMMAND" >&2; exit "$status"' ERR
 
@@ -16,6 +20,10 @@ while [[ "$#" -gt 0 ]]; do
   option="$1"
   shift
   case "$option" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
     --push)
       if [[ "$push_tag" == true ]]; then
         log "ERROR: option '--push' can only be specified once."

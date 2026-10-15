@@ -48,7 +48,7 @@ uv run check-zig-line-length
 ## Releasing
 
 Update the package version in `build.zig.zon`, commit the release changes, and
-run `scripts/tag-release.sh` from a clean working tree. It creates an annotated
+run `uv run tag-release` from a clean working tree. It creates an annotated
 `v<version>` tag. Push that tag to `origin` to trigger the GitHub Release
 workflow, which checks the tag against the package version and generates
 release notes. `--push` pushes the release tag, and `--bump` increments the
@@ -58,8 +58,8 @@ Combine them to push the release tag and then make the next-version commit
 locally:
 
 ```sh
-scripts/tag-release.sh --push --bump
-scripts/tag-release.sh --push --bump minor
+uv run tag-release --push --bump
+uv run tag-release --push --bump minor
 ```
 
 Use `uv run bump-version [--major|--minor|--patch]` to update the package
