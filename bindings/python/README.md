@@ -73,10 +73,12 @@ Zig's default Debug mode unless passed `-Doptimize` explicitly.
 
 From `bindings/python/`, run the focused binding tests after building the
 extension with `uv run --locked python -m unittest discover -s tests`. The
-`Python wheels` GitHub Actions workflow clears previous build outputs, builds
-and installs a native wheel for every supported interpreter and platform, then
-checks that compilation and rendering work. A separate source distribution job
-builds and installs directly from the sdist in a clean environment.
+`Python wheels` GitHub Actions workflow clears previous build outputs, pins
+each wheel build to its matrix interpreter, and checks its CPython ABI and
+platform tags. It then installs a native wheel for every supported interpreter
+and platform and checks that compilation and rendering work. A separate source
+distribution job builds and installs directly from the sdist in a clean
+environment.
 
 ## Example
 

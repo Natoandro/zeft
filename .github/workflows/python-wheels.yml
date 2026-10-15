@@ -19,23 +19,35 @@ jobs:
           - name: Linux x86_64
             runner: ubuntu-24.04
             zig_target: x86_64-linux-gnu
+            wheel_platform: linux
+            wheel_arch: x86_64
           - name: Linux aarch64
             runner: ubuntu-24.04-arm
             zig_target: aarch64-linux-gnu
+            wheel_platform: linux
+            wheel_arch: aarch64
           - name: macOS Intel
             runner: macos-15-intel
             zig_target: x86_64-macos
+            wheel_platform: macosx
+            wheel_arch: x86_64
           - name: macOS Apple Silicon
             runner: macos-15
             zig_target: aarch64-macos
+            wheel_platform: macosx
+            wheel_arch: arm64
           - name: Windows x86_64
             runner: windows-2025
             zig_target: x86_64-windows-msvc
+            wheel_platform: win
+            wheel_arch: amd64
         python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     env:
       ZEFT_ZIG_TARGET: ${{ matrix.platform.zig_target }}
       ZEFT_ZIG_OPTIMIZE: ReleaseSafe
+      ZEFT_WHEEL_PLATFORM: ${{ matrix.platform.wheel_platform }}
+      ZEFT_WHEEL_ARCH: ${{ matrix.platform.wheel_arch }}
 
     steps:
       - uses: actions/checkout@v6
@@ -56,7 +68,48 @@ jobs:
           rm -rf bindings/python/dist bindings/python/src/zeft/_native* zig-out .zig-cache
 
       - name: Build wheel
-        run: uv build --no-cache --project bindings/python --wheel
+        run: >-
+          uv build --no-cache --project bindings/python
+          --python ${{ matrix.python-version }} --wheel
+
+      - name: Verify wheel tags
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import zipfile
+          from pathlib import Path
+
+          wheels = list(Path("bindings/python/dist").glob("*.whl"))
+          assert len(wheels) == 1, f"expected one wheel, found {wheels}"
+          expected_python = f"cp{sys.version_info.major}{sys.version_info.minor}"
+          expected_platform = f"{os.environ['ZEFT_WHEEL_PLATFORM']}_"
+          expected_arch = f"_{os.environ['ZEFT_WHEEL_ARCH']}"
+
+          with zipfile.ZipFile(wheels[0]) as wheel:
+              metadata = next(
+                  name
+                  for name in wheel.namelist()
+                  if name.endswith(".dist-info/WHEEL")
+              )
+              tags = [
+                  line.removeprefix("Tag: ")
+                  for line in wheel.read(metadata)
+                  .decode()
+                  .splitlines()
+                  if line.startswith("Tag: ")
+              ]
+
+          assert tags, f"wheel has no WHEEL tags: {wheels[0]}"
+          for tag in tags:
+              python_tag, abi_tag, platform_tag = tag.split("-")
+              assert python_tag == expected_python, tag
+              assert abi_tag == expected_python, tag
+              assert platform_tag.startswith(expected_platform), tag
+              assert platform_tag.endswith(expected_arch), tag
+          print(f"Verified {wheels[0].name}: {', '.join(tags)}")
+          PY
 
       - name: Install and import wheel
         shell: bash
