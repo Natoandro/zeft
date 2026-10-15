@@ -521,7 +521,7 @@ const Lowerer = struct {
                     self.allocator,
                     .{
                         .span = call.call_span,
-                        .data = .{ .call_function = .{
+                        .data = .{ .call = .{
                             .name = call.name,
                             .argument_count = call.args.len,
                         } },
@@ -535,7 +535,7 @@ const Lowerer = struct {
                     self.allocator,
                     .{
                         .span = filter.call_span,
-                        .data = .{ .call_filter = .{
+                        .data = .{ .call = .{
                             .name = filter.name,
                             .argument_count = filter.args.len + 1,
                         } },

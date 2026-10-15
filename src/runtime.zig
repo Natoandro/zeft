@@ -7,10 +7,13 @@ const ir = @import("zeft_ir");
 
 pub const Value = union(enum) {
     null,
+    invalid,
     boolean: bool,
     integer: i64,
     float: f64,
     string: []const u8,
+    trusted_html: []const u8,
+    trusted_xml: []const u8,
     object: Object,
     sequence: Sequence,
 };
@@ -33,12 +36,9 @@ pub const Registration = struct {
     callback: Callable,
     user_data: ?*const anyopaque = null,
 };
-pub const RenderOptions = struct {
-    allocator: std.mem.Allocator = std.heap.page_allocator,
-    filters: []const Registration = &.{},
-    functions: []const Registration = &.{},
-    include_context: ?*anyopaque = null,
-    include_resolver: ?*const fn (
+pub const IncludeResolver = struct {
+    context: *anyopaque,
+    resolve: *const fn (
         *anyopaque,
         []const u8,
         *std.Io.Writer,
@@ -46,7 +46,12 @@ pub const RenderOptions = struct {
         core.OutputFormat,
         RenderOptions,
         core.SourceSpan,
-    ) anyerror!RenderResult = null,
+    ) anyerror!RenderResult,
+};
+pub const RenderOptions = struct {
+    allocator: std.mem.Allocator = std.heap.page_allocator,
+    callables: []const Registration = &.{},
+    include_resolver: ?IncludeResolver = null,
 };
 pub const RenderResult = union(enum) {
     success,
@@ -82,8 +87,6 @@ pub fn stringValue(comptime T: type, pointer: *const T) []const u8 {
 }
 
 /// Adapt supported native context values without allocating or copying them.
-/// Objects are Zig structs, sequences are arrays/slices, and scalar leaves are
-/// byte strings in the initial access-only expression subset.
 pub fn adapt(comptime T: type, pointer: *const T) Value {
     const type_info = @typeInfo(T);
     if (type_info == .pointer and type_info.pointer.size == .slice and
@@ -95,6 +98,15 @@ pub fn adapt(comptime T: type, pointer: *const T) Value {
         return .{ .string = pointer[0..] };
     }
     if (T == bool) return .{ .boolean = pointer.* };
+    if (type_info == .int) {
+        const adapted = std.math.cast(i64, pointer.*) orelse return .invalid;
+        return .{ .integer = adapted };
+    }
+    if (type_info == .float) return .{ .float = @floatCast(pointer.*) };
+    if (type_info == .optional) {
+        if (pointer.*) |*value| return adapt(type_info.optional.child, value);
+        return .null;
+    }
     if (type_info == .pointer and type_info.pointer.size == .slice) {
         return .{ .sequence = .{
             .pointer = @ptrCast(pointer),
@@ -112,7 +124,17 @@ pub fn adapt(comptime T: type, pointer: *const T) Value {
     if (type_info == .@"struct") {
         return .{ .object = .{ .pointer = @ptrCast(pointer), .get_property = objectProperty(T) } };
     }
-    @compileError("context values must be structs, arrays, slices, or byte strings");
+    @compileError("unsupported context value type");
+}
+
+pub fn isAggregate(comptime T: type) bool {
+    if (isString(T)) return false;
+    return switch (@typeInfo(T)) {
+        .array, .@"struct" => true,
+        .pointer => |pointer| pointer.size == .slice,
+        .optional => |optional| isAggregate(optional.child),
+        else => false,
+    };
 }
 
 fn objectProperty(comptime T: type) *const fn (*const anyopaque, []const u8) ?Value {
@@ -202,6 +224,24 @@ pub fn renderWithOptions(
                         write.escape_context,
                         format,
                     ),
+                    .trusted_html => |bytes| {
+                        if (format != .html or write.escape_context != .text) return .{
+                            .failure = .{
+                                .kind = .invalid_operand,
+                                .span = instruction.span,
+                            },
+                        };
+                        try writer.writeAll(bytes);
+                    },
+                    .trusted_xml => |bytes| {
+                        if (format != .xml or write.escape_context != .text) return .{
+                            .failure = .{
+                                .kind = .invalid_operand,
+                                .span = instruction.span,
+                            },
+                        };
+                        try writer.writeAll(bytes);
+                    },
                     .null => {},
                     .boolean => |boolean| try writeEscaped(
                         writer,
@@ -254,6 +294,10 @@ pub fn renderWithOptions(
                 };
                 const sequence = switch (iterable) {
                     .sequence => |value| value,
+                    .invalid => return .{ .failure = .{
+                        .kind = .invalid_operand,
+                        .span = instruction.span,
+                    } },
                     else => return .{ .failure = .{
                         .kind = .non_iterable,
                         .span = instruction.span,
@@ -324,13 +368,8 @@ pub fn renderWithOptions(
                     .span = instruction.span,
                     .include_identity = identity,
                 } };
-                const resolver_context = options.include_context orelse return .{ .failure = .{
-                    .kind = .missing_include,
-                    .span = instruction.span,
-                    .include_identity = identity,
-                } };
-                switch (try resolver(
-                    resolver_context,
+                switch (try resolver.resolve(
+                    resolver.context,
                     identity,
                     writer,
                     context,
@@ -385,6 +424,10 @@ fn evaluateExpression(
                 var found = false;
                 for (context) |entry| {
                     if (std.mem.eql(u8, name, entry.name)) {
+                        if (entry.value == .invalid) return .{ .failure = .{
+                            .kind = .invalid_operand,
+                            .span = instruction.span,
+                        } };
                         if (depth >= stack.len) return .{ .failure = .{
                             .kind = .invalid_operand,
                             .span = instruction.span,
@@ -440,6 +483,10 @@ fn evaluateExpression(
                     .span = instruction.span,
                 } };
                 const current = stack[depth - 1];
+                if (current == .invalid) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const next: ?Value = switch (current) {
                     .object => |object| object.get_property(object.pointer, name),
                     else => null,
@@ -455,6 +502,10 @@ fn evaluateExpression(
                     .span = instruction.span,
                 } };
                 const current = stack[depth - 1];
+                if (current == .invalid) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const next: ?Value = switch (current) {
                     .sequence => |sequence| if (index < sequence.len) sequence.get_index(
                         sequence.pointer,
@@ -474,6 +525,10 @@ fn evaluateExpression(
                 } };
                 const selector = stack[depth - 1];
                 const current = stack[depth - 2];
+                if (selector == .invalid or current == .invalid) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const index: usize = switch (selector) {
                     .integer => |value| if (value < 0) return .{ .failure = .{
                         .kind = .invalid_property_access,
@@ -583,17 +638,21 @@ fn evaluateExpression(
             .jump => |target| {
                 pc = target - 1;
             },
-            .call_function => |call| {
+            .call => |call| {
                 const count: usize = call.argument_count;
                 if (count > depth) return .{ .failure = .{
                     .kind = .invalid_operand,
                     .span = instruction.span,
                 } };
                 const args = stack[depth - count .. depth];
+                for (args) |arg| if (arg == .invalid) return .{ .failure = .{
+                    .kind = .invalid_operand,
+                    .span = instruction.span,
+                } };
                 const function = findRegistration(
-                    options.functions,
+                    options.callables,
                     call.name,
-                ) orelse findBuiltinFunction(call.name) orelse findBuiltinFilter(call.name);
+                ) orelse findBuiltinCallable(call.name);
                 const result = if (function) |registered|
                     registered.callback(
                         allocator,
@@ -602,44 +661,13 @@ fn evaluateExpression(
                     ) catch |err| {
                         if (err == error.OutOfMemory) return error.OutOfMemory;
                         return .{ .failure = .{
-                            .kind = .function_failure,
+                            .kind = .callable_failure,
                             .span = instruction.span,
+                            .callback_error = @errorName(err),
                         } };
                     }
                 else
-                    return .{ .failure = .{ .kind = .function_failure, .span = instruction.span } };
-                depth -= count;
-                stack[depth] = result;
-                depth += 1;
-            },
-            .call_filter => |call| {
-                const count: usize = call.argument_count;
-                if (count > depth or count == 0) return .{ .failure = .{
-                    .kind = .invalid_operand,
-                    .span = instruction.span,
-                } };
-                const args = stack[depth - count .. depth];
-                // Filter registrations keep precedence. In the absence of a
-                // filter, the same pipe syntax can invoke a function with the
-                // piped value occupying its first argument.
-                const callable = findRegistration(options.filters, call.name) orelse
-                    findRegistration(options.functions, call.name) orelse
-                    findBuiltinFilter(call.name) orelse
-                    findBuiltinFunction(call.name);
-                const result = if (callable) |registered|
-                    registered.callback(
-                        allocator,
-                        registered.user_data,
-                        args,
-                    ) catch |err| {
-                        if (err == error.OutOfMemory) return error.OutOfMemory;
-                        return .{ .failure = .{
-                            .kind = .filter_failure,
-                            .span = instruction.span,
-                        } };
-                    }
-                else
-                    return .{ .failure = .{ .kind = .filter_failure, .span = instruction.span } };
+                    return .{ .failure = .{ .kind = .callable_failure, .span = instruction.span } };
                 depth -= count;
                 stack[depth] = result;
                 depth += 1;
@@ -679,12 +707,8 @@ fn findRegistration(registrations: []const Registration, name: []const u8) ?Regi
     return null;
 }
 
-fn findBuiltinFunction(name: []const u8) ?Registration {
+fn findBuiltinCallable(name: []const u8) ?Registration {
     if (std.mem.eql(u8, name, "length")) return .{ .name = "length", .callback = builtinLength };
-    return null;
-}
-
-fn findBuiltinFilter(name: []const u8) ?Registration {
     if (std.mem.eql(u8, name, "default")) return .{ .name = "default", .callback = builtinDefault };
     if (std.mem.eql(u8, name, "upper")) return .{ .name = "upper", .callback = builtinUpper };
     if (std.mem.eql(u8, name, "lower")) return .{ .name = "lower", .callback = builtinLower };

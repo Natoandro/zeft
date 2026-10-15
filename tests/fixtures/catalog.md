@@ -56,22 +56,23 @@ allocation assertions remain in focused tests.
 | ID | Status | Fixture or scenario | Expected result |
 | --- | --- | --- | --- |
 | E-001 | Fixture | `text.html.dynamic.template` | HTML text and attribute contexts escape the same value according to their distinct rules. |
-| E-002 | Fixture | `text.html.expressions.template` | Nested property/index access, precedence, short-circuiting, filters, and escaping compose in one render. |
+| E-002 | Fixture | `text.html.expressions.template` | Nested property/index access, precedence, short-circuiting, pipe calls, and escaping compose in one render. |
 | E-003 | Fixture | `tests/integration.zig` expression cases | Integer arithmetic, grouping, boolean literal, string newline escape, unary not, precedence, and logical short-circuit behavior. |
 | E-004 | Fixture | `tests/integration.zig` access cases | Struct fields, arrays/slices, property chains, zero-based indexes, missing properties, and out-of-range indexes. |
 | E-005 | Fixture | Built-in callable case | `length` for strings/sequences; `upper`, `lower`, `trim`, and `default` behavior. |
 | E-006 | Fixture | Registered callable cases | Render-local registrations, built-in override, scratch allocation, callback failures, and source spans. |
 | E-007 | Fixture | Expression table for every binary operator and precedence boundary | Verify `||`, `&&`, equality, comparisons, additive, and multiplicative precedence; all binary operators associate left-to-right. |
 | E-008 | Fixture | Expression table for numeric syntax and string escapes | Accept specified decimal/exponent forms and six escapes; reject unknown escapes, unescaped line breaks, and malformed numbers. `null`, `true`, and `false` are reserved case-sensitively; other case spellings remain identifiers. |
-| E-009 | Fixture | Function/filter syntax table: no args, multiple args, nested calls, filter arguments and pipelines | Parse zero or more arguments; execute left-to-right pipelines, including registered and built-in functions with the piped value first; filters take precedence over same-name functions in pipe syntax; report callable arity/type errors at call sites. |
+| E-009 | Fixture | Call syntax table: no args, multiple args, nested calls, and pipelines | Parse zero or more arguments; execute left-to-right pipelines through one callable namespace, with the piped value first; report callable arity/type errors at call sites. |
 | E-010 | Fixture | Expression output matrix for HTML/XML text/attributes | Test `&`, `<`, `>`, `"`, and `'` for each output context and format. |
 | E-011 | Fixture | Root names repeated and in different case | Repeated case-sensitive roots reuse symbols; distinct names resolve independently and missing roots fail by default. |
-| E-012 | Fixture | Supported native bool/string/array/slice/struct adapters; numeric/null literals and callback values | Verify supported value operations, property lookup, indexing, and invalid operation categories. Native numeric/optional fields remain unsupported. |
+| E-012 | Fixture | Supported native bool/numeric/optional/string/array/slice/struct adapters; numeric literals and callback values | Verify root and nested adaptation, property lookup, indexing, null optionals, and invalid operation categories. |
 | E-013 | Fixture | Direct null/sequence/object interpolation, nonnull cross-type equality, division/modulo by zero | Null emits no bytes; sequences and objects fail direct interpolation; nonnull cross-type equality and division/modulo by zero return `invalid_operand`. |
 | E-014 | Focused | S-008 and DG-079–DG-080 | Null equals null and differs from every nonnull value in runtime and folded expressions. |
-| E-015 | Planned | Direct and piped calls through one registration namespace | Both forms resolve the same callable, with the piped value supplied first; implement and enable with ZEP-097. |
-| E-016 | Planned | Properties and indexes following grouped expressions and calls | Postfix operations compose uniformly and retain their precedence; implement and enable with ZEP-098. |
+| E-015 | Fixture | tests/fixtures/expressions.zig EX-059 | Direct and piped calls resolve the same callable, with the piped value supplied first. |
+| E-016 | Focused | `tests/e2e_expressions.zig`: property and index access after grouped expressions and call results | Postfix operations compose uniformly and retain their precedence. |
 | E-017 | Focused | `tests/e2e_expressions.zig`: signed integer render and arithmetic cases | Preserve i64 boundaries and decimal formatting, detect overflow, promote exact integral floats to i64 for mixed arithmetic, promote other mixed operations to f64, always divide as f64, and apply the same promotion rule to comparisons. |
+| E-018 | Focused | `tests/e2e_expressions.zig`: trusted HTML/XML callback values | Matching text output is raw; format and attribute mismatches fail; ordinary strings remain escaped. |
 | DG-083 | Focused | `tests/e2e_expressions.zig`: signed integer overflow case | Integer overflow returns `invalid_operand`. |
 
 ## Compile diagnostics
@@ -125,7 +126,7 @@ element-only document formatting whitespace is removed.
 | ID | Status | Scenario | Expected result |
 | --- | --- | --- | --- |
 | R-001 | Fixture | Invalid property/index access, invalid operand, and local selector spans | Return the correct runtime category and originating selector/operator span. |
-| R-002 | Fixture | Unknown/failing filters and functions | Return filter/function failure at the call site. |
+| R-002 | Fixture | Unknown/failing callables | Return callable failure at the call site. |
 | R-003 | Fixture | Missing root variable | Return `missing_variable` by default at the identifier span; source before the expression does not shift the reported span. |
 | R-004 | Focused | Writer that fails during static and dynamic writes | Propagate the original Zig writer error without converting it to a template diagnostic. |
 | R-005 | Focused | Compile with tracked allocator, render, deinitialize | Temporary compile allocations are released; persistent data lives until deinit and is released once. |
@@ -145,6 +146,7 @@ element-only document formatting whitespace is removed.
 | K-006 | Focused | Missing/invalid child and include cycle | Return explicit errors with dependency context; never substitute stale child content. |
 | K-007 | Focused | Evict/replace while render is active | Active render keeps its compiled entry alive until completion. |
 | K-008 | Focused | Concurrent cache lookup and rendering | Cache publication and reference accounting remain safe across concurrent callers. |
+| K-009 | Focused | tests/e2e_cache.zig: custom public include resolver | Render an include graph, report missing children and cycles, and keep child templates alive for each synchronous render. |
 | O-001 | Unit | `src/compiler/optimize.zig` optimizer cases | Constant folding preserves spans; empty writes and unreachable branches are removed; jump targets remain valid. |
 | O-002 | Unit | `src/zeft.zig` finalization case | Repeated strings and symbol names share finalized storage while preserving output. |
 | B-001 | Benchmark | `bench/main.zig` small, large, dynamic, and control-flow cases | `zig build -Doptimize=ReleaseFast bench` reports compile/render time, allocator activity, write calls, and compiled size without thresholds. |
@@ -166,12 +168,12 @@ architecture is implemented and compile-failure verification is available.
 ## Value coverage boundaries
 
 Numbers and null values are covered through specified literal and callback
-operations. Native adapters currently support booleans, byte strings, structs,
-arrays, and slices; numeric and optional fields are not accepted by the adapter.
+operations. Native adapters support booleans, numbers, optionals, byte strings,
+structs, arrays, and slices.
 Direct null interpolation and direct sequence/object interpolation are covered
 by EX-060 and DG-075–DG-076. Nonnull cross-type equality and zero-divisor
-arithmetic are covered by DG-077–DG-078 and DG-081–DG-082. DG-079–DG-080 cover successful folded null comparisons in the expression suite. Numeric and
-optional native fields remain unsupported by the adapter.
+arithmetic are covered by DG-077–DG-078 and DG-081–DG-082. DG-079–DG-080 cover
+successful folded null comparisons in the expression suite.
 
 ## Fixture inventory
 

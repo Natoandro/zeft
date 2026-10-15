@@ -822,14 +822,14 @@ const ActiveCacheRender = struct {
 
 fn renderWhileHeld(render: *ActiveCacheRender) void {
     var writer = std.Io.Writer.fixed(&render.output);
-    const functions = [_]zeft.Registration{.{
+    const callables = [_]zeft.Registration{.{
         .name = "hold",
         .callback = holdRenderCallback,
         .user_data = render.state,
     }};
     const options: zeft.RenderOptions = .{
         .allocator = std.heap.page_allocator,
-        .functions = &functions,
+        .callables = &callables,
     };
     const result = render.cache.renderWithOptions(
         std.heap.page_allocator,

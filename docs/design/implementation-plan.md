@@ -17,12 +17,6 @@ the decision; do not maintain a separate decision log.
   Verification: add compile-success and build-failure cases for the comptime
   API, and verify equivalent runtime and comptime inputs render identically.
 
-- [ ] **ZEP-089** Adapt supported Zig integers and floats to
-  the distinct integer and `f64` runtime values, and preserve optional values
-  as their child value or null. Keep compile-time diagnostics for unsupported
-  Zig types. Verification: cover root, nested, sequence, null, and concurrent
-  contexts, including out-of-range unsigned values.
-
 - [ ] **ZEP-090** Expand HTML compatibility in explicit batches: raw-text
   elements, unquoted attributes, nonvoid self-closing syntax, additional valid
   doctypes, and optional end-tag behavior. Preserve deterministic diagnostics
@@ -35,33 +29,6 @@ the decision; do not maintain a separate decision log.
   pass over the same structure. Treat includes as opaque boundaries and
   preserve raw, preformatted, XML, mixed, and dynamic content. Verification:
   extend the whitespace matrix without asserting CSS-dependent visual layout.
-
-- [ ] **ZEP-092** Add a public include-resolver interface independent of
-  `TemplateCache`, then implement that interface for the cache. Verification:
-  render the same include graph through the cache and a minimal custom resolver,
-  including missing children, cycles, and retained lifetimes.
-
-- [ ] **ZEP-093** Add format-tagged trusted HTML and XML values. Allow trusted
-  output only in matching text contexts and reject format or attribute-context
-  mismatches. Verification: cover every allowed and rejected context while
-  confirming that ordinary strings remain escaped.
-
-- [ ] **ZEP-096** Expand diagnostics with source identities, line/column
-  helpers, ordered include stacks, callback failure details, and documented
-  partial-output behavior. Verification: cover nested includes, multibyte
-  prefixes, callback errors, and writer failures through public APIs.
-
-- [ ] **ZEP-097** Replace separate function and filter registrations with one
-  callable namespace. Treat pipe notation solely as alternate call syntax that
-  supplies its input as the first argument. Migrate built-ins, diagnostics,
-  public render options, expression IR, and existing callers together.
-  Verification: cover direct and piped calls, overrides, name collisions,
-  failures, argument order, and left-to-right pipelines.
-
-- [ ] **ZEP-098** Generalize postfix expressions so property access and index
-  access may follow any primary expression, including grouped expressions and
-  call results. Verification: cover chained calls, properties, and indexes,
-  their precedence, and invalid postfix syntax.
 
 - [ ] **ZEP-104** Build platform-tagged CPython wheels in GitHub Actions for
   the supported OS, architecture, and Python matrix. Pass explicit Zig target

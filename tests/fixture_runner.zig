@@ -160,7 +160,27 @@ pub fn expectRenderFailure(case: RenderFailure, context: anytype) anyerror!void 
     };
     switch (rendered) {
         .success => return error.ExpectedRenderFailure,
-        .failure => |diagnostic| try std.testing.expectEqualDeep(case.diagnostic, diagnostic),
+        .failure => |diagnostic| {
+            try std.testing.expectEqual(case.diagnostic.kind, diagnostic.kind);
+            try std.testing.expectEqual(case.diagnostic.span, diagnostic.span);
+            if (case.diagnostic.include_identity) |expected| {
+                try std.testing.expectEqualStrings(expected, diagnostic.include_identity.?);
+            }
+            if (case.diagnostic.include_parent_identity) |expected| {
+                try std.testing.expectEqualStrings(expected, diagnostic.include_parent_identity.?);
+            }
+            if (case.diagnostic.source_identity) |expected| {
+                try std.testing.expectEqualStrings(expected, diagnostic.source_identity.?);
+            }
+            if (case.diagnostic.callback_error) |expected| {
+                try std.testing.expectEqualStrings(expected, diagnostic.callback_error.?);
+            }
+            if (case.diagnostic.include_compile_diagnostic) |expected| {
+                const actual = diagnostic.include_compile_diagnostic.?;
+                try std.testing.expectEqual(expected.kind, actual.kind);
+                try std.testing.expectEqual(expected.span, actual.span);
+            }
+        },
     }
     if (case.expected_prefix) |prefix| try std.testing.expectEqualStrings(
         prefix,

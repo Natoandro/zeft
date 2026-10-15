@@ -86,9 +86,10 @@ case-sensitive literals. Numbers match
 `[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`. Strings may use single or double quotes
 and the escapes `\\`, `\'`, `\"`, `\n`, `\r`, and `\t`.
 
-An access begins with an identifier and may contain `.property` and
-`[expression]` selectors. Properties are case-sensitive. Sequence indexes are
-zero-based non-negative integers. Parentheses group expressions.
+Any primary expression may be followed by `.property` and `[expression]`
+selectors, including grouped expressions and call results. Properties are
+case-sensitive. Sequence indexes are zero-based non-negative integers.
+Parentheses group expressions.
 
 Calls use `name(argument, ...)`. Pipe syntax, written as `value | name` or
 `value | name(argument, ...)`, is alternate call syntax that passes the piped
@@ -148,9 +149,9 @@ and position. HTML and XML text escape `&`, `<`, and `>`. Attributes also
 escape both quote characters: HTML uses `&quot;` and `&#39;`; XML uses
 `&quot;` and `&apos;`.
 
-Future trusted output values MUST be tagged with their format. A trusted HTML
-value may bypass escaping only in HTML text; a trusted XML value may do so only
-in XML text. Trusted values used in a different format or in an attribute MUST
+Trusted HTML and XML values are tagged with their format. A trusted HTML value
+may bypass escaping only in HTML text; a trusted XML value may do so only in
+XML text. Trusted values used in a different format or in an attribute MUST
 fail rather than silently bypass escaping. Ordinary strings remain escaped.
 
 ## Whitespace

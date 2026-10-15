@@ -543,7 +543,7 @@ pub const success_cases = [_]SuccessCase{
             \\
             ,
             .output =
-            \\filter:function
+            \\function:function
             \\
             ,
             .render_options = render_options,
@@ -672,15 +672,7 @@ fn functionChoice(
 ) anyerror!zeft.Value {
     return .{ .string = "function" };
 }
-fn filterChoice(
-    _: std.mem.Allocator,
-    _: ?*const anyopaque,
-    _: []const zeft.Value,
-) anyerror!zeft.Value {
-    return .{ .string = "filter" };
-}
-
-const functions = [_]zeft.Registration{
+const direct_callables = [_]zeft.Registration{
     .{ .name = "number", .callback = number },
     .{ .name = "greeting", .callback = greeting },
     .{ .name = "join", .callback = join },
@@ -697,25 +689,24 @@ fn negate(
     return .{ .boolean = !args[0].boolean };
 }
 
-const filters = [_]zeft.Registration{
+const pipe_callables = [_]zeft.Registration{
     .{ .name = "negate", .callback = negate },
     .{ .name = "append", .callback = append },
-    .{ .name = "configured", .callback = configured, .user_data = &user_data },
-    .{ .name = "fail", .callback = fail },
-    .{ .name = "choose", .callback = filterChoice },
 };
-const override_functions = functions ++ [_]zeft.Registration{.{
+const callables = direct_callables ++ pipe_callables;
+const override_callables = callables ++ [_]zeft.Registration{.{
     .name = "length",
     .callback = overrideLength,
 }};
-const override_filters = filters ++ [_]zeft.Registration{.{ .name = "upper", .callback = append }};
+const override_callables_with_upper = override_callables ++ [_]zeft.Registration{.{
+    .name = "upper",
+    .callback = append,
+}};
 const render_options: zeft.RenderOptions = .{
     .allocator = std.testing.allocator,
-    .functions = &functions,
-    .filters = &filters,
+    .callables = &callables,
 };
 const override_options: zeft.RenderOptions = .{
     .allocator = std.testing.allocator,
-    .functions = &override_functions,
-    .filters = &override_filters,
+    .callables = &override_callables_with_upper,
 };

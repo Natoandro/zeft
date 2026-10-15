@@ -17,9 +17,9 @@ to the cache. A hit MUST return a retained lease to the matching immutable
 compiled template. A miss MUST compile, store, and return a lease.
 
 Cache matching MUST account for exact identity bytes, source bytes, all compile
-options that affect output or semantics, and the compiler/IR version. In the
-current API, compile options are output format, whitespace policy, and
-indentation bytes. A hash MAY accelerate matching, but equality MUST be
+options that affect output or semantics, and the compiler/IR version. Compile
+options include output format, whitespace policy, indentation bytes, and
+optional source identity. A hash MAY accelerate matching, but equality MUST be
 confirmed against all identity inputs.
 
 ## Source change detection
@@ -42,9 +42,10 @@ Include syntax and identity semantics are defined by the language contract.
 `compile()` MUST compile a parent without looking up its children.
 
 Rendering MUST ask its resolver for the current child on each include
-execution. A resolver MUST retain each returned child for the duration of its
-use. Cache callers populate or reload children with get-or-compile before
-rendering. A lease render pins that lease's root version while resolving
+execution through the public resolver callback. A resolver MUST retain its
+selected child for the duration of rendering it. Cache callers populate or
+reload children with get-or-compile before rendering. A lease render pins that
+lease's root version while resolving
 children from the current cache. A cache render pins the current root version.
 Missing children, children whose initial compilation failed, and include
 cycles MUST return runtime diagnostics with the relevant include identity and

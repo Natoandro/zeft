@@ -67,7 +67,7 @@ fn renderConcurrentOptions(state: *ConcurrentOptionsRender) void {
     var writer = std.Io.Writer.fixed(&state.output);
     const result = state.template.renderWithOptions(&writer, &state.context, .{
         .allocator = state.allocator,
-        .filters = state.registrations,
+        .callables = state.registrations,
     }) catch {
         state.failed = true;
         return;
@@ -1024,7 +1024,7 @@ fn failingCallable(
     return error.DeliberateFailure;
 }
 
-test "built-in functions and filters evaluate through expression IR" {
+test "built-in callables evaluate through expression IR" {
     const result = try zeft.compile(std.testing.allocator, "{{ length(items) }}|{{ name | upper }}|{{ blank | default('fallback') | trim }}", .{});
     var template = switch (result) {
         .success => |value| value,
@@ -1041,7 +1041,7 @@ test "built-in functions and filters evaluate through expression IR" {
     try std.testing.expectEqualStrings("3|ADA|fallback", std.Io.Writer.buffered(&writer));
 }
 
-test "registered functions and filters override built-ins and receive scratch allocation" {
+test "registered callables override built-ins and receive scratch allocation" {
     const result = try zeft.compile(std.testing.allocator, "{{ name | upper }}|{{ name | suffix('!') }}", .{});
     var template = switch (result) {
         .success => |value| value,
@@ -1057,7 +1057,7 @@ test "registered functions and filters override built-ins and receive scratch al
     var writer = std.Io.Writer.fixed(&output);
     const rendered = try template.renderWithOptions(&writer, .{ .name = "Ada" }, .{
         .allocator = std.testing.allocator,
-        .filters = &registrations,
+        .callables = &registrations,
     });
     try std.testing.expectEqual(zeft.RenderResult.success, rendered);
     try std.testing.expectEqualStrings("Ada!|Ada!", std.Io.Writer.buffered(&writer));
@@ -1065,12 +1065,14 @@ test "registered functions and filters override built-ins and receive scratch al
 
 test "callable failures and invalid operands retain originating source spans" {
     const cases = [_]struct { source: []const u8, kind: zeft.RenderErrorKind }{
-        .{ .source = "{{ fail() }}", .kind = .function_failure },
-        .{ .source = "{{ value | fail }}", .kind = .filter_failure },
+        .{ .source = "{{ fail() }}", .kind = .callable_failure },
+        .{ .source = "{{ value | fail }}", .kind = .callable_failure },
         .{ .source = "{{ 'a' - 1 }}", .kind = .invalid_operand },
     };
-    const failing_functions = [_]zeft.Registration{.{ .name = "fail", .callback = failingCallable }};
-    const failing_filters = [_]zeft.Registration{.{ .name = "fail", .callback = failingCallable }};
+    const failing_callables = [_]zeft.Registration{.{
+        .name = "fail",
+        .callback = failingCallable,
+    }};
     for (cases) |case| {
         const result = try zeft.compile(std.testing.allocator, case.source, .{});
         var template = switch (result) {
@@ -1081,8 +1083,7 @@ test "callable failures and invalid operands retain originating source spans" {
         var output: [16]u8 = undefined;
         var writer = std.Io.Writer.fixed(&output);
         const rendered = try template.renderWithOptions(&writer, .{ .value = "ok" }, .{
-            .functions = &failing_functions,
-            .filters = &failing_filters,
+            .callables = &failing_callables,
         });
         switch (rendered) {
             .success => return error.ExpectedDiagnostic,
@@ -1103,6 +1104,12 @@ test "callable failures and invalid operands retain originating source spans" {
                     break :blk zeft.SourceSpan{ .start = start, .end = start + 1 };
                 };
                 try std.testing.expectEqual(@as(?zeft.SourceSpan, expected), diagnostic.span);
+                if (diagnostic.kind == .callable_failure) {
+                    try std.testing.expectEqualStrings(
+                        "DeliberateFailure",
+                        diagnostic.callback_error.?,
+                    );
+                }
             },
         }
     }
@@ -1130,7 +1137,7 @@ test "render scratch allocations are released after callback output" {
     var writer = std.Io.Writer.fixed(&output);
     const rendered = try template.renderWithOptions(&writer, .{ .value = "temporary" }, .{
         .allocator = allocator,
-        .filters = &registrations,
+        .callables = &registrations,
     });
     try std.testing.expectEqual(zeft.RenderResult.success, rendered);
     try std.testing.expectEqualStrings("temporary!", std.Io.Writer.buffered(&writer));
@@ -1145,7 +1152,7 @@ test "render scratch allocations are released after callback output" {
             .{ .value = "temporary" },
             .{
                 .allocator = allocator,
-                .filters = &registrations,
+                .callables = &registrations,
             },
         ),
     );
@@ -1164,7 +1171,7 @@ test "render scratch allocations are released after callback output" {
         .{ .value = "temporary" },
         .{
             .allocator = allocator,
-            .filters = &registrations,
+            .callables = &registrations,
         },
     );
     try std.testing.expect(diagnostic == .failure);
@@ -1180,7 +1187,7 @@ test "fixture runner supports large output and typed callback registrations" {
         .id = "runner-large-output",
         .template = "{{ value | suffix }}",
         .output = value ++ "!",
-        .render_options = .{ .allocator = std.testing.allocator, .filters = &registrations },
+        .render_options = .{ .allocator = std.testing.allocator, .callables = &registrations },
     }, &Context{ .value = value });
 }
 

@@ -121,6 +121,7 @@ test "LC-002 original static writer error propagates" {
     var buffer: [1]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
     try std.testing.expectError(error.WriteFailed, template.render(&writer, .{}));
+    try std.testing.expectEqualStrings("s", buffer[0..1]);
 }
 
 test "LC-003 dynamic writer error releases callback scratch" {
@@ -137,7 +138,7 @@ test "LC-003 dynamic writer error releases callback scratch" {
             ValueContext{ .value = "temporary&" },
             .{
                 .allocator = tracked.allocator(),
-                .filters = &copy_registration,
+                .callables = &copy_registration,
             },
         ),
     );
@@ -165,7 +166,7 @@ test "LC-004 include writer error releases render state and child lease" {
             ValueContext{},
             .{
                 .allocator = tracked.allocator(),
-                .filters = &copy_registration,
+                .callables = &copy_registration,
             },
         ),
     );
@@ -188,13 +189,14 @@ test "LC-005 callback failure releases allocations made before error" {
         ValueContext{},
         .{
             .allocator = tracked.allocator(),
-            .filters = &registration,
+            .callables = &registration,
         },
     );
     try std.testing.expect(rendered == .failure);
     try std.testing.expectEqualDeep(
         zeft.RenderDiagnostic{
-            .kind = .filter_failure,
+            .kind = .callable_failure,
+            .callback_error = "CallbackRejected",
             .span = .{
                 .start = 11,
                 .end = 15,
@@ -217,7 +219,7 @@ test "LC-006 later template diagnostic releases successful callback scratch" {
         ValueContext{},
         .{
             .allocator = tracked.allocator(),
-            .filters = &copy_registration,
+            .callables = &copy_registration,
         },
     );
     try std.testing.expect(rendered == .failure);
@@ -281,7 +283,7 @@ fn renderCompiled(worker: *CompiledWorker) void {
         &worker.context,
         .{
             .allocator = worker.allocator,
-            .functions = &registrations,
+            .callables = &registrations,
         },
     ) catch {
         worker.failed = true;
@@ -379,7 +381,7 @@ fn renderCache(worker: *CacheWorker) void {
         ValueContext{},
         .{
             .allocator = std.heap.page_allocator,
-            .functions = &registrations,
+            .callables = &registrations,
         },
     ) catch {
         worker.failed = true;

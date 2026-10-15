@@ -107,8 +107,9 @@ root names use a symbol table. Every instruction carries a source span.
 Expression IR is stack based. It can load a root symbol or local slot, push a
 literal, select properties or indexes, apply unary and binary operators,
 short-circuit through jumps, validate the evaluated logical right operand,
-invoke functions and filters, and return a value. Call argument counts use
-`usize`.
+invoke a callable, and return a value. Direct calls and pipe syntax lower to
+the same call instruction; pipes place the input value first. Call argument
+counts use `usize`.
 Expression instructions also carry source spans.
 
 The IR types live in `src/compiler/ir.zig`. They are private implementation
@@ -149,31 +150,32 @@ scratch storage sized to the instruction count for larger programs. Expression
 IR is acyclic, so this capacity bounds every possible value push, including
 zero-argument calls.
 
-The runtime value union currently contains null, `bool`, `i64`, `f64`, borrowed byte
+The runtime value union contains null, booleans, `i64`, `f64`, borrowed byte
 strings, callback-backed objects, and callback-backed sequences. Native
-adaptation supports booleans, byte strings, structs, arrays, and slices.
-Aggregate nested values require the root context to be passed by pointer so
-their borrowed storage remains stable. Numeric and optional native fields are
-not implemented yet.
+adaptation supports booleans, integers, floats, optionals, byte strings,
+structs, arrays, and slices. Aggregate nested values require the root context
+to be passed by pointer so their borrowed storage remains stable. An internal
+invalid-value tag carries out-of-range native integers to the render boundary,
+where they become `invalid_operand` diagnostics.
 
 Root context structs are converted at the public boundary into a stack array of
 name/value entries. Objects and sequences retain an opaque pointer plus a
 comptime-generated lookup callback. Property lookup scans names
 case-sensitively; root lookup scans the context entry slice.
 
-All built-ins support direct and pipe calls. Pipe calls try filter and function
-registrations before built-ins; direct calls try function registrations.
-Callback allocation failures propagate as `OutOfMemory`. Other callback errors currently
-become `filter_failure` or `function_failure` diagnostics and do not retain the
-original Zig error name. Callback result bytes may use the render scratch arena.
+All built-ins support direct and pipe calls. Both forms resolve against one
+render-local callable set before built-ins. Callback allocation failures
+propagate as `OutOfMemory`. Other callback errors become
+`callable_failure` diagnostics. Callback result bytes may use the render
+scratch arena.
 
 ## Escaping and output
 
 Lowering assigns either text or attribute escape context to every expression
 write. Rendering combines that context with the compiled HTML/XML format.
-Strings and booleans pass through the escaper; signed integers and `f64`
-numbers are printed directly; null writes nothing; sequences and objects fail
-direct interpolation.
+Ordinary strings and booleans pass through the escaper; format-matched trusted
+values bypass escaping in text; signed integers and `f64` numbers are printed
+directly; null writes nothing; sequences and objects fail direct interpolation.
 
 Output is streamed to the caller's `std.Io.Writer`. A later failure does not
 roll back bytes already written. Writer errors propagate as Zig errors.
@@ -186,7 +188,8 @@ replacement, eviction, failure records, and reference accounting. Compilation
 currently occurs while that mutex is held; rendering does not.
 
 The cache key first uses a Wyhash fingerprint containing the compiler/IR
-version marker, identity, source, format, whitespace policy, and indentation.
+version marker, identity, source, format, whitespace policy, indentation, and
+source identity.
 Exact identity, source, and option equality confirms a hit. Successful reload
 retires the prior version. Failed reload records its diagnostic and preserves
 the last valid entry.
@@ -195,15 +198,14 @@ the last valid entry.
 is destroyed only when its count reaches zero. Cache deinitialization asserts
 that no entry is still leased.
 
-Cache rendering installs private include callback fields in `RenderOptions`.
-The callback acquires the current child entry for each include, tracks active
-identities in a render-local dependency stack, detects cycles, and releases the
-child after its render. Include diagnostic identity bytes are interned into a
-cache-owned diagnostic arena before each child lease is released, and remain
-valid through cache deinitialization. Missing-root identities use the same
-storage. Repeated identities share storage. The
-public resolver abstraction described by the architecture is not implemented
-yet.
+Cache rendering installs an `IncludeResolver` value in `RenderOptions`.
+Its callback acquires the current child entry for each include, tracks active
+identities and ordered edges in a render-local stack, detects cycles, and
+releases the child after its render. Include diagnostic identity bytes and
+ordered dependency-edge stacks are interned into a cache-owned diagnostic
+arena before each child lease is released, and remain valid through cache
+deinitialization. Missing-root identities use the same storage. Repeated
+identities share storage.
 
 ## Verification layout
 

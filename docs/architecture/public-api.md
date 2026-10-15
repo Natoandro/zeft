@@ -35,6 +35,11 @@ is deinitialized. A compiled template owns all finalized data and does not
 borrow source or compile-option bytes. It is deinitialized exactly once after
 all renders finish.
 
+Callers MAY set `CompileOptions.source_identity`. Compilation diagnostics
+borrow that identity for the result lifetime; compiled templates retain their
+own copy and attach it to render diagnostics. `sourceLocation` converts a
+source byte offset to one-based line and Unicode scalar column coordinates.
+
 ## Context values
 
 The native adapter MUST support booleans, signed integers up to 64 bits,
@@ -51,28 +56,33 @@ keep it valid and MUST synchronize mutable context shared by concurrent renders.
 
 ## Callbacks and trusted values
 
-Callables are registered per render with a case-sensitive name, callback, and
-optional user-data pointer. Direct calls and pipes resolve through the same
+Callables are registered per render in one namespace with a case-sensitive
+name, callback, and optional user-data pointer. Direct calls and pipes resolve through the same
 registration set. A callback receives evaluated values and the render scratch
 allocator. Registrations, user data, arguments, and borrowed callback results
 remain valid for the render call. Scratch-backed results MUST NOT escape it.
 Public runtime values use distinct `integer: i64` and `float: f64` variants.
 Numeric literals in template source compile as floats.
 
-Trusted HTML and XML values are explicit public value variants or wrapper
-types. Construction is an application trust boundary. Their format and valid
-output context follow the language contract; a plain string is never trusted.
+Trusted HTML and XML values use the public `Value.trusted_html` and
+`Value.trusted_xml` variants. Constructing either is an application trust
+boundary. Their format and valid output context follow the language contract;
+a plain string is never trusted.
 
 ## Include resolver
 
-Includes resolve through a caller-supplied interface independent of filesystems
-and caches. Conceptually, the resolver accepts an exact identity and returns a
-retained immutable compiled template or a diagnostic. The retained template
-MUST remain alive for its use by the render.
+Includes resolve through the public IncludeResolver callback interface,
+independent of filesystems and caches. It receives the exact identity, writer,
+context, format, render options, and directive span. It renders the selected
+retained immutable child synchronously and releases its lease after use. A
+resolver reports missing children, cycles, and child compilation failures
+through RenderResult.
 
 `TemplateCache` implements this resolver contract and remains the convenient
 default for reloadable applications. Applications MAY provide another resolver
 for embedded resources, databases, package systems, or an existing cache.
+Custom resolvers MUST retain child templates for the complete render call and
+track active identities to report recursive inclusion.
 
 ## Diagnostics
 
@@ -84,6 +94,8 @@ original source.
 Nested include failures MUST expose an ordered include stack. Each frame
 identifies the parent, child, and include-directive span. A child compilation
 failure also retains the child's category, span, and source identity.
+Cache diagnostic strings and include frames remain valid until cache
+deinitialization.
 
 Diagnostics distinguish compile failures from render failures. Writer errors
 are not template diagnostics and propagate unchanged. A callback diagnostic

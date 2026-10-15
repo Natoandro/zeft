@@ -130,7 +130,7 @@ test "S-005 include diagnostics survive child eviction during an active render" 
     }};
     var output: [32]u8 = undefined;
     var writer = std.Io.Writer.fixed(&output);
-    const result = try root.renderWithOptions(&writer, .{}, .{ .functions = &registrations });
+    const result = try root.renderWithOptions(&writer, .{}, .{ .callables = &registrations });
     try std.testing.expectEqual(zeft.RenderErrorKind.missing_include, result.failure.kind);
     try std.testing.expectEqualStrings("missing", result.failure.include_identity.?);
     try std.testing.expectEqualStrings("child", result.failure.include_parent_identity.?);
@@ -152,8 +152,7 @@ test "S-006 callable allocation failures propagate as allocator errors" {
         var output: [16]u8 = undefined;
         var writer = std.Io.Writer.fixed(&output);
         try std.testing.expectError(error.OutOfMemory, template.renderWithOptions(&writer, .{}, .{
-            .functions = &registrations,
-            .filters = &registrations,
+            .callables = &registrations,
         }));
     }
 }
@@ -178,7 +177,7 @@ test "S-007 expression stacks and call argument counts support large flat calls"
         .{},
         .{
             .allocator = std.testing.allocator,
-            .functions = &registrations,
+            .callables = &registrations,
         },
     ));
     try std.testing.expectEqualStrings("65537", writer.buffered());
@@ -279,7 +278,7 @@ test "S-009 all builtins support direct calls and function registrations overrid
     try std.testing.expectEqual(zeft.RenderResult.success, try overridden.renderWithOptions(
         &writer,
         .{},
-        .{ .functions = &registrations },
+        .{ .callables = &registrations },
     ));
     try std.testing.expectEqualStrings("1|1", writer.buffered());
 }

@@ -46,8 +46,8 @@ Zeft integers. Integers outside `[-2**63, 2**63 - 1]` raise
 handled as a boolean before integer conversion.
 
 Render output is returned as `str`, decoded from the engine's UTF-8 output.
-The initial binding does not expose include resolvers, function or filter
-callbacks, or template caches. A template that attempts an include therefore
+The initial binding does not expose include resolvers, callable callbacks, or
+template caches. A template that attempts an include therefore
 raises `RenderError` for the engine's missing-template diagnostic.
 
 The module MUST define `TemplateError`, `CompileError(TemplateError)`, and

@@ -102,15 +102,7 @@ fn functionChoice(
 ) anyerror!zeft.Value {
     return .{ .string = "function" };
 }
-fn filterChoice(
-    _: std.mem.Allocator,
-    _: ?*const anyopaque,
-    _: []const zeft.Value,
-) anyerror!zeft.Value {
-    return .{ .string = "filter" };
-}
-
-const functions = [_]zeft.Registration{
+const direct_callables = [_]zeft.Registration{
     .{ .name = "number", .callback = number },
     .{ .name = "greeting", .callback = greeting },
     .{ .name = "join", .callback = join },
@@ -127,31 +119,276 @@ fn negate(
     return .{ .boolean = !args[0].boolean };
 }
 
-const filters = [_]zeft.Registration{
+const pipe_callables = [_]zeft.Registration{
     .{ .name = "negate", .callback = negate },
     .{ .name = "append", .callback = append },
-    .{ .name = "configured", .callback = configured, .user_data = &user_data },
-    .{ .name = "fail", .callback = fail },
-    .{ .name = "choose", .callback = filterChoice },
 };
-const override_functions = functions ++ [_]zeft.Registration{.{
+const callables = direct_callables ++ pipe_callables;
+const override_callables = callables ++ [_]zeft.Registration{.{
     .name = "length",
     .callback = overrideLength,
 }};
-const override_filters = filters ++ [_]zeft.Registration{.{ .name = "upper", .callback = append }};
+const override_callables_with_upper = override_callables ++ [_]zeft.Registration{.{
+    .name = "upper",
+    .callback = append,
+}};
 const render_options: zeft.RenderOptions = .{
     .allocator = std.testing.allocator,
-    .functions = &functions,
-    .filters = &filters,
+    .callables = &callables,
 };
 const override_options: zeft.RenderOptions = .{
     .allocator = std.testing.allocator,
-    .functions = &override_functions,
-    .filters = &override_filters,
+    .callables = &override_callables_with_upper,
 };
 
 test "expression fixtures compile and render exact output" {
     try fixtures.expectSuccessCases(expression_cases.success_cases);
+}
+
+fn identity(
+    _: std.mem.Allocator,
+    _: ?*const anyopaque,
+    args: []const zeft.Value,
+) anyerror!zeft.Value {
+    if (args.len != 1) return error.InvalidArguments;
+    return args[0];
+}
+
+fn trustedValue(
+    _: std.mem.Allocator,
+    pointer: ?*const anyopaque,
+    args: []const zeft.Value,
+) anyerror!zeft.Value {
+    if (args.len != 0) return error.InvalidArguments;
+    const raw = pointer orelse return error.MissingValue;
+    const value: *const zeft.Value = @ptrCast(@alignCast(raw));
+    return value.*;
+}
+
+test "postfix selectors follow grouped expressions and call results" {
+    const compiled = try zeft.compile(
+        std.testing.allocator,
+        "{{ (profile.user).name }}|{{ identity(profile.user).label }}|" ++
+            "{{ identity(people)[1].name }}",
+        .{},
+    );
+    var template = switch (compiled) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+
+    const registrations = [_]zeft.Registration{.{ .name = "identity", .callback = identity }};
+    var output: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.renderWithOptions(&writer, &Context{}, .{
+        .allocator = std.testing.allocator,
+        .callables = &registrations,
+    });
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings("Ada|engineer|Grace", std.Io.Writer.buffered(&writer));
+}
+
+test "native numbers and optionals adapt through root nested and sequence values" {
+    const NativeContext = struct {
+        signed: i16 = -12,
+        unsigned: u32 = 42,
+        single: f32 = 1.5,
+        absent: ?i64 = null,
+        nested: struct { value: ?u8 = 7 } = .{},
+        sequence: [2]?i32 = .{ 9, null },
+    };
+    const compiled = try zeft.compile(
+        std.testing.allocator,
+        "{{ signed }}|{{ unsigned }}|{{ single }}|{{ absent }}|" ++
+            "{{ nested.value }}|{{ sequence[0] }}|{{ sequence[1] }}",
+        .{},
+    );
+    var template = switch (compiled) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    var output: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, &NativeContext{});
+    try std.testing.expectEqual(zeft.RenderResult.success, rendered);
+    try std.testing.expectEqualStrings(
+        "-12|42|1.5||7|9|",
+        std.Io.Writer.buffered(&writer),
+    );
+}
+
+test "out of range unsigned native values report invalid_operand" {
+    const OverflowContext = struct { value: u64 };
+    const compiled = try zeft.compile(std.testing.allocator, "{{ value }}", .{});
+    var template = switch (compiled) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    var output: [32]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const rendered = try template.render(&writer, &OverflowContext{
+        .value = std.math.maxInt(u64),
+    });
+    try std.testing.expect(rendered == .failure);
+    try std.testing.expectEqual(zeft.RenderErrorKind.invalid_operand, rendered.failure.kind);
+}
+
+const NativeValueWorker = struct {
+    template: *const zeft.CompiledTemplate,
+    value: i64,
+    expected: []const u8,
+    failed: bool = false,
+
+    fn run(self: *NativeValueWorker) void {
+        var output: [32]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&output);
+        const ContextType = struct { value: i64 };
+        const rendered = self.template.render(&writer, &ContextType{ .value = self.value }) catch {
+            self.failed = true;
+            return;
+        };
+        self.failed = rendered != .success or
+            !std.mem.eql(u8, std.Io.Writer.buffered(&writer), self.expected);
+    }
+};
+
+test "native numeric contexts adapt independently during concurrent renders" {
+    const compiled = try zeft.compile(std.testing.allocator, "{{ value }}", .{});
+    var template = switch (compiled) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer template.deinit();
+    var workers = [_]NativeValueWorker{
+        .{ .template = &template, .value = -7, .expected = "-7" },
+        .{ .template = &template, .value = 0, .expected = "0" },
+        .{ .template = &template, .value = 19, .expected = "19" },
+        .{ .template = &template, .value = 42, .expected = "42" },
+    };
+    var threads: [workers.len]std.Thread = undefined;
+    for (&workers, 0..) |*worker, index| {
+        threads[index] = try std.Thread.spawn(.{}, NativeValueWorker.run, .{worker});
+    }
+    for (threads) |thread| thread.join();
+    for (workers) |worker| try std.testing.expect(!worker.failed);
+}
+
+test "trusted HTML and XML output requires a matching text context" {
+    const html = zeft.Value{ .trusted_html = "<b>&</b>" };
+    const xml = zeft.Value{ .trusted_xml = "<b>&amp;</b>" };
+    const html_registration = [_]zeft.Registration{.{
+        .name = "value",
+        .callback = trustedValue,
+        .user_data = &html,
+    }};
+    const xml_registration = [_]zeft.Registration{.{
+        .name = "value",
+        .callback = trustedValue,
+        .user_data = &xml,
+    }};
+
+    const html_compiled = try zeft.compile(std.testing.allocator, "{{ value() }}", .{});
+    var html_template = switch (html_compiled) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer html_template.deinit();
+    var output: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const html_result = try html_template.renderWithOptions(&writer, .{}, .{
+        .allocator = std.testing.allocator,
+        .callables = &html_registration,
+    });
+    try std.testing.expectEqual(zeft.RenderResult.success, html_result);
+    try std.testing.expectEqualStrings("<b>&</b>", std.Io.Writer.buffered(&writer));
+
+    const mismatch_result = try html_template.renderWithOptions(&writer, .{}, .{
+        .allocator = std.testing.allocator,
+        .callables = &xml_registration,
+    });
+    try std.testing.expect(mismatch_result == .failure);
+    try std.testing.expectEqual(
+        zeft.RenderErrorKind.invalid_operand,
+        mismatch_result.failure.kind,
+    );
+
+    const attribute_compiled = try zeft.compile(
+        std.testing.allocator,
+        "<p title=\"{{ value() }}\"></p>",
+        .{},
+    );
+    var attribute_template = switch (attribute_compiled) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer attribute_template.deinit();
+    const attribute_result = try attribute_template.renderWithOptions(&writer, .{}, .{
+        .allocator = std.testing.allocator,
+        .callables = &html_registration,
+    });
+    try std.testing.expect(attribute_result == .failure);
+    try std.testing.expectEqual(
+        zeft.RenderErrorKind.invalid_operand,
+        attribute_result.failure.kind,
+    );
+
+    const xml_compiled = try zeft.compile(
+        std.testing.allocator,
+        "{{ value() }}",
+        .{ .format = .xml },
+    );
+    var xml_template = switch (xml_compiled) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer xml_template.deinit();
+    var xml_output: [64]u8 = undefined;
+    var xml_writer = std.Io.Writer.fixed(&xml_output);
+    const xml_result = try xml_template.renderWithOptions(&xml_writer, .{}, .{
+        .allocator = std.testing.allocator,
+        .callables = &xml_registration,
+    });
+    try std.testing.expectEqual(zeft.RenderResult.success, xml_result);
+    try std.testing.expectEqualStrings(
+        "<b>&amp;</b>",
+        std.Io.Writer.buffered(&xml_writer),
+    );
+    const xml_mismatch = try xml_template.renderWithOptions(&xml_writer, .{}, .{
+        .allocator = std.testing.allocator,
+        .callables = &html_registration,
+    });
+    try std.testing.expect(xml_mismatch == .failure);
+    try std.testing.expectEqual(
+        zeft.RenderErrorKind.invalid_operand,
+        xml_mismatch.failure.kind,
+    );
+
+    const xml_attribute_compiled = try zeft.compile(
+        std.testing.allocator,
+        "<p title=\"{{ value() }}\"/>",
+        .{ .format = .xml },
+    );
+    var xml_attribute_template = switch (xml_attribute_compiled) {
+        .success => |value| value,
+        .failure => return error.UnexpectedCompileFailure,
+    };
+    defer xml_attribute_template.deinit();
+    const xml_attribute_result = try xml_attribute_template.renderWithOptions(
+        &xml_writer,
+        .{},
+        .{
+            .allocator = std.testing.allocator,
+            .callables = &xml_registration,
+        },
+    );
+    try std.testing.expect(xml_attribute_result == .failure);
+    try std.testing.expectEqual(
+        zeft.RenderErrorKind.invalid_operand,
+        xml_attribute_result.failure.kind,
+    );
 }
 
 fn numericConstant(
@@ -196,7 +433,7 @@ test "signed integers preserve exact values and numeric semantics" {
     var writer = std.Io.Writer.fixed(&output);
     const rendered = try template.renderWithOptions(&writer, .{}, .{
         .allocator = std.testing.allocator,
-        .functions = &registrations,
+        .callables = &registrations,
     });
     try std.testing.expectEqual(zeft.RenderResult.success, rendered);
     try std.testing.expectEqualStrings(
@@ -224,7 +461,7 @@ test "signed integer overflow reports invalid_operand" {
     var writer = std.Io.Writer.fixed(&output);
     const rendered = try template.renderWithOptions(&writer, .{}, .{
         .allocator = std.testing.allocator,
-        .functions = &registration,
+        .callables = &registration,
     });
     try std.testing.expect(rendered == .failure);
     try std.testing.expectEqual(zeft.RenderErrorKind.invalid_operand, rendered.failure.kind);
@@ -244,7 +481,7 @@ test "signed integer overflow reports invalid_operand" {
     const exact_float_result = try exact_float_template.renderWithOptions(
         &exact_float_writer,
         .{},
-        .{ .allocator = std.testing.allocator, .functions = &registration },
+        .{ .allocator = std.testing.allocator, .callables = &registration },
     );
     try std.testing.expect(exact_float_result == .failure);
     try std.testing.expectEqual(

@@ -17,6 +17,9 @@ pub const CompileErrorKind = core.CompileErrorKind;
 pub const RenderErrorKind = core.RenderErrorKind;
 pub const CompileDiagnostic = core.CompileDiagnostic;
 pub const RenderDiagnostic = core.RenderDiagnostic;
+pub const IncludeFrame = core.IncludeFrame;
+pub const SourceLocation = core.SourceLocation;
+pub const sourceLocation = core.sourceLocation;
 
 pub const CompileResult = union(enum) {
     success: CompiledTemplate,
@@ -28,6 +31,7 @@ pub const Value = runtime.Value;
 pub const Callable = runtime.Callable;
 pub const Registration = runtime.Registration;
 pub const RenderOptions = runtime.RenderOptions;
+pub const IncludeResolver = runtime.IncludeResolver;
 
 pub const ContextEntry = runtime.ContextEntry;
 
@@ -79,8 +83,8 @@ pub const CompiledTemplate = struct {
         return self.finalized().logical_size;
     }
 
-    /// Render against a struct with byte-string fields, or pass a pointer when
-    /// the context contains nested structs, arrays, or slices. Runtime template
+    /// Render against a struct with scalar native fields, or pass a pointer
+    /// when it contains nested structs, arrays, or slices. Runtime template
     /// errors are returned as diagnostics; writer errors propagate unchanged.
     pub fn render(
         self: *const CompiledTemplate,
@@ -88,7 +92,7 @@ pub const CompiledTemplate = struct {
         context: anytype,
     ) anyerror!RenderResult {
         const compiled = self.finalized();
-        return @call(
+        const result = try @call(
             .never_inline,
             renderContext,
             .{
@@ -99,9 +103,10 @@ pub const CompiledTemplate = struct {
                 RenderOptions{},
             },
         );
+        return attachSourceIdentity(result, compiled.options.source_identity);
     }
 
-    /// Render with caller supplied filters, functions, and scratch allocator.
+    /// Render with caller supplied callables, resolver, and scratch allocator.
     /// Registered callback data must remain valid for the duration of render.
     pub fn renderWithOptions(
         self: *const CompiledTemplate,
@@ -110,7 +115,7 @@ pub const CompiledTemplate = struct {
         options: RenderOptions,
     ) anyerror!RenderResult {
         const compiled = self.finalized();
-        return @call(
+        const result = try @call(
             .never_inline,
             renderContext,
             .{
@@ -121,6 +126,7 @@ pub const CompiledTemplate = struct {
                 options,
             },
         );
+        return attachSourceIdentity(result, compiled.options.source_identity);
     }
 
     pub fn renderRuntime(
@@ -130,15 +136,25 @@ pub const CompiledTemplate = struct {
         options: RenderOptions,
     ) anyerror!RenderResult {
         const compiled = self.finalized();
-        return runtime.renderWithOptions(
+        const result = try runtime.renderWithOptions(
             compiled.program,
             writer,
             context,
             compiled.options.format,
             options,
         );
+        return attachSourceIdentity(result, compiled.options.source_identity);
     }
 };
+
+fn attachSourceIdentity(result: RenderResult, identity: ?[]const u8) RenderResult {
+    if (result == .failure and result.failure.source_identity == null) {
+        var diagnostic = result.failure;
+        diagnostic.source_identity = identity;
+        return .{ .failure = diagnostic };
+    }
+    return result;
+}
 
 const CacheEntry = struct {
     identity: []const u8,
@@ -182,6 +198,7 @@ const CacheRenderFrame = struct {
     cache: *TemplateCache,
     allocator: std.mem.Allocator,
     dependencies: std.ArrayList([]const u8) = .empty,
+    edges: std.ArrayList(core.IncludeFrame) = .empty,
 };
 
 /// Thread-safe cache for immutable compiled templates and independently loaded includes.
@@ -213,20 +230,25 @@ pub const TemplateCache = struct {
     ) std.mem.Allocator.Error!CacheCompileResult {
         self.mutex.lock();
         defer self.mutex.unlock();
-        const fingerprint = cacheFingerprint(identity, source, options);
+        var compile_options = options;
+        if (compile_options.source_identity == null) {
+            compile_options.source_identity = identity;
+        }
+        const fingerprint = cacheFingerprint(identity, source, compile_options);
         for (self.entries.items) |entry| {
             if (!entry.retired and std.mem.eql(
                 u8,
                 entry.identity,
                 identity,
             ) and entry.fingerprint == fingerprint and
-                std.mem.eql(u8, entry.source, source) and optionsEqual(entry.options, options))
+                std.mem.eql(u8, entry.source, source) and
+                optionsEqual(entry.options, compile_options))
             {
                 entry.references += 1;
                 return .{ .success = .{ .cache = self, .entry = entry } };
             }
         }
-        const compiled = try compile(self.allocator, source, options);
+        const compiled = try compile(self.allocator, source, compile_options);
         switch (compiled) {
             .failure => |diagnostic| {
                 try self.recordFailure(identity, diagnostic);
@@ -239,19 +261,24 @@ pub const TemplateCache = struct {
                 errdefer self.allocator.free(identity_copy);
                 const source_copy = try self.allocator.dupe(u8, source);
                 errdefer self.allocator.free(source_copy);
-                const indentation_copy = try self.allocator.dupe(u8, options.indentation);
+                const indentation_copy = try self.allocator.dupe(
+                    u8,
+                    compile_options.indentation,
+                );
                 errdefer self.allocator.free(indentation_copy);
                 const new_entry = try self.allocator.create(CacheEntry);
                 errdefer self.allocator.destroy(new_entry);
                 new_entry.* = .{
                     .identity = identity_copy,
                     .source = source_copy,
-                    .options = options,
+                    .options = compile_options,
                     .fingerprint = fingerprint,
                     .template = owned_template,
                     .references = 1,
                 };
                 new_entry.options.indentation = indentation_copy;
+                new_entry.options.source_identity =
+                    owned_template.finalized().options.source_identity;
                 // Reserve every list slot before retiring the current version.
                 // If either allocation fails, the previous entry stays current.
                 try self.all_entries.ensureUnusedCapacity(self.allocator, 1);
@@ -294,7 +321,7 @@ pub const TemplateCache = struct {
     ) anyerror!RenderResult {
         var root = self.acquire(identity) orelse return self.persistIncludeDiagnostic(.{
             .failure = .{ .kind = .missing_template, .include_identity = identity },
-        });
+        }, &.{});
         defer root.deinit();
         return self.renderLeaseWithAllocator(allocator, &root, writer, context, options);
     }
@@ -319,12 +346,15 @@ pub const TemplateCache = struct {
     ) anyerror!RenderResult {
         var frame = CacheRenderFrame{ .cache = self, .allocator = allocator };
         defer frame.dependencies.deinit(allocator);
+        defer frame.edges.deinit(allocator);
         try frame.dependencies.append(allocator, lease.entry.identity);
         var configured = options;
-        configured.include_context = &frame;
-        configured.include_resolver = resolveCachedInclude;
+        configured.include_resolver = .{
+            .context = &frame,
+            .resolve = resolveCachedInclude,
+        };
         const result = try lease.entry.template.renderWithOptions(writer, context, configured);
-        return self.persistIncludeDiagnostic(result);
+        return self.persistIncludeDiagnostic(result, &.{});
     }
 
     pub fn deinit(self: *TemplateCache) void {
@@ -351,9 +381,12 @@ pub const TemplateCache = struct {
     fn persistIncludeDiagnostic(
         self: *TemplateCache,
         result: RenderResult,
+        stack: []const core.IncludeFrame,
     ) std.mem.Allocator.Error!RenderResult {
         if (result != .failure or (result.failure.include_identity == null and
-            result.failure.include_parent_identity == null)) return result;
+            result.failure.include_parent_identity == null and
+            result.failure.source_identity == null and result.failure.include_stack.len == 0 and
+            stack.len == 0)) return result;
         self.mutex.lock();
         defer self.mutex.unlock();
         var diagnostic = result.failure;
@@ -362,6 +395,41 @@ pub const TemplateCache = struct {
         }
         if (diagnostic.include_parent_identity) |identity| {
             diagnostic.include_parent_identity = try self.persistIdentity(identity);
+        }
+        if (diagnostic.source_identity) |identity| {
+            diagnostic.source_identity = try self.persistIdentity(identity);
+        }
+        if (diagnostic.include_compile_diagnostic) |*compile_diagnostic| {
+            if (compile_diagnostic.source_identity) |identity| {
+                compile_diagnostic.source_identity = try self.persistIdentity(identity);
+            }
+        }
+        if (diagnostic.include_stack.len == 0 and stack.len > 0) {
+            const owned_stack = try self.diagnostic_storage.allocator().alloc(
+                core.IncludeFrame,
+                stack.len,
+            );
+            for (stack, 0..) |edge, index| {
+                owned_stack[index] = .{
+                    .parent_identity = try self.persistIdentity(edge.parent_identity),
+                    .child_identity = try self.persistIdentity(edge.child_identity),
+                    .span = edge.span,
+                };
+            }
+            diagnostic.include_stack = owned_stack;
+        } else if (diagnostic.include_stack.len > 0) {
+            const owned_stack = try self.diagnostic_storage.allocator().alloc(
+                core.IncludeFrame,
+                diagnostic.include_stack.len,
+            );
+            for (diagnostic.include_stack, 0..) |edge, index| {
+                owned_stack[index] = .{
+                    .parent_identity = try self.persistIdentity(edge.parent_identity),
+                    .child_identity = try self.persistIdentity(edge.child_identity),
+                    .span = edge.span,
+                };
+            }
+            diagnostic.include_stack = owned_stack;
         }
         return .{ .failure = diagnostic };
     }
@@ -443,9 +511,11 @@ pub const TemplateCache = struct {
         errdefer self.allocator.free(identity_copy);
         try self.failures.ensureUnusedCapacity(self.allocator, 1);
         self.clearFailure(identity);
+        var owned_diagnostic = diagnostic;
+        owned_diagnostic.source_identity = identity_copy;
         self.failures.appendAssumeCapacity(.{
             .identity = identity_copy,
-            .diagnostic = diagnostic,
+            .diagnostic = owned_diagnostic,
         });
     }
 
@@ -474,39 +544,63 @@ fn resolveCachedInclude(
     const frame: *CacheRenderFrame = @ptrCast(@alignCast(raw));
     const parent_identity = frame.dependencies.items[frame.dependencies.items.len - 1];
     for (frame.dependencies.items) |active| if (std.mem.eql(u8, active, identity)) {
-        return .{ .failure = .{
+        try frame.edges.append(frame.allocator, .{
+            .parent_identity = parent_identity,
+            .child_identity = identity,
+            .span = span,
+        });
+        defer _ = frame.edges.pop();
+        return frame.cache.persistIncludeDiagnostic(.{ .failure = .{
             .kind = .include_cycle,
             .span = span,
             .include_identity = identity,
             .include_parent_identity = parent_identity,
-        } };
+        } }, frame.edges.items);
     };
     var child = frame.cache.acquire(identity) orelse {
         const compile_diagnostic = frame.cache.failureFor(identity);
-        return .{ .failure = .{
+        try frame.edges.append(frame.allocator, .{
+            .parent_identity = parent_identity,
+            .child_identity = identity,
+            .span = span,
+        });
+        defer _ = frame.edges.pop();
+        return frame.cache.persistIncludeDiagnostic(.{ .failure = .{
             .kind = if (compile_diagnostic != null) .include_compile_failure else .missing_include,
             .span = span,
             .include_identity = identity,
             .include_parent_identity = parent_identity,
             .include_compile_diagnostic = compile_diagnostic,
-        } };
+        } }, frame.edges.items);
     };
     defer child.deinit();
     try frame.dependencies.append(frame.allocator, child.entry.identity);
     defer _ = frame.dependencies.pop();
+    try frame.edges.append(frame.allocator, .{
+        .parent_identity = parent_identity,
+        .child_identity = child.entry.identity,
+        .span = span,
+    });
+    defer _ = frame.edges.pop();
     _ = format;
     const result = try child.entry.template.renderRuntime(writer, context, options);
     // Copy dependency strings while the child's retained storage is still alive.
-    return frame.cache.persistIncludeDiagnostic(result);
+    return frame.cache.persistIncludeDiagnostic(result, frame.edges.items);
 }
 
 fn cacheFingerprint(identity: []const u8, source: []const u8, options: CompileOptions) u64 {
     var hasher = std.hash.Wyhash.init(0x5a454654);
-    hasher.update("zeft-compiler-ir-2");
+    hasher.update("zeft-compiler-ir-3");
     hasher.update(identity);
     hasher.update(source);
     hasher.update(&.{ @intFromEnum(options.format), @intFromEnum(options.whitespace) });
     hasher.update(options.indentation);
+    if (options.source_identity) |source_identity| {
+        hasher.update(&.{1});
+        hasher.update(source_identity);
+    } else {
+        hasher.update(&.{0});
+    }
     return hasher.final();
 }
 
@@ -515,7 +609,15 @@ fn optionsEqual(left: CompileOptions, right: CompileOptions) bool {
         u8,
         left.indentation,
         right.indentation,
-    );
+    ) and optionalBytesEqual(left.source_identity, right.source_identity);
+}
+
+fn optionalBytesEqual(left: ?[]const u8, right: ?[]const u8) bool {
+    if (left) |left_bytes| {
+        const right_bytes = right orelse return false;
+        return std.mem.eql(u8, left_bytes, right_bytes);
+    }
+    return right == null;
 }
 
 fn renderContext(
@@ -556,8 +658,12 @@ fn renderContext(
                 else
                     &@field(context, field.name);
                 break :blk .{ .string = runtime.stringValue(field.type, field_pointer) };
-            } else if (comptime context_is_pointer) blk: {
-                break :blk runtime.adapt(field.type, &@field(context.*, field.name));
+            } else if (comptime context_is_pointer or !runtime.isAggregate(field.type)) blk: {
+                const field_pointer = if (comptime context_is_pointer)
+                    &@field(context.*, field.name)
+                else
+                    &@field(context, field.name);
+                break :blk runtime.adapt(field.type, field_pointer);
             } else @compileError("nested context values require passing a pointer to the context struct"),
         };
     }
@@ -578,22 +684,40 @@ pub fn compile(
     const parsed = try parser.parseWithFormat(temp_allocator, source, options.format);
     const document = switch (parsed) {
         .success => |value| value,
-        .failure => |diagnostic| return .{ .failure = diagnostic },
+        .failure => |diagnostic| return .{ .failure = withCompileIdentity(
+            diagnostic,
+            options.source_identity,
+        ) },
     };
     const analyzed_result = try analysis.analyze(temp_allocator, source, document);
     const analyzed = switch (analyzed_result) {
         .success => |value| value,
-        .failure => |diagnostic| return .{ .failure = diagnostic },
+        .failure => |diagnostic| return .{ .failure = withCompileIdentity(
+            diagnostic,
+            options.source_identity,
+        ) },
     };
     const lowered = try lower.lower(temp_allocator, document, analyzed, options);
     const program = switch (lowered) {
         .success => |value| value,
-        .failure => |diagnostic| return .{ .failure = diagnostic },
+        .failure => |diagnostic| return .{ .failure = withCompileIdentity(
+            diagnostic,
+            options.source_identity,
+        ) },
     };
 
     // Run optimization on every successful compile, including the no-op case.
     const optimized = try optimizer.optimize(temp_allocator, program);
     return .{ .success = try finalize(allocator, temp_allocator, optimized, options) };
+}
+
+fn withCompileIdentity(
+    diagnostic: CompileDiagnostic,
+    identity: ?[]const u8,
+) CompileDiagnostic {
+    var result = diagnostic;
+    result.source_identity = identity;
+    return result;
 }
 
 fn finalize(
@@ -635,11 +759,7 @@ fn finalize(
                 } },
                 else => {},
             },
-            .call_function => |call| instruction.data = .{ .call_function = .{
-                .name = try interned.intern(call.name),
-                .argument_count = call.argument_count,
-            } },
-            .call_filter => |call| instruction.data = .{ .call_filter = .{
+            .call => |call| instruction.data = .{ .call = .{
                 .name = try interned.intern(call.name),
                 .argument_count = call.argument_count,
             } },
@@ -649,6 +769,10 @@ fn finalize(
     }
 
     const indentation = try persistent.dupe(u8, options.indentation);
+    const source_identity = if (options.source_identity) |identity|
+        try persistent.dupe(u8, identity)
+    else
+        null;
     const instructions = try persistent.dupe(ir.Instruction, program.instructions);
     for (instructions) |*instruction| switch (instruction.data) {
         .write_static => |*id| id.* = string_map[id.*],
@@ -659,6 +783,7 @@ fn finalize(
         symbols.len * @sizeOf(analysis.Symbol) +
         instructions.len * @sizeOf(ir.Instruction) +
         expressions.len * @sizeOf(ir.ExpressionProgram) + indentation.len;
+    if (source_identity) |identity| logical_size += identity.len;
     for (expressions) |expr| logical_size += expr.instructions.len *
         @sizeOf(ir.ExpressionInstruction);
     for (interned.values.items) |bytes| logical_size += bytes.len;
@@ -676,6 +801,7 @@ fn finalize(
         .options = options,
     };
     finalized.options.indentation = indentation;
+    finalized.options.source_identity = source_identity;
     return .{ .impl = finalized };
 }
 

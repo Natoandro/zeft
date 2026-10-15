@@ -9,6 +9,61 @@ const child = fixture_data.includes.child.template;
 const child_v2 = fixture_data.includes.child_v2.template;
 const invalid = fixture_data.includes.invalid.template;
 
+const CustomResolverState = struct {
+    root: ?*const zeft.CompiledTemplate = null,
+    child: ?*const zeft.CompiledTemplate = null,
+    active: [8][]const u8 = undefined,
+    depth: usize = 0,
+
+    fn resolve(
+        raw: *anyopaque,
+        identity: []const u8,
+        writer: *std.Io.Writer,
+        context_entries: []const zeft.ContextEntry,
+        format: zeft.OutputFormat,
+        options: zeft.RenderOptions,
+        span: zeft.SourceSpan,
+    ) anyerror!zeft.RenderResult {
+        const state: *CustomResolverState = @ptrCast(@alignCast(raw));
+        for (state.active[0..state.depth]) |active| {
+            if (std.mem.eql(u8, active, identity)) return .{ .failure = .{
+                .kind = .include_cycle,
+                .span = span,
+                .include_identity = identity,
+                .include_parent_identity = state.active[state.depth - 1],
+            } };
+        }
+        const template = if (std.mem.eql(u8, identity, "root"))
+            state.root
+        else if (std.mem.eql(u8, identity, "child"))
+            state.child
+        else
+            null;
+        const child_template = template orelse return .{ .failure = .{
+            .kind = .missing_include,
+            .span = span,
+            .include_identity = identity,
+            .include_parent_identity = state.active[state.depth - 1],
+        } };
+        state.active[state.depth] = identity;
+        state.depth += 1;
+        defer state.depth -= 1;
+        _ = format;
+        return child_template.renderRuntime(writer, context_entries, options);
+    }
+
+    fn interface(self: *CustomResolverState) zeft.IncludeResolver {
+        return .{ .context = @ptrCast(self), .resolve = resolve };
+    }
+};
+
+fn compileTemplate(source: []const u8, identity: []const u8) !zeft.CompiledTemplate {
+    return switch (try zeft.compile(allocator, source, .{ .source_identity = identity })) {
+        .success => |template| template,
+        .failure => error.UnexpectedCompileFailure,
+    };
+}
+
 const cache_cases = @import("fixtures/cache.zig");
 
 fn load(
@@ -68,6 +123,57 @@ test "CA-001 cache hits distinct identities and source versions" {
     defer changed.deinit();
     try expectLease(&first, "<p>&lt;Ada&gt;</p>");
     try expectLease(&changed, "<b>&lt;Ada&gt;</b>");
+}
+
+test "custom include resolver renders children and handles missing and cyclic identities" {
+    var parent = try compileTemplate(root, "root");
+    defer parent.deinit();
+    var child_template = try compileTemplate(child, "child");
+    defer child_template.deinit();
+    var state = CustomResolverState{
+        .root = &parent,
+        .child = &child_template,
+        .depth = 1,
+    };
+    state.active[0] = "root";
+    var output: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+    const options: zeft.RenderOptions = .{
+        .allocator = allocator,
+        .include_resolver = state.interface(),
+    };
+    try std.testing.expectEqual(
+        zeft.RenderResult.success,
+        try parent.renderWithOptions(&writer, context, options),
+    );
+    try std.testing.expectEqualStrings(fixture_data.includes.root.output, writer.buffered());
+
+    var missing = try compileTemplate("{% include \"absent\" %}", "root");
+    defer missing.deinit();
+    state.root = &missing;
+    state.depth = 1;
+    var missing_output: [32]u8 = undefined;
+    var missing_writer = std.Io.Writer.fixed(&missing_output);
+    const missing_result = try missing.renderWithOptions(
+        &missing_writer,
+        context,
+        options,
+    );
+    try std.testing.expect(missing_result == .failure);
+    try std.testing.expectEqual(zeft.RenderErrorKind.missing_include, missing_result.failure.kind);
+
+    var cycle_root = try compileTemplate("A{% include \"child\" %}", "root");
+    defer cycle_root.deinit();
+    var cycle_child = try compileTemplate("B{% include \"root\" %}", "child");
+    defer cycle_child.deinit();
+    state.root = &cycle_root;
+    state.child = &cycle_child;
+    state.depth = 1;
+    var cycle_output: [32]u8 = undefined;
+    var cycle_writer = std.Io.Writer.fixed(&cycle_output);
+    const cycle_result = try cycle_root.renderWithOptions(&cycle_writer, context, options);
+    try std.testing.expect(cycle_result == .failure);
+    try std.testing.expectEqual(zeft.RenderErrorKind.include_cycle, cycle_result.failure.kind);
 }
 
 test "CA-002 cache options preserve independent retained outputs" {
@@ -144,6 +250,7 @@ test "CA-004 failed parent and child reloads preserve valid versions" {
             .failure => |diagnostic| try std.testing.expectEqualDeep(
                 zeft.CompileDiagnostic{
                     .kind = .invalid_markup,
+                    .source_identity = identity,
                     .span = .{
                         .start = 0,
                         .end = 6,
@@ -190,6 +297,14 @@ test "CA-005 missing dependencies and initial child failure retain diagnostic id
             },
             .include_identity = "absent",
             .include_parent_identity = "parent",
+            .source_identity = "parent",
+            .include_stack = &.{
+                .{
+                    .parent_identity = "parent",
+                    .child_identity = "absent",
+                    .span = .{ .start = 0, .end = 22 },
+                },
+            },
         } },
         missing,
     );
@@ -211,8 +326,17 @@ test "CA-005 missing dependencies and initial child failure retain diagnostic id
             },
             .include_identity = "absent",
             .include_parent_identity = "parent",
+            .source_identity = "parent",
+            .include_stack = &.{
+                .{
+                    .parent_identity = "parent",
+                    .child_identity = "absent",
+                    .span = .{ .start = 0, .end = 22 },
+                },
+            },
             .include_compile_diagnostic = .{
                 .kind = .invalid_markup,
+                .source_identity = "absent",
                 .span = .{
                     .start = 0,
                     .end = 6,
@@ -230,6 +354,10 @@ test "CA-005 missing dependencies and initial child failure retain diagnostic id
     try std.testing.expectEqualStrings("absent", failed.failure.include_identity.?);
     var fixed = try load(&cache, "absent", child, .{});
     defer fixed.deinit();
+    try std.testing.expectEqualStrings(
+        "absent",
+        failed.failure.include_compile_diagnostic.?.source_identity.?,
+    );
     var restored = try load(&cache, "parent", fixture_data.includes.missing.template, .{});
     defer restored.deinit();
     try expectLease(&restored, "<p>&lt;Ada&gt;</p>");
@@ -254,6 +382,19 @@ test "CA-006 recursive includes report the offending dependency edge" {
             },
             .include_identity = "a",
             .include_parent_identity = "b",
+            .source_identity = "b",
+            .include_stack = &.{
+                .{
+                    .parent_identity = "a",
+                    .child_identity = "b",
+                    .span = .{ .start = 1, .end = 18 },
+                },
+                .{
+                    .parent_identity = "b",
+                    .child_identity = "a",
+                    .span = .{ .start = 1, .end = 18 },
+                },
+            },
         } },
         try render(
             &cache,
