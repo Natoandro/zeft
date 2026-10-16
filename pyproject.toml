@@ -1,6 +1,6 @@
 [project]
 name = "zeft-dev-tools"
-version = "0.2.1"
+version = "0.2.2"
 description = "Development tools for the Zeft repository"
 requires-python = ">=3.11"
 dependencies = []

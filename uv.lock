@@ -10,10 +10,10 @@ members = [
 
 [[package]]
 name = "zeft"
-version = "0.2.1"
+version = "0.2.2"
 source = { editable = "bindings/python" }
 
 [[package]]
 name = "zeft-dev-tools"
-version = "0.2.1"
+version = "0.2.2"
 source = { editable = "." }
