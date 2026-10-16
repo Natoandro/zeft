@@ -67,15 +67,30 @@ class ZeftBuildHook(BuildHookInterface):
 
         if sys.platform == "win32":
             library = sysconfig.get_config_var("LIBRARY")
-            if not library:
-                raise RuntimeError("Could not determine the CPython import library")
             library_dir = sysconfig.get_config_var("LIBDIR") or str(
                 Path(sys.base_prefix) / "libs"
             )
+            library_path = Path(library) if library else None
+            if library_path is None or not library_path.is_file():
+                library_dir_path = Path(library_dir)
+                candidates = (
+                    library_dir_path
+                    / f"python{sys.version_info.major}{sys.version_info.minor}.lib",
+                    library_dir_path / f"python{sys.version_info.major}.lib",
+                )
+                library_path = next(
+                    (candidate for candidate in candidates if candidate.is_file()),
+                    None,
+                )
+            if library_path is None:
+                raise RuntimeError(
+                    "Could not find the CPython import library in "
+                    f"{library_dir!r} (sysconfig LIBRARY={library!r})"
+                )
             command.extend(
                 [
-                    f"-Dpython-library-dir={library_dir}",
-                    f"-Dpython-library={Path(library).stem}",
+                    f"-Dpython-library-dir={library_path.parent}",
+                    f"-Dpython-library={library_path.stem}",
                 ]
             )
         return command
