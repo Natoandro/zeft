@@ -51,7 +51,8 @@ Update the package version in `build.zig.zon`, commit the release changes, and
 run `uv run tag-release` from a clean working tree. It creates an annotated
 `v<version>` tag. Push that tag to `origin` to trigger the GitHub Release
 workflow, which checks the tag against the package version and generates
-release notes. `--push` pushes the release tag, and `--bump` increments the
+release notes. `--push` pushes the current branch to `origin` before creating
+and pushing the release tag, and `--bump` increments the
 versions in the configured manifests, refreshes `uv.lock`, and commits them
 after tagging. The bump level can be `major`, `minor`, or `patch` (the default).
 Combine them to push the release tag and then make the next-version commit

@@ -93,6 +93,17 @@ if [[ "$bump_version" == true && ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; th
 fi
 
 tag="v$version"
+if [[ "$push_tag" == true ]]; then
+  branch="$(git branch --show-current)"
+  if [[ -z "$branch" ]]; then
+    log "ERROR: cannot push the current branch from a detached HEAD."
+    exit 1
+  fi
+  log "Pushing branch $branch to origin before tagging."
+  git push origin "$branch"
+  log "Pushed branch $branch to origin."
+fi
+
 log "Checking whether tag $tag already exists."
 if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
   tag_commit="$(git rev-parse "$tag^{commit}")"
