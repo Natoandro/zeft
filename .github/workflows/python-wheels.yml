@@ -72,6 +72,7 @@ jobs:
         run: >-
           uv build --no-cache --project bindings/python
           --python ${{ matrix.python-version }} --wheel
+          --out-dir bindings/python/dist
 
       - name: Verify wheel tags
         run: >-
@@ -114,7 +115,8 @@ jobs:
         shell: bash
         run: |
           rm -rf bindings/python/dist bindings/python/src/zeft/_native* zig-out .zig-cache
-          uv build --no-cache --project bindings/python --sdist
+          uv build --no-cache --project bindings/python --sdist \
+            --out-dir bindings/python/dist
 
       - name: Install source distribution and render
         shell: bash
