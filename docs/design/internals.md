@@ -36,7 +36,10 @@ The source distribution carries the Zig build inputs under `engine/` so a
 wheel can be built from the sdist without access to the engine checkout.
 The GitHub Actions wheel matrix selects an explicit Zig target and a matching
 runner for Linux x86_64/aarch64, macOS x86_64/arm64, and Windows x86_64, with
-CPython 3.11 through 3.14. Each job installs and imports its wheel.
+CPython 3.11 through 3.14. Each job checks its wheel tags and imports the
+wheel. The tag release calls the same reusable workflow and attaches its wheel
+and source-distribution artifacts after the Zig and Python checks pass. The
+wheel-tag and import checks are Python scripts runnable with `uv run`.
 The C shim initializes `zeft._native`, whose `Template` object releases its
 opaque Zig compiled-template owner when finalized. The Zig bridge compiles
 UTF-8 source with selected compile options and renders through the engine's

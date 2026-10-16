@@ -72,7 +72,11 @@ import-test those wheels on every supported CPython version before publishing
 the artifacts.
 
 Building and consuming the Zig package MUST NOT require Python or `uv`.
-Python distributions MAY be released independently of the Zig package.
+Python distributions MUST use the same version as the Zig package and MUST be
+included in the corresponding tagged GitHub release. The release workflow MUST
+build and import-test every supported wheel before attaching the wheels and
+source distribution to the release. PyPI publishing MAY be added to that
+workflow.
 
 Python wheel builds and extension builds from source distributions MUST default
 to Zig `ReleaseSafe`. Published wheel builds MUST select `ReleaseSafe`

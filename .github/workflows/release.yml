@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Publish GitHub Release
+  zig:
+    name: Verify Zig package
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -19,13 +19,18 @@ jobs:
         uses: vercel-labs/setup-zig@v1
         with:
           version: 0.16.0
-      - name: Verify tag matches package version
+      - name: Verify tag matches package versions
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           version="$(sed -nE 's/^[[:space:]]*\.version = "([^"]+)"[,]?$/\1/p' build.zig.zon)"
+          python_version="$(sed -nE 's/^version = "([^"]+)"$/\1/p' bindings/python/pyproject.toml)"
           if [[ -z "$version" || "$RELEASE_TAG" != "v$version" ]]; then
-            echo "Tag '$RELEASE_TAG' does not match package version '$version'." >&2
+            echo "Tag '$RELEASE_TAG' does not match Zig package version '$version'." >&2
+            exit 1
+          fi
+          if [[ "$python_version" != "$version" ]]; then
+            echo "Python package version '$python_version' does not match Zig package version '$version'." >&2
             exit 1
           fi
       - name: Check formatting
@@ -34,7 +39,26 @@ jobs:
         run: zig build
       - name: Run tests
         run: zig build test
+
+  python:
+    name: Build and verify Python distributions
+    uses: ./.github/workflows/python-wheels.yml
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [zig, python]
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+        run: >-
+          gh release create "$GITHUB_REF_NAME" release-assets/*
+          --verify-tag --generate-notes

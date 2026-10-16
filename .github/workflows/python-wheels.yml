@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -73,51 +74,17 @@ jobs:
           --python ${{ matrix.python-version }} --wheel
 
       - name: Verify wheel tags
-        shell: bash
-        run: |
-          python - <<'PY'
-          import os
-          import sys
-          import zipfile
-          from pathlib import Path
-
-          wheels = list(Path("bindings/python/dist").glob("*.whl"))
-          assert len(wheels) == 1, f"expected one wheel, found {wheels}"
-          expected_python = f"cp{sys.version_info.major}{sys.version_info.minor}"
-          expected_platform = f"{os.environ['ZEFT_WHEEL_PLATFORM']}_"
-          expected_arch = f"_{os.environ['ZEFT_WHEEL_ARCH']}"
-
-          with zipfile.ZipFile(wheels[0]) as wheel:
-              metadata = next(
-                  name
-                  for name in wheel.namelist()
-                  if name.endswith(".dist-info/WHEEL")
-              )
-              tags = [
-                  line.removeprefix("Tag: ")
-                  for line in wheel.read(metadata)
-                  .decode()
-                  .splitlines()
-                  if line.startswith("Tag: ")
-              ]
-
-          assert tags, f"wheel has no WHEEL tags: {wheels[0]}"
-          for tag in tags:
-              python_tag, abi_tag, platform_tag = tag.split("-")
-              assert python_tag == expected_python, tag
-              assert abi_tag == expected_python, tag
-              assert platform_tag.startswith(expected_platform), tag
-              assert platform_tag.endswith(expected_arch), tag
-          print(f"Verified {wheels[0].name}: {', '.join(tags)}")
-          PY
+        run: >-
+          uv run --no-project
+          python bindings/python/scripts/verify_wheel.py
 
       - name: Install and import wheel
         shell: bash
         run: |
           wheel=$(find bindings/python/dist -maxdepth 1 -name '*.whl' -print -quit)
           test -n "$wheel"
-          uv pip install --no-cache --system "$wheel"
-          python -I -c 'import zeft; assert zeft._native.build_mode == "ReleaseSafe"; template = zeft.compile("<p>{{ name }}</p>"); assert template.render({"name": "ok"}) == "<p>ok</p>"; template.close()'
+          uv run --no-project --with "$wheel" python \
+            bindings/python/scripts/smoke_test.py ok
 
       - uses: actions/upload-artifact@v4
         with:
@@ -154,5 +121,11 @@ jobs:
         run: |
           sdist=$(find bindings/python/dist -maxdepth 1 -name '*.tar.gz' -print -quit)
           test -n "$sdist"
-          uv pip install --no-cache --system "$sdist"
-          python -I -c 'import zeft; assert zeft._native.build_mode == "ReleaseSafe"; template = zeft.compile("<p>{{ name }}</p>"); assert template.render({"name": "sdist"}) == "<p>sdist</p>"; template.close()'
+          uv run --no-project --with "$sdist" python \
+            bindings/python/scripts/smoke_test.py sdist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeft-source-distribution
+          path: bindings/python/dist/*.tar.gz
+          if-no-files-found: error
